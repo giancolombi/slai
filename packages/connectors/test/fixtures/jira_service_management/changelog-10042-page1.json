@@ -1,0 +1,68 @@
+{
+  "self": "https://acme.atlassian.net/rest/api/3/issue/10042/changelog?maxResults=100&startAt=0",
+  "nextPage": "https://acme.atlassian.net/rest/api/3/issue/10042/changelog?maxResults=100&startAt=3",
+  "maxResults": 3,
+  "startAt": 0,
+  "total": 6,
+  "isLast": false,
+  "values": [
+    {
+      "id": "20001",
+      "author": {
+        "accountId": "5b10a2844c20165700ede21g",
+        "displayName": "Dana Whitfield",
+        "accountType": "atlassian",
+        "active": true
+      },
+      "created": "2026-09-28T09:20:00.000+0000",
+      "items": [
+        {
+          "field": "assignee",
+          "fieldtype": "jira",
+          "fieldId": "assignee",
+          "from": null,
+          "fromString": null,
+          "to": "5b10a2844c20165700ede21g",
+          "toString": "Dana Whitfield"
+        }
+      ]
+    },
+    {
+      "id": "20002",
+      "author": {
+        "accountId": "5b10a2844c20165700ede21g",
+        "displayName": "Dana Whitfield",
+        "accountType": "atlassian",
+        "active": true
+      },
+      "created": "2026-09-28T09:40:00.000+0000",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10003",
+          "fromString": "Waiting for support",
+          "to": "10004",
+          "toString": "Waiting for customer"
+        }
+      ]
+    },
+    {
+      "id": "20003",
+      "author": { "accountId": "qm:cust-1", "displayName": "Maya Chen", "accountType": "customer", "active": true },
+      "created": "2026-09-28T11:00:00.000+0000",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10004",
+          "fromString": "Waiting for customer",
+          "to": "10003",
+          "toString": "Waiting for support"
+        }
+      ]
+    }
+  ]
+}

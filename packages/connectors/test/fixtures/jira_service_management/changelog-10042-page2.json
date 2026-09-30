@@ -1,0 +1,85 @@
+{
+  "self": "https://acme.atlassian.net/rest/api/3/issue/10042/changelog?maxResults=100&startAt=3",
+  "maxResults": 3,
+  "startAt": 3,
+  "total": 6,
+  "isLast": true,
+  "values": [
+    {
+      "id": "20004",
+      "author": {
+        "accountId": "5b10a2844c20165700ede21g",
+        "displayName": "Dana Whitfield",
+        "accountType": "atlassian",
+        "active": true
+      },
+      "created": "2026-09-28T12:00:00.000+0000",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10003",
+          "fromString": "Waiting for support",
+          "to": "10005",
+          "toString": "Resolved"
+        },
+        {
+          "field": "resolution",
+          "fieldtype": "jira",
+          "fieldId": "resolution",
+          "from": null,
+          "fromString": null,
+          "to": "10000",
+          "toString": "Done"
+        }
+      ]
+    },
+    {
+      "id": "20005",
+      "author": { "accountId": "qm:cust-1", "displayName": "Maya Chen", "accountType": "customer", "active": true },
+      "created": "2026-09-29T08:00:00.000+0000",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10005",
+          "fromString": "Resolved",
+          "to": "10003",
+          "toString": "Waiting for support"
+        }
+      ]
+    },
+    {
+      "id": "20006",
+      "author": {
+        "accountId": "5b10a2844c20165700ede21g",
+        "displayName": "Dana Whitfield",
+        "accountType": "atlassian",
+        "active": true
+      },
+      "created": "2026-09-29T08:10:00.000+0000",
+      "items": [
+        {
+          "field": "priority",
+          "fieldtype": "jira",
+          "fieldId": "priority",
+          "from": "2",
+          "fromString": "High",
+          "to": "1",
+          "toString": "Highest"
+        },
+        {
+          "field": "labels",
+          "fieldtype": "jira",
+          "fieldId": "labels",
+          "from": null,
+          "fromString": "enterprise sso",
+          "to": null,
+          "toString": "enterprise reopened sso"
+        }
+      ]
+    }
+  ]
+}
