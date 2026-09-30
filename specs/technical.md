@@ -279,7 +279,27 @@
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
   errors as `{error:{code,message}}`, lists as `{items,nextCursor}`, money in cents,
-  durations in ms, times as ISO strings.
+  durations in ms, times as ISO strings. Who-did-it fields (`approvedBy`, `uploadedBy`,
+  `decidedBy`) are user ids, each with a `…ByName` display name beside it; a null
+  `decidedBy` with `decidedAt` set means slai decided (autopilot or an assist note).
+- **TR-22a** Live updates: producers call `notifyEvent` inside their transaction
+  (`slai_events`, ids only); `GET /events` forwards only the session org's events.
+  Types: `ticket.updated` (ticket, evaluation or one of its agent runs),
+  `action.created`, `action.updated` (approved, sending, sent, failed, rejected),
+  `replay.progress` (queued, running, progress, done), `contract.updated`. The web
+  keeps one EventSource per tab, invalidates the matching query caches (coalesced per
+  300 ms), reconnects with jittered backoff (1 s to 30 s) and then refetches all, and
+  reconnects on org switch. Polling is only the fallback while the stream is down
+  (lists 60 s, in-flight extraction or replay 5 s).
+- **TR-22b** Contract text: `GET /contracts/:id/text` extracts on demand with the
+  extraction agent's loader (`@slai/agents/documents`: unpdf per PDF page, mammoth for
+  DOCX), so pages and quotes match the citations. It returns at most 400k characters
+  (`truncated` beyond), is cached per file hash in-process, reads through RLS, and is
+  audited as `contract.text_viewed`. The review screen places quotes with the
+  extractor's normalization and maps them back to exact offsets.
+- **TR-22c** Web bundle: routes are lazy; React, TanStack and zod are separate vendor
+  chunks; `@slai/shared` is side-effect free and `API_BASE` lives in its own module, so
+  the entry chunk has no zod.
 - **TR-23** Auth is **better-auth 1.7** (`better-auth`, with the `twoFactor`
   plugin, `@better-auth/passkey` and `@better-auth/sso`), configured in
   `apps/api/src/auth/better-auth.ts`. slai keeps organizations, memberships,

@@ -81,10 +81,17 @@ Each task references the requirements it serves.
 - [x] T-54 Contracts and the contract review screen (citations; ambiguity gating on approve) (PR-3, PR-4)
 - [x] T-55 Policies, customers, connections, autonomy rules, replay report, usage, audit, team, settings
 
-- [ ] T-56 Wire SSE live updates (replace polling)
+- [x] T-56 Wire SSE live updates: one EventSource per tab, cache invalidation per event (coalesced),
+      jittered backoff reconnect, a top-bar status, polling only as the fallback; every state the UI
+      shows is announced (`action.updated`, run start/finish, replay start) (TR-22a)
 - [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
-- [ ] T-58 Inline contract text on the review screen; bundle splitting (the MFA QR code shipped in T-52a)
-- [ ] T-59 API contract: document that `approvedBy`/`uploadedBy`/`decidedBy` are user ids; type the invite response; invitation email and accept endpoint
+- [x] T-58 Inline contract text on the review screen (`GET /contracts/:id/text`, document pane with
+      citation scroll and highlight); bundle splitting (vendor chunks, zod-free entry: entry chunk
+      466.6 → 61 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
+- [x] T-59 API contract: `approvedBy`/`uploadedBy`/`decidedBy` documented as user ids, with
+      `…ByName` display names on the DTOs; the invite response is the shared `Invitation` DTO
+- [ ] T-59a Invitation email (worker mailer) and accept flow (sign up or sign in, then join the org).
+      Moved to after the better-auth merge (T-15 to T-19); now unblocked
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
