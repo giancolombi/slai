@@ -31,6 +31,7 @@ import {
   knowledgeSources,
   memberships,
   notificationChannels,
+  onboardingState,
   organizations,
   orgExports,
   replays,
@@ -181,6 +182,7 @@ const TABLES: Table[] = [
   ["billing_periods", (tx) => tx.select().from(billingPeriods)],
   ["credit_grants", (tx) => tx.select().from(creditGrants)],
   ["billing_events", (tx) => tx.select().from(billingEvents)],
+  ["onboarding_state", (tx) => tx.select().from(onboardingState)],
   ["usage_ledger", (tx) => tx.select().from(usageLedger)],
   ["audit_events", (tx) => tx.select().from(auditEvents)],
 ];

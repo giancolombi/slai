@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { WhatsThis } from "../../help/whats-this";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { personLabel } from "../../lib/people";
 import { qk, useContract, useCustomers, useMe, usePolicy } from "../../lib/queries";
@@ -557,6 +558,9 @@ function PolicyReview({
                 />
               </TabsContent>
               <TabsContent value="citations" className="pt-3">
+                <p className="mb-2 flex items-center gap-1 text-xs text-ink-muted">
+                  Each value's source text in the contract <WhatsThis concept="citations" />
+                </p>
                 <div
                   ref={citationsRef}
                   className="flex max-h-none flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-thin lg:max-h-[calc(100dvh-15rem)]"
@@ -733,6 +737,7 @@ function AmbiguityPanel({
           {open
             ? `${open} ${open === 1 ? "question needs" : "questions need"} a decision before approval`
             : "Every ambiguity is resolved"}
+          <WhatsThis concept="ambiguity" />
         </h2>
         <span className="text-xs text-ink-muted">
           The contract doesn't settle these. slai made an assumption; confirm it or change the value.

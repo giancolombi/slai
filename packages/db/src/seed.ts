@@ -20,6 +20,7 @@ import {
   knowledgeSources,
   memberships,
   notificationChannels,
+  onboardingState,
   organizations,
   slaPolicies,
   twoFactors,
@@ -228,6 +229,11 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
         .insert(memberships)
         .values({ orgId, userId, role: "owner" })
         .onConflictDoUpdate({ target: [memberships.orgId, memberships.userId], set: { role: "owner" } });
+      // The demo user has "used slai before": no first-run welcome (the checklist stays derived from state).
+      await tx
+        .insert(onboardingState)
+        .values({ orgId, userId, welcomeSeenAt: new Date() })
+        .onConflictDoNothing({ target: [onboardingState.orgId, onboardingState.userId] });
 
       const enterpriseId = await upsertPolicy(tx, orgId, ENTERPRISE_POLICY, true, userId);
       const premiumId = await upsertPolicy(tx, orgId, PREMIUM_POLICY, false, userId);

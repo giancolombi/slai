@@ -1,7 +1,9 @@
 import type { AgentAction } from "@slai/shared";
 import { Button, Card, cn, EmptyState, formatRelative, Kbd, Label, Textarea } from "@slai/ui";
+import { Link } from "@tanstack/react-router";
 import { Inbox, PartyPopper, ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { GuideButton } from "../../help/guide-button";
 import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog, UsedKnowledge } from "./draft-parts";
 import { useInboxKeys } from "./use-inbox-keys";
 
@@ -91,7 +93,15 @@ export function ApprovalsInbox({
         <EmptyState
           icon={<PartyPopper />}
           title="Inbox zero"
-          description="No drafts are waiting. New drafts land here when a ticket reaches its trigger risk under an assist rule."
+          description="No drafts are waiting. New drafts land here when a ticket reaches its trigger risk under an Assist rule, or when autopilot holds one back. With every rule on Observe, there are none."
+          action={
+            <>
+              <Button asChild size="sm" variant="secondary">
+                <Link to="/autonomy">Review autonomy</Link>
+              </Button>
+              <GuideButton guide="approvals" />
+            </>
+          }
         />
       </Card>
     );

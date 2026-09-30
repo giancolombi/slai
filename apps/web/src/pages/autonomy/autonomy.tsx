@@ -25,6 +25,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell, Eye, Gauge, Lock, PenLine, ShieldCheck, UserCheck, Zap } from "lucide-react";
 import { useId, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { WhatsThis } from "../../help/whats-this";
 import { api, errorMessage } from "../../lib/api";
 import { AUTONOMY_HELP, AUTONOMY_LABEL, PRIORITIES, PRIORITY_LABEL } from "../../lib/labels";
 import { qk, useAutonomy, useCustomers, useMe } from "../../lib/queries";
@@ -309,7 +310,11 @@ export function AutonomyPage() {
 
         <Card>
           <CardHeader
-            title="Rules"
+            title={
+              <span className="inline-flex items-center gap-1">
+                Rules <WhatsThis concept="autonomy" />
+              </span>
+            }
             description={
               <>
                 The most specific rule wins: customer + priority, then customer, then priority, then the default.{" "}

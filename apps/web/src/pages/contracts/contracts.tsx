@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage } from "../../lib/api";
 import { personLabel } from "../../lib/people";
 import { qk, useContracts, useCustomers } from "../../lib/queries";
@@ -115,7 +116,8 @@ export function ContractsPage() {
           <EmptyState
             icon={<FileSignature />}
             title="No contracts yet"
-            description="Drop your first SLA contract above. Breach Replay and live clocks start from an approved policy."
+            description="Drop your first SLA contract above. slai extracts a policy with a citation for every number; live clocks and Breach Replay start once it is approved."
+            action={<GuideButton guide="contract-review" />}
           />
         ) : (
           <ContractsTable

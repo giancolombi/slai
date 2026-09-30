@@ -13,6 +13,7 @@ import {
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Cable, History } from "lucide-react";
 import { ErrorState, Page, QueryState } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { providerLabel } from "../../lib/labels";
 import { useConnections, useReplays } from "../../lib/queries";
 import { leadTime, ReplayProgress, ReplayStatusBadge, RunReplayForm } from "./replay-parts";
@@ -53,6 +54,7 @@ export function ReplaysPage() {
                   icon={<History />}
                   title="No replays yet"
                   description="Run your first replay to see the last 90 days through your contracts. It takes about a minute."
+                  action={<GuideButton guide="replay" />}
                 />
               </Card>
             }

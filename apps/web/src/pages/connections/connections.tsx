@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Page, QueryState } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage } from "../../lib/api";
 import { providerLabel } from "../../lib/labels";
 import { qk, useConnections, useMe } from "../../lib/queries";
@@ -327,7 +328,12 @@ export function ConnectionsPage() {
               icon={<Cable />}
               title="No help desk connected"
               description="Connect Zendesk, Jira Service Management, Intercom, Freshdesk, HubSpot and more. slai starts measuring every ticket against your contracts right away."
-              action={addButton}
+              action={
+                <>
+                  {addButton}
+                  <GuideButton guide="connections" />
+                </>
+              }
             />
           </Card>
         }

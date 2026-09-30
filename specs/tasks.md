@@ -101,6 +101,11 @@ Each task references the requirements it serves.
 - [x] T-59a Invitation email (`send-invite-email`, token sealed only until sent) and `/invite/:token`:
       sign up there (then MFA enrollment) or sign in (SSO/enforce-SSO honoured) and join with the
       invited role; single use, 7-day expiry, resend/revoke from Team, audited (PR-24, TR-23d)
+- [x] T-59b In-product onboarding and help: getting-started checklist derived from org state
+      (`GET/PATCH /onboarding`, `onboarding_state` with RLS, per-user dismissal restorable from Help),
+      Help center with searchable guides as TSX modules, About-this-page on every page with a
+      route-coverage guard test, What's-this tooltips, role-aware first-run welcome, empty states
+      linking the next action and guide, `?` shortcut, MSW mock support (PR-27, TR-22d)
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →

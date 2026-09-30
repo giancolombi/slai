@@ -22,6 +22,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bot, ChevronDown, ChevronRight, Cpu, Search, ShieldCheck } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api } from "../../lib/api";
 import { qk } from "../../lib/queries";
 
@@ -199,9 +200,10 @@ export function AuditPage() {
                     title={all.length === 0 ? "No events yet" : "No events match"}
                     description={
                       all.length === 0
-                        ? "Security-relevant activity will be recorded here."
+                        ? "Sign-ins, approvals, policy and autonomy changes, and every help-desk write are recorded here."
                         : "Try another filter, or load older events."
                     }
+                    action={all.length === 0 ? <GuideButton guide="team-security" anchor="audit" /> : undefined}
                   />
                 </TableMessage>
               ) : (

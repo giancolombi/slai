@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalsInbox } from "../src/pages/approvals/inbox";
+import { renderRouted } from "./render-routed";
 
 function draft(n: number, extra: Partial<AgentAction> = {}): AgentAction {
   return {
@@ -110,8 +111,10 @@ describe("Approvals inbox keyboard shortcuts", () => {
     expect(onApprove).toHaveBeenCalledWith(expect.objectContaining({ id: "act_1" }), "Draft body 1 jkar");
   });
 
-  it("shows inbox zero when nothing is waiting", () => {
-    render(<ApprovalsInbox items={[]} onApprove={vi.fn()} onReject={vi.fn()} />);
-    expect(screen.getByText("Inbox zero")).toBeInTheDocument();
+  it("shows inbox zero when nothing is waiting, with the next step and a guide", async () => {
+    renderRouted(<ApprovalsInbox items={[]} onApprove={vi.fn()} onReject={vi.fn()} />);
+    expect(await screen.findByText("Inbox zero")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review autonomy" })).toHaveAttribute("href", "/autonomy");
+    expect(screen.getByRole("link", { name: "Read: Approvals" })).toHaveAttribute("href", "/help/approvals");
   });
 });

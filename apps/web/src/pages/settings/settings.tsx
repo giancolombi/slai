@@ -31,6 +31,7 @@ import { Link } from "@tanstack/react-router";
 import { Bell, Hash, Mail, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage } from "../../lib/api";
 import { qk, useChannels, useMe, useOrg } from "../../lib/queries";
 import { OffboardingSection } from "./offboarding";
@@ -275,11 +276,14 @@ function NotificationsTab({ canEdit }: { canEdit: boolean }) {
           title="No channels yet"
           description="Add an email address or a Slack webhook to hear about risk before it becomes a breach."
           action={
-            canEdit && (
-              <Button size="sm" onClick={() => setAdding(true)}>
-                Add channel
-              </Button>
-            )
+            <>
+              {canEdit && (
+                <Button size="sm" onClick={() => setAdding(true)}>
+                  Add channel
+                </Button>
+              )}
+              <GuideButton guide="alerts" />
+            </>
           }
         />
       ) : (

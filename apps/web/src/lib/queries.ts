@@ -42,6 +42,7 @@ export const qk = {
   autonomy: ["autonomy"] as const,
   channels: ["channels"] as const,
   dashboard: ["dashboard"] as const,
+  onboarding: ["onboarding"] as const,
   replays: ["replays"] as const,
   replay: (id: string) => ["replays", id] as const,
   usage: ["usage"] as const,
@@ -150,6 +151,16 @@ export const useAutonomy = () => useQuery({ queryKey: qk.autonomy, queryFn: api.
 export const useChannels = () => useQuery({ queryKey: qk.channels, queryFn: api.notifications.list });
 export const useDashboard = () =>
   useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard.get, refetchInterval: useLivePolling() });
+/** The getting-started checklist and this user's help preferences. Always refetched on mount: steps follow org state. */
+export const useOnboarding = (enabled = true) =>
+  useQuery({ queryKey: qk.onboarding, queryFn: api.onboarding.get, staleTime: 0, enabled });
+export const useUpdateOnboarding = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.onboarding.update,
+    onSuccess: (next) => queryClient.setQueryData(qk.onboarding, next),
+  });
+};
 export const useReplays = () => {
   const fallback = useLivePolling(PROGRESS_FALLBACK_MS);
   return useQuery({

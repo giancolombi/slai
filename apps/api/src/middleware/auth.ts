@@ -1,4 +1,4 @@
-import type { Role } from "@slai/shared";
+import { API_BASE, type Role } from "@slai/shared";
 import type { MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie } from "hono/cookie";
 import type { Auth } from "../auth/better-auth.js";
@@ -68,9 +68,12 @@ export function requireRole(min: Role): MiddlewareHandler<AppEnv> {
   };
 }
 
+/** A user's own preferences, which viewers may change too (they touch no org data). */
+const SELF_SERVICE_WRITES = new Set([`${API_BASE}/onboarding`]);
+
 /** Viewers are read-only everywhere: any non-GET needs `member`. Routes add stricter checks. */
 export const writesNeedMember: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (c.req.method !== "GET" && c.req.method !== "HEAD") {
+  if (c.req.method !== "GET" && c.req.method !== "HEAD" && !SELF_SERVICE_WRITES.has(c.req.path)) {
     const a = c.get("auth");
     if (a && ROLE_RANK[a.role] < ROLE_RANK.member) throw forbidden("Viewers have read-only access.");
   }

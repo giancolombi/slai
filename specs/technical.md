@@ -413,6 +413,32 @@
 - **TR-22c** Web bundle: routes are lazy; React, TanStack and zod are separate vendor
   chunks; `@slai/shared` is side-effect free and `API_BASE` lives in its own module, so
   the entry chunk has no zod.
+- **TR-22d** In-product help (PR-27):
+  - **Help content is code.** Guides are TSX modules in
+    `apps/web/src/help/guides/*.tsx` with typed metadata (id, title, summary,
+    keywords, related guides, section anchors); the FAQ and glossary export their
+    entries for search. There are no Markdown help files. Search is client-side
+    (every query word must match a title, keyword, summary, section, FAQ question or
+    glossary term; prefixes count). Plan figures in the billing guide are read
+    from `plans.ts`; the SLA clock guide draws with the real `SlaBar`/`SlaClock`.
+  - **Route-coverage guard.** `PAGE_HELP` (`apps/web/src/help/page-help.ts`) holds the
+    "About this page" entry for every page in the app shell, keyed by route path;
+    `apps/web/test/page-help.test.tsx` fails when a routed page (`APP_PAGE_ROUTES`
+    in `router.tsx`) has no entry or an entry has no page, and opens the panel on
+    every page. The panel is a Radix dialog sheet (focus moves in, is trapped and
+    returns). `?` opens Help unless focus is in a field or a dialog is open (`/`
+    stays ticket search; the inbox keeps j/k/a/e/r).
+  - **Checklist and preferences.** `GET /onboarding` derives each step inside
+    `withOrg` (see `ONBOARDING_STEPS` in `@slai/shared`: an active connection; a
+    non-archived contract; an active policy with a contract, or an active default;
+    a customer with a policy, or an active default; any autonomy rule; an enabled
+    notification channel; another active member or a pending/accepted invitation;
+    a replay that did not fail). `PATCH /onboarding { checklistDismissed?,
+    welcomeSeen? }` writes the caller's own row in `onboarding_state` (org_id,
+    user_id unique; FORCE RLS; `slai_app` only; in the org export). Viewers may
+    call it (the one write `writesNeedMember` allows them); it is not audited
+    (personal UI state). Migration 0010 marks every existing membership's welcome
+    as seen. The MSW mock derives the same steps from the mock org.
 - **TR-23** Auth is **better-auth 1.7** (`better-auth`, with the `twoFactor`
   plugin, `@better-auth/passkey` and `@better-auth/sso`), configured in
   `apps/api/src/auth/better-auth.ts`. slai keeps organizations, memberships,
