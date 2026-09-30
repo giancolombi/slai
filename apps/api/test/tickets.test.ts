@@ -153,7 +153,9 @@ describe("dashboard and usage", () => {
     ]);
     const res = await owner.client.get<UsageSummary>("/usage");
     expect(res.body).toMatchObject({ costCents: 3, creditsUsed: 1 });
-    expect(res.body.byKind).toEqual(expect.arrayContaining([{ kind: "model_call", count: 1, credits: 1, costCents: 3 }]));
+    expect(res.body.byKind).toEqual(
+      expect.arrayContaining([{ kind: "model_call", count: 1, credits: 1, costCents: 3 }]),
+    );
   });
 });
 
