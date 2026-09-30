@@ -15,7 +15,7 @@ const variants: Record<ButtonVariant, string> = {
   primary: "bg-accent text-on-accent shadow-xs hover:bg-accent-hover",
   secondary: "bg-surface text-ink border border-line-strong shadow-xs hover:bg-hover hover:border-ink-subtle/40",
   ghost: "text-ink-muted hover:text-ink hover:bg-hover",
-  danger: "bg-breached text-white shadow-xs hover:brightness-95",
+  danger: "bg-breached text-on-breached shadow-xs hover:brightness-95",
   link: "text-accent-text underline-offset-4 hover:underline px-0! h-auto!",
 };
 

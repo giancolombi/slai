@@ -54,6 +54,7 @@
   --color-breached-text: var(--risk-breached-text);
   --color-breached-subtle: var(--risk-breached-subtle);
   --color-breached-border: var(--risk-breached-border);
+  --color-on-breached: var(--on-breached);
 
   --font-sans: var(--typeface-sans);
   --font-mono: var(--typeface-mono);

@@ -124,6 +124,8 @@
   --risk-breached-subtle: #fce9ea;
   --risk-breached-border: #f2b8bd;
   --risk-breached-solid: #d62f3c;
+  /* Text on a solid breached fill (danger buttons). */
+  --on-breached: #ffffff;
 
   /* elevation: tight, layered, low-contrast */
   --elev-xs: 0 1px 0 rgb(22 24 29 / 0.04);
@@ -172,6 +174,7 @@
   --risk-breached-subtle: #351417;
   --risk-breached-border: #5f2328;
   --risk-breached-solid: #ec4a55;
+  --on-breached: var(--ink-950);
   --elev-xs: 0 1px 0 rgb(0 0 0 / 0.3);
   --elev-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.05);
   --elev-md: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
@@ -216,6 +219,7 @@
     --risk-breached-subtle: #351417;
     --risk-breached-border: #5f2328;
     --risk-breached-solid: #ec4a55;
+    --on-breached: var(--ink-950);
     --elev-xs: 0 1px 0 rgb(0 0 0 / 0.3);
     --elev-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.05);
     --elev-md: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);

@@ -1,4 +1,4 @@
-import { Check, Minus, Pause, Timer } from "lucide-react";
+import { Check, Pause, Timer } from "lucide-react";
 import { cn } from "../lib/cn";
 import { formatDuration, formatDurationLong } from "../lib/format";
 import { RISK_META, type Risk } from "../lib/risk";
@@ -69,7 +69,6 @@ export function SlaClock({
     text = "—";
     label = "Not measured";
     tone = "text-ink-subtle";
-    Icon = Minus;
   } else if (state === "paused") {
     const left = remainingMs ?? 0;
     text = formatClock(left);
@@ -104,7 +103,7 @@ export function SlaClock({
       data-state={state}
       className={cn("inline-flex items-center font-mono whitespace-nowrap tnum", sizes[size], tone, className)}
     >
-      {showIcon && <Icon aria-hidden className="shrink-0 opacity-80" />}
+      {showIcon && state !== "not_applicable" && <Icon aria-hidden className="shrink-0 opacity-80" />}
       <time dateTime={dueIso} aria-hidden>
         {text}
       </time>
