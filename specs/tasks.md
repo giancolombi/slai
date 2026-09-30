@@ -25,9 +25,9 @@ Each task references the requirements it serves.
       upload validation, webhook signature rejection
 
 ## M2: Connectors
-- [~] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
-- [~] T-21 Demo connector: deterministic simulated help desk with live ticket flow (PR-9)
-- [~] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
+- [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
+- [x] T-21 Demo connector: deterministic simulated help desk with live ticket flow (PR-9)
+- [x] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
 - [ ] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
 - [ ] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
 - [ ] T-25 Status/priority mapping override UI and API (PR-8)
