@@ -1,0 +1,48 @@
+/**
+ * Test-database helpers shared by the db and api test suites. Each suite gets
+ * its own freshly migrated database (e.g. `slai_test_db`, `slai_test_api`) in
+ * the local cluster, so suites can run in parallel without truncating.
+ */
+import postgres from "postgres";
+import { runMigrations } from "./migrate.js";
+
+const DEFAULT_OWNER_URL = "postgres://slai:slai@localhost:5433/slai";
+
+export interface TestDbUrls {
+  owner: string;
+  app: string;
+  system: string;
+}
+
+function withDb(base: string, dbName: string, user?: { name: string; password: string }): string {
+  const u = new URL(base);
+  u.pathname = `/${dbName}`;
+  if (user) {
+    u.username = user.name;
+    u.password = user.password;
+  }
+  return u.toString();
+}
+
+export function testDbUrls(dbName: string, ownerBase = process.env.DATABASE_URL ?? DEFAULT_OWNER_URL): TestDbUrls {
+  return {
+    owner: withDb(ownerBase, dbName),
+    app: withDb(ownerBase, dbName, { name: "slai_app", password: "slai_app" }),
+    system: withDb(ownerBase, dbName, { name: "slai_worker", password: "slai_worker" }),
+  };
+}
+
+/** Drops and recreates `dbName`, then migrates it. Call from a vitest globalSetup. */
+export async function createTestDatabase(dbName: string): Promise<TestDbUrls> {
+  if (!/^slai_test_[a-z0-9_]+$/.test(dbName)) throw new Error("test database names must start with slai_test_");
+  const urls = testDbUrls(dbName);
+  const admin = postgres(withDb(urls.owner, "postgres"), { max: 1, onnotice: () => {} });
+  try {
+    await admin.unsafe(`drop database if exists ${dbName} with (force)`);
+    await admin.unsafe(`create database ${dbName}`);
+  } finally {
+    await admin.end({ timeout: 5 });
+  }
+  await runMigrations(urls.owner);
+  return urls;
+}

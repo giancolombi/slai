@@ -52,6 +52,7 @@ export const loginBody = z.object({
     .optional(),
 });
 export const mfaVerifyBody = z.object({ totp: z.string().regex(/^\d{6}$/) });
+export const switchOrgBody = z.object({ organizationId: z.uuid() });
 
 export interface Me {
   user: { id: string; email: string; name: string; mfaEnabled: boolean };
@@ -76,6 +77,7 @@ export interface Member {
   lastLoginAt: string | null;
 }
 export const inviteBody = z.object({ email: z.email(), role: z.enum(ROLES) });
+export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
   monthlySpendCapCents: z.number().int().nonnegative().nullable().optional(),
@@ -175,6 +177,22 @@ export interface Policy {
   approvedAt: string | null;
   createdAt: string;
 }
+/**
+ * `POST /policies`. `definition` is the engine's policy input; its `id` and `name` are
+ * set by the server. `basedOn` (a policy id) creates the next draft version in that
+ * policy's lineage instead of a new policy.
+ */
+export const createPolicyBody = z.object({
+  name: z.string().min(1).max(200),
+  definition: z.unknown(),
+  isDefault: z.boolean().default(false),
+  contractId: z.uuid().nullable().default(null),
+  basedOn: z.uuid().nullable().default(null),
+});
+export const policyPreviewBody = z.object({
+  connectionId: z.uuid().optional(),
+  days: z.number().int().min(1).max(180).default(30),
+});
 export const updatePolicyBody = z.object({
   name: z.string().min(1).max(200).optional(),
   definition: z.unknown().optional(),
