@@ -13,10 +13,10 @@ import { afterAll, describe, expect, it } from "vitest";
 import { backupDatabase, pgTools, restoreDatabase } from "../src/backup.js";
 import { connect, createOrgDb } from "../src/client.js";
 import { tickets } from "../src/schema.js";
-import { testDbUrls } from "../src/testing.js";
+import { testDbName, testDbUrls } from "../src/testing.js";
 import { failure, openDbs, seedOrg, urls } from "./helpers.js";
 
-const RESTORE_DB = "slai_test_restore";
+const RESTORE_DB = testDbName("slai_test_restore");
 const restored = testDbUrls(RESTORE_DB);
 
 const dockerOk = spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;

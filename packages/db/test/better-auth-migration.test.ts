@@ -9,9 +9,9 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { MIGRATIONS_DIR } from "../src/migrate.js";
 import { hashPassword, verifyPassword } from "../src/passwords.js";
-import { testDbUrls } from "../src/testing.js";
+import { testDbName, testDbUrls } from "../src/testing.js";
 
-const DB = "slai_test_db_ba_migration";
+const DB = testDbName("slai_test_db_ba_migration");
 const urls = testDbUrls(DB);
 const files = readdirSync(MIGRATIONS_DIR)
   .filter((f) => f.endsWith(".sql"))

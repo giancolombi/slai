@@ -22,6 +22,9 @@ export interface AgentRuntimeConfig {
   sandboxFactory?: SandboxFactory;
   /** Injected model provider for the local runtime (tests). */
   llm?: LlmProvider;
+  /** MODEL_PROVIDER=ollama (local runtime only). */
+  ollamaUrl?: string;
+  ollamaModel?: string;
 }
 
 export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
@@ -37,9 +40,13 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
         provider: config.provider,
         anthropicApiKey: config.anthropicApiKey,
         openaiApiKey: config.openaiApiKey,
+        ollamaUrl: config.ollamaUrl,
+        ollamaModel: config.ollamaModel,
       });
     exec = (job, bounds) => runJob(job, bounds, provider);
   } else {
+    // A sandbox cannot reach a model on the developer's machine.
+    if (config.provider === "ollama") throw new Error("MODEL_PROVIDER=ollama requires AGENT_RUNTIME=local");
     if (!config.e2bTemplate)
       throw new Error("E2B_TEMPLATE (a pinned name:<buildId>) is required for AGENT_RUNTIME=e2b");
     const factory =

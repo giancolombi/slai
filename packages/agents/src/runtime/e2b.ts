@@ -6,7 +6,7 @@ import type { AgentKind, AgentRunResult, ModelProvider, ModelUsage, RunBounds } 
 import { createLimiter } from "./limiter.js";
 import { SandboxCommandTimeoutError, type SandboxFactory, type SandboxHandle } from "./sandbox.js";
 
-export const PROVIDER_HOSTS: Record<Exclude<ModelProvider, "mock">, string> = {
+export const PROVIDER_HOSTS: Record<Exclude<ModelProvider, "mock" | "ollama">, string> = {
   anthropic: "api.anthropic.com",
   openai: "api.openai.com",
 };

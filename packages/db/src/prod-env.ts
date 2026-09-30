@@ -80,6 +80,9 @@ export function productionEnvProblems(env: NodeJS.ProcessEnv, service: Service):
   if (service === "worker") {
     const provider = v("MODEL_PROVIDER") ?? "mock";
     if (provider === "mock") problems.push("MODEL_PROVIDER=mock is not allowed (use anthropic or openai)");
+    if (provider === "ollama") {
+      problems.push("MODEL_PROVIDER=ollama is for local prototypes only (use anthropic or openai)");
+    }
     if (provider === "anthropic" && !v("ANTHROPIC_API_KEY")) problems.push("ANTHROPIC_API_KEY is required");
     if (provider === "openai" && !v("OPENAI_API_KEY")) problems.push("OPENAI_API_KEY is required");
     if ((v("AGENT_RUNTIME") ?? "local") !== "e2b") {

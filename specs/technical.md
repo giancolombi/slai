@@ -180,6 +180,15 @@
   - Retries use jittered backoff. The fallback is used only for provider errors,
     never for invalid output.
   - A `mock` provider runs everything deterministically with no keys.
+- **TR-16a** `MODEL_PROVIDER=ollama` runs a local open model through Ollama (default
+  `qwen3.5:9b`). It is free, and data never leaves the machine. It uses JSON-schema
+  constrained output and gets the documents' extracted text (local models can't read
+  PDFs). Cost is metered as 0. It works only with `AGENT_RUNTIME=local`, and production
+  refuses it. On a sample two-tier contract it took about 2 minutes on an M4 Pro and got
+  the tiers, hours, parties and targets. It was weaker than Claude on business-day
+  conversion (all flagged as ambiguities) and missed a credit clause, so human review
+  catches this. Try a file with
+  `pnpm --filter @slai/agents exec tsx scripts/try-extract.ts <file> ollama`.
 - **TR-17** **Commercial API keys only.** Claude Max and ChatGPT/Codex subscriptions
   are consumer plans: they are not licensed to run a multi-tenant product on third
   parties' data, and they can't carry the no-training/DPA/ZDR commitments SOC 2

@@ -44,6 +44,8 @@ const deps: WorkerDeps = {
     openaiApiKey: env.OPENAI_API_KEY,
     e2bApiKey: env.E2B_API_KEY,
     e2bTemplate: env.E2B_TEMPLATE,
+    ollamaUrl: env.OLLAMA_URL,
+    ollamaModel: env.OLLAMA_MODEL,
   }),
   mailer: smtpMailer(env.SMTP_URL, env.EMAIL_FROM),
   storage: createStorage({

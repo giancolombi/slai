@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 /**
  * Test-database helpers shared by the db and api test suites. Each suite gets
  * its own freshly migrated database (e.g. `slai_test_db`, `slai_test_api`) in
@@ -25,7 +27,25 @@ function withDb(base: string, dbName: string, user?: { name: string; password: s
   return u.toString();
 }
 
-export function testDbUrls(dbName: string, ownerBase = process.env.DATABASE_URL ?? DEFAULT_OWNER_URL): TestDbUrls {
+/**
+ * Test databases are per checkout: two worktrees (or a worktree and the main
+ * checkout) running tests against one Postgres must not drop each other's
+ * databases mid-run. The suffix is a short hash of this package's location,
+ * overridable with SLAI_TEST_DB_SUFFIX.
+ */
+export const TEST_DB_SUFFIX =
+  process.env.SLAI_TEST_DB_SUFFIX ??
+  createHash("sha256")
+    .update(fileURLToPath(import.meta.url))
+    .digest("hex")
+    .slice(0, 8);
+
+export function testDbName(base: string): string {
+  return base.endsWith(`_${TEST_DB_SUFFIX}`) ? base : `${base}_${TEST_DB_SUFFIX}`;
+}
+
+export function testDbUrls(baseName: string, ownerBase = process.env.DATABASE_URL ?? DEFAULT_OWNER_URL): TestDbUrls {
+  const dbName = testDbName(baseName);
   return {
     owner: withDb(ownerBase, dbName),
     app: withDb(ownerBase, dbName, { name: "slai_app", password: "slai_app" }),
@@ -35,7 +55,8 @@ export function testDbUrls(dbName: string, ownerBase = process.env.DATABASE_URL 
 }
 
 /** Drops and recreates `dbName`, then migrates it. Call from a vitest globalSetup. */
-export async function createTestDatabase(dbName: string): Promise<TestDbUrls> {
+export async function createTestDatabase(baseName: string): Promise<TestDbUrls> {
+  const dbName = testDbName(baseName);
   if (!/^slai_test_[a-z0-9_]+$/.test(dbName)) throw new Error("test database names must start with slai_test_");
   const urls = testDbUrls(dbName);
   const admin = postgres(withDb(urls.owner, "postgres"), { max: 1, onnotice: () => {} });

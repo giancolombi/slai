@@ -46,6 +46,8 @@ describe("production env validation", () => {
   it("refuses mock AI and the in-process agent runtime", () => {
     const p = productionEnvProblems({ ...goodWorker, MODEL_PROVIDER: "mock", AGENT_RUNTIME: "local" }, "worker");
     expect(p.join("\n")).toMatch(/MODEL_PROVIDER=mock is not allowed/);
+    const local = productionEnvProblems({ ...goodWorker, MODEL_PROVIDER: "ollama" }, "worker");
+    expect(local.join("\n")).toMatch(/MODEL_PROVIDER=ollama is for local prototypes only/);
     expect(p.join("\n")).toMatch(/AGENT_RUNTIME must be e2b/);
     expect(productionEnvProblems({ ...goodWorker, E2B_TEMPLATE: "slai-agent" }, "worker").join()).toMatch(/pinned/);
     expect(productionEnvProblems({ ...goodWorker, ANTHROPIC_API_KEY: "" }, "worker").join()).toMatch(

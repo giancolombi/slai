@@ -8,7 +8,7 @@ import type { AuthorRole, Metric, MetricResult, PolicyInput, Priority, RiskLevel
 
 export type AgentKind = "contract_extraction" | "triage" | "draft_reply";
 export type Autonomy = "observe" | "assist" | "autopilot";
-export type ModelProvider = "anthropic" | "openai" | "mock";
+export type ModelProvider = "anthropic" | "openai" | "ollama" | "mock";
 
 /** One model call's metered usage. Cost is in micro-dollars (1e-6 USD). */
 export interface ModelUsage {

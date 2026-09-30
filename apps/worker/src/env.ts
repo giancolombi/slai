@@ -30,7 +30,10 @@ export const envSchema = z.object({
   STORAGE_LOCAL_DIR: z.string().default(".data/uploads"),
   SMTP_URL: z.string().min(1).default("smtp://localhost:1025"),
   EMAIL_FROM: z.string().min(1).default("slai <alerts@slai.local>"),
-  MODEL_PROVIDER: z.enum(["mock", "anthropic", "openai"]).default("mock"),
+  MODEL_PROVIDER: z.enum(["mock", "anthropic", "openai", "ollama"]).default("mock"),
+  /** MODEL_PROVIDER=ollama: a local open model (free, private; dev/prototype only). */
+  OLLAMA_URL: z.url().default("http://localhost:11434"),
+  OLLAMA_MODEL: z.string().min(1).default("qwen3.5:9b"),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   AGENT_RUNTIME: z.enum(["local", "e2b"]).default("local"),

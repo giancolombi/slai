@@ -13,7 +13,7 @@ export const RUNNER_COMMAND = "node /opt/slai/runner.js";
 /** Placeholder API key the in-sandbox SDKs send; the E2B egress proxy overwrites the auth header. */
 export const EGRESS_INJECTED_KEY = "injected-at-egress";
 
-const provider = z.enum(["anthropic", "openai", "mock"]);
+const provider = z.enum(["anthropic", "openai", "ollama", "mock"]);
 
 export const manifestSchema = z.object({
   version: z.literal(1),
