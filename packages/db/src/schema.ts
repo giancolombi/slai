@@ -1,11 +1,21 @@
 /**
- * The slai schema. Every table except `users` and `sessions` is org-scoped:
- * it has `org_id` and a forced RLS policy `org_id = current_setting('app.org_id')`
- * (see migrations/0001_security.sql). `organizations` is scoped by its own `id`.
+ * The slai schema. Every table except the identity tables (`users`, `sessions`,
+ * `accounts`, `verifications`, `two_factors`, `passkeys`) is org-scoped: it has
+ * `org_id` and a forced RLS policy `org_id = current_setting('app.org_id')`
+ * (see migrations/0002_security.sql and 0004_better_auth.sql). `organizations`
+ * is scoped by its own `id`.
  *
- * Columns holding secrets are ciphertext from `crypto.ts` (never plaintext):
- * users.mfa_secret, connections.credentials, connections.webhook_secret, and
- * notification_channels.target for Slack webhooks.
+ * The identity tables are better-auth's models mapped onto our names (see
+ * apps/api/src/auth/better-auth.ts). Only the `slai_auth` role can read their
+ * secret columns.
+ *
+ * Columns holding secrets are ciphertext (never plaintext):
+ * - `crypto.ts` (AES-256-GCM, key id, AAD): connections.credentials,
+ *   connections.webhook_secret, notification_channels.target for Slack
+ *   webhooks, and the OIDC client secret inside sso_providers.oidc_config.
+ * - better-auth's versioned envelope (XChaCha20-Poly1305 under SESSION_SECRET):
+ *   two_factors.secret, two_factors.backup_codes, and accounts' OAuth tokens.
+ * sessions.token_hash is the sha256 of the cookie token, never the token.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -86,7 +96,10 @@ export const organizations = pgTable("organizations", {
   slug: text("slug").notNull().unique(),
   plan: text("plan").notNull().default("trial"),
   monthlySpendCapCents: integer("monthly_spend_cap_cents"),
-  requireMfa: boolean("require_mfa").notNull().default(false),
+  /** Password and passkey sign-in are refused for emails on this org's verified SSO domains. */
+  enforceSso: boolean("enforce_sso").notNull().default(false),
+  /** SSO sessions must also pass slai MFA (by default the IdP's MFA is trusted). */
+  ssoRequireMfa: boolean("sso_require_mfa").notNull().default(false),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -95,13 +108,10 @@ export const users = pgTable("users", {
   id: id(),
   email: citext("email").notNull().unique(),
   name: text("name").notNull(),
-  /** argon2id PHC string. */
-  passwordHash: text("password_hash").notNull(),
-  /** Encrypted TOTP secret (base32), set during MFA setup. */
-  mfaSecret: text("mfa_secret"),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  /** better-auth's `twoFactorEnabled`: a verified TOTP factor exists. The password lives in `accounts`. */
   mfaEnabled: boolean("mfa_enabled").notNull().default(false),
-  /** Last accepted TOTP time step, to reject code replay. */
-  mfaLastStep: bigNumber("mfa_last_step"),
   lastLoginAt: ts("last_login_at"),
   disabledAt: ts("disabled_at"),
   createdAt: createdAt(),
@@ -126,21 +136,101 @@ export const sessions = pgTable(
   "sessions",
   {
     id: id(),
-    /** sha256 (hex) of the cookie token. The token itself is never stored. */
+    /** sha256 (hex) of the cookie token (better-auth's `token`, hashed by the sealing adapter). */
     tokenHash: text("token_hash").notNull().unique(),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     activeOrgId: uuid("active_org_id").references(() => organizations.id, { onDelete: "set null" }),
+    /** How the session was established: password (+ second factor), passkey, or sso. */
+    authMethod: text("auth_method").notNull().default("password"),
+    /** A second factor was verified for this session (TOTP, backup code, passkey). */
     mfaVerified: boolean("mfa_verified").notNull().default(false),
+    /** For SSO sessions: the organization whose IdP authenticated the user. */
+    ssoOrgId: uuid("sso_org_id").references(() => organizations.id, { onDelete: "set null" }),
     ip: text("ip"),
     userAgent: text("user_agent"),
     createdAt: createdAt(),
-    /** Absolute expiry (7 days after creation). Idle expiry uses last_seen_at. */
+    updatedAt: updatedAt(),
+    /** Sliding idle expiry (12h, refreshed on use). The 7-day absolute limit is checked against created_at. */
     expiresAt: ts("expires_at").notNull(),
-    lastSeenAt: ts("last_seen_at").notNull().defaultNow(),
   },
   (t) => [index().on(t.userId), index().on(t.expiresAt)],
+);
+
+/** better-auth accounts: the argon2id password (`provider_id = 'credential'`) and SSO identities. */
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: id(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    /** argon2id PHC string (credential accounts only). */
+    password: text("password"),
+    /** OAuth/OIDC tokens, encrypted by better-auth (`encryptOAuthTokens`). */
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: ts("access_token_expires_at"),
+    refreshTokenExpiresAt: ts("refresh_token_expires_at"),
+    scope: text("scope"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.userId), unique().on(t.providerId, t.accountId)],
+);
+
+/** better-auth verification values: 2FA challenges, SSO state, passkey challenges. Short-lived. */
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: id(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: ts("expires_at").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.identifier)],
+);
+
+/** better-auth twoFactor: the encrypted TOTP secret and backup codes. */
+export const twoFactors = pgTable("two_factors", {
+  id: id(),
+  userId: uuid("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  secret: text("secret").notNull(),
+  backupCodes: text("backup_codes").notNull(),
+  verified: boolean("verified").notNull().default(true),
+  failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+  lockedUntil: ts("locked_until"),
+  createdAt: createdAt(),
+});
+
+/** better-auth passkeys (WebAuthn credentials). */
+export const passkeys = pgTable(
+  "passkeys",
+  {
+    id: id(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull().unique(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    aaguid: text("aaguid"),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.userId)],
 );
 
 export const invitations = pgTable(
@@ -178,6 +268,34 @@ export const auditEvents = pgTable(
     requestId: text("request_id"),
   },
   (t) => [index().on(t.orgId, t.id)],
+);
+
+/**
+ * better-auth ssoProvider: one per IdP, owned by an organization. `oidc_config`
+ * is better-auth's JSON with `clientSecret` sealed by `crypto.ts` (AAD
+ * `sso_provider:<provider_id>`); the sealing adapter decrypts it for better-auth only.
+ */
+export const ssoProviders = pgTable(
+  "sso_providers",
+  {
+    id: id(),
+    orgId: orgId(),
+    /** Stable id used in callback URLs (`/sso/callback/:providerId`). */
+    providerId: text("provider_id").notNull().unique(),
+    name: text("name").notNull().default(""),
+    issuer: text("issuer").notNull(),
+    /** Comma-separated email domains. */
+    domain: text("domain").notNull(),
+    domainVerified: boolean("domain_verified").notNull().default(false),
+    /** Published as `_slai-verification.<domain> TXT slai-verification=<token>`. Not a secret. */
+    domainVerificationToken: text("domain_verification_token"),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.orgId)],
 );
 
 // ---------- help desk ----------
@@ -529,6 +647,7 @@ export const usageLedger = pgTable(
 /** Every org-scoped table (RLS applies). Used by tests to assert coverage. */
 export const ORG_SCOPED_TABLES = [
   "memberships",
+  "sso_providers",
   "invitations",
   "audit_events",
   "connections",

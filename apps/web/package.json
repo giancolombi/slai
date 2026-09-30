@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
     "@slai/shared": "workspace:*",
     "@slai/sla-engine": "workspace:*",
     "@slai/ui": "workspace:*",
@@ -18,6 +19,7 @@
     "@tanstack/react-router": "^1.170.40",
     "clsx": "^2.1.1",
     "lucide-react": "^1.48.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zod": "^4.6.5"

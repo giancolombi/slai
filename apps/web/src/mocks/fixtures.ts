@@ -16,6 +16,7 @@ import type {
   MetricState,
   NotificationChannel,
   OrgSettings,
+  OrgSsoSettings,
   Policy,
   Priority,
   Replay,
@@ -120,11 +121,51 @@ export function buildMe(): Me {
       { id: ACME_ORG_ID, name: "Acme Cloud", role: "owner" },
       { id: SANDBOX_ORG_ID, name: "Acme Cloud (Sandbox)", role: "admin" },
     ],
+    security: { authMethod: "password", mfa: "satisfied", totp: true, passkeys: 1, hasPassword: true },
+  };
+}
+
+/** Acme's SSO: one verified OIDC provider (Okta) and one SAML provider awaiting DNS verification. */
+export function buildOrgSso(): OrgSsoSettings {
+  const base = "http://localhost:8787/api/v1/auth/sso";
+  return {
+    enforceSso: false,
+    requireMfaForSso: false,
+    providers: [
+      {
+        id: "0d9c2d1e-2b0a-4c1e-9f00-5b0a00000001",
+        providerId: "acme-okta-7f3a91c2",
+        name: "Acme Okta",
+        protocol: "oidc",
+        issuer: "https://acmecloud.okta.example",
+        domains: ["acmecloud.example"],
+        domainVerified: true,
+        domainVerification: null,
+        clientId: "0oa8kq2slai",
+        metadataUrl: null,
+        callbackUrl: `${base}/callback/acme-okta-7f3a91c2`,
+        createdAt: new Date(Date.now() - 40 * DAY).toISOString(),
+      },
+      {
+        id: "0d9c2d1e-2b0a-4c1e-9f00-5b0a00000002",
+        providerId: "acme-contractors-2c4d",
+        name: "Contractors (Entra ID)",
+        protocol: "saml",
+        issuer: "https://sts.windows.example/acme-contractors",
+        domains: ["contractors.acmecloud.example"],
+        domainVerified: false,
+        domainVerification: { recordName: "_slai-verification", recordValue: "slai-verification=Qm9vdHN0cmFwLXRva2Vu" },
+        clientId: null,
+        metadataUrl: "https://login.microsoftonline.example/acme/federationmetadata.xml",
+        callbackUrl: `${base}/saml2/sp/acs/acme-contractors-2c4d`,
+        createdAt: new Date(Date.now() - 2 * DAY).toISOString(),
+      },
+    ],
   };
 }
 
 export function buildOrgSettings(): OrgSettings {
-  return { id: ACME_ORG_ID, name: "Acme Cloud", plan: "growth", monthlySpendCapCents: 150_000, requireMfa: true };
+  return { id: ACME_ORG_ID, name: "Acme Cloud", plan: "growth", monthlySpendCapCents: 150_000 };
 }
 
 export const AGENTS = [

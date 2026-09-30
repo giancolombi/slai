@@ -9,6 +9,11 @@ import type {
   NotificationChannel,
   Policy,
   Replay,
+  SecondFactor,
+  SignInDiscovery,
+  SignInResult,
+  SsoProvider,
+  TotpEnrollment,
 } from "@slai/shared";
 import {
   API_BASE,
@@ -17,6 +22,8 @@ import {
   createConnectionBody,
   createPolicyBody,
   createReplayBody,
+  createSsoProviderBody,
+  discoverBody,
   inviteBody,
   loginBody,
   notificationChannelBody,
@@ -26,12 +33,27 @@ import {
   switchOrgBody,
   updateMemberBody,
   updateOrgBody,
+  updateOrgSsoBody,
   updatePolicyBody,
   upsertCustomerBody,
+  verifyBackupCodeBody,
+  verifyTotpBody,
 } from "@slai/shared";
 import { delay, HttpResponse, http } from "msw";
 import type { z } from "zod";
-import { audit, dashboard, emptyOrg, getDb, org, resetDb, saveDb, toDetail, toSummary, usage } from "./db";
+import {
+  audit,
+  dashboard,
+  emptyOrg,
+  getDb,
+  MOCK_BACKUP_CODES,
+  org,
+  resetDb,
+  saveDb,
+  toDetail,
+  toSummary,
+  usage,
+} from "./db";
 import { buildCustomers, buildTickets, CONNECTORS, replayResult } from "./fixtures";
 import { kestrelAmbiguities, kestrelCitations, kestrelDraftDefinition } from "./policies";
 
@@ -70,8 +92,25 @@ function requireCsrf(request: Request) {
     : fail(403, "csrf", "Missing X-Requested-With header.");
 }
 
+/** The session check plus the API's MFA gate: no second factor, no data. */
 function requireSession() {
-  return getDb().session === "in" ? null : fail(401, "unauthorized", "Please sign in.");
+  const d = getDb();
+  if (d.session !== "in") return fail(401, "unauthorized", "Please sign in.");
+  if (d.me.security.mfa === "enrollment_required") {
+    return fail(403, "mfa_enrollment_required", "Set up two-factor authentication to continue.");
+  }
+  if (d.me.security.mfa === "verification_required") return fail(403, "mfa_required", "Verify your second factor.");
+  return null;
+}
+
+/** The verified SSO provider (in any mock org) for an email's domain. */
+function ssoProviderFor(email: string) {
+  const domain = email.split("@")[1]?.toLowerCase();
+  for (const o of Object.values(getDb().orgs)) {
+    const provider = o.sso.providers.find((p) => p.domainVerified && domain && p.domains.includes(domain));
+    if (provider) return { provider, enforced: o.sso.enforceSso };
+  }
+  return null;
 }
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
@@ -174,7 +213,7 @@ function customerView(c: ReturnType<typeof org>["customers"][number], now: numbe
 // ---------------------------------------------------------------- handlers
 
 export const handlers = [
-  // ------------------------------------------------ auth
+  // ------------------------------------------------ auth (mirrors the API's step results and MFA gate)
   http.get(url("/auth/me"), async () => {
     await latency(80, 200);
     const d = getDb();
@@ -182,30 +221,181 @@ export const handlers = [
     return HttpResponse.json(d.me);
   }),
 
-  http.post(url("/auth/login"), async ({ request }) => {
+  http.post(url("/auth/discover"), async ({ request }) => {
+    await latency(150, 300);
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+    const body = await parse(request, discoverBody);
+    if (body instanceof Response) return body;
+    const p = ssoProviderFor(body.email);
+    const out: SignInDiscovery = p
+      ? { method: "sso", providerId: p.provider.providerId, enforced: p.enforced }
+      : { method: "password" };
+    return HttpResponse.json(out);
+  }),
+
+  http.post(url("/auth/sign-in/email"), async ({ request }) => {
     await latency(300, 700);
     const csrf = requireCsrf(request);
     if (csrf) return csrf;
     const body = await parse(request, loginBody);
     if (body instanceof Response) return body;
     const d = getDb();
-    if (body.password === "wrong-password") return fail(401, "invalid_credentials", "Email or password is incorrect.");
-    if (d.me.user.mfaEnabled && !body.totp) {
+    if (ssoProviderFor(body.email)?.enforced) {
+      return fail(403, "sso_required", "Your organization requires single sign-on. Continue with SSO.");
+    }
+    if (body.password === "wrong-password")
+      return fail(401, "invalid_credentials", "Invalid email, password, or code.");
+    const s = d.me.security;
+    const methods: SecondFactor[] = [
+      ...(s.totp ? (["totp", "backup_code"] as const) : []),
+      ...(s.passkeys ? (["passkey"] as const) : []),
+    ];
+    if (methods.length > 0) {
       d.session = "mfa";
       saveDb();
-      return fail(401, "mfa_required", "Enter the 6-digit code from your authenticator app.");
+      return HttpResponse.json({ status: "mfa_required", methods } satisfies SignInResult);
     }
-    if (body.totp === "000000")
-      return fail(401, "invalid_totp", "That code didn't match. Codes change every 30 seconds.");
     d.session = "in";
+    d.me.security = { ...s, authMethod: "password", mfa: "enrollment_required" };
+    saveDb();
+    return HttpResponse.json({ status: "mfa_enrollment_required", me: d.me } satisfies SignInResult);
+  }),
+
+  http.post(url("/auth/two-factor/verify-totp"), async ({ request }) => {
+    await latency(250, 500);
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+    const body = await parse(request, verifyTotpBody);
+    if (body instanceof Response) return body;
+    const d = getDb();
+    if (d.session === "out") return fail(401, "mfa_challenge_expired", "That sign-in attempt expired. Sign in again.");
+    if (body.code === "000000") return fail(401, "invalid_code", "That code is not valid.");
+    const enrolling = d.session === "in" && !d.me.security.totp;
+    d.session = "in";
+    d.me.user.mfaEnabled = true;
+    d.me.security = { ...d.me.security, totp: true, mfa: "satisfied" };
+    const member = org().members.find((m) => m.userId === d.me.user.id);
+    if (member) member.mfaEnabled = true;
     audit(
       d.me.user.name,
-      "auth.login",
+      enrolling ? "auth.mfa_enabled" : "auth.login",
       { type: "user", id: d.me.user.id },
-      { method: body.totp ? "password+totp" : "password" },
+      {
+        method: "password",
+        secondFactor: "totp",
+      },
     );
     saveDb();
-    return HttpResponse.json(d.me);
+    return HttpResponse.json({ status: "signed_in", me: d.me } satisfies SignInResult);
+  }),
+
+  http.post(url("/auth/two-factor/verify-backup-code"), async ({ request }) => {
+    await latency(250, 500);
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+    const body = await parse(request, verifyBackupCodeBody);
+    if (body instanceof Response) return body;
+    const d = getDb();
+    if (d.session === "out") return fail(401, "mfa_challenge_expired", "That sign-in attempt expired. Sign in again.");
+    const i = d.backupCodes.indexOf(body.code);
+    if (i === -1) return fail(401, "invalid_code", "That code is not valid.");
+    d.backupCodes.splice(i, 1);
+    d.session = "in";
+    d.me.security = { ...d.me.security, mfa: "satisfied" };
+    audit(d.me.user.name, "auth.backup_code_used", { type: "user", id: d.me.user.id });
+    saveDb();
+    return HttpResponse.json({ status: "signed_in", me: d.me } satisfies SignInResult);
+  }),
+
+  http.post(url("/auth/two-factor/enable"), async ({ request }) => {
+    await latency(250, 500);
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+    const d = getDb();
+    if (d.session !== "in") return fail(401, "unauthorized", "Please sign in.");
+    const body = (await request.json().catch(() => ({}))) as { password?: string };
+    if (d.me.security.hasPassword && body.password === "wrong-password") {
+      return fail(400, "invalid_password", "That password is not correct.");
+    }
+    const secret = "JBSWY3DPEHPK3PXPKESTREL7Q";
+    d.backupCodes = MOCK_BACKUP_CODES.slice();
+    saveDb();
+    return HttpResponse.json({
+      secret,
+      otpauthUrl: `otpauth://totp/slai:${encodeURIComponent(d.me.user.email)}?secret=${secret}&issuer=slai&digits=6&period=30`,
+      backupCodes: d.backupCodes,
+    } satisfies TotpEnrollment);
+  }),
+
+  http.post(
+    url("/auth/two-factor/generate-backup-codes"),
+    guarded(() => {
+      const d = getDb();
+      d.backupCodes = MOCK_BACKUP_CODES.map((c) => c.replace("mock", "new"));
+      audit(d.me.user.name, "auth.backup_codes_regenerated", { type: "user", id: d.me.user.id });
+      return HttpResponse.json({ backupCodes: d.backupCodes });
+    }),
+  ),
+
+  http.post(
+    url("/auth/two-factor/disable"),
+    guarded(() => {
+      const d = getDb();
+      if (d.me.security.passkeys === 0) {
+        return fail(409, "last_factor", "Add a passkey before removing your authenticator app.");
+      }
+      d.me.user.mfaEnabled = false;
+      d.me.security = { ...d.me.security, totp: false };
+      audit(d.me.user.name, "auth.mfa_disabled", { type: "user", id: d.me.user.id });
+      return new HttpResponse(null, { status: 204 });
+    }),
+  ),
+
+  // WebAuthn needs a real authenticator and the real API; mock mode only lists and removes.
+  http.get(url("/auth/passkey/generate-register-options"), () =>
+    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+  ),
+  http.get(url("/auth/passkey/generate-authenticate-options"), () =>
+    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+  ),
+  http.get(
+    url("/auth/passkey/list-user-passkeys"),
+    guarded(() => HttpResponse.json(getDb().passkeys)),
+  ),
+  http.post(
+    url("/auth/passkey/delete-passkey"),
+    guarded(async ({ request }) => {
+      const d = getDb();
+      const { id } = (await request.json()) as { id: string };
+      if (!d.me.security.totp && d.passkeys.length <= 1) {
+        return fail(409, "last_factor", "Keep at least one second factor.");
+      }
+      d.passkeys = d.passkeys.filter((p) => p.id !== id);
+      d.me.security = { ...d.me.security, passkeys: d.passkeys.length };
+      audit(d.me.user.name, "auth.passkey_removed", { type: "passkey", id });
+      return new HttpResponse(null, { status: 204 });
+    }),
+  ),
+
+  http.post(url("/auth/sign-in/sso"), async ({ request }) => {
+    await latency(200, 400);
+    const csrf = requireCsrf(request);
+    if (csrf) return csrf;
+    const body = (await request.json().catch(() => ({}))) as { email?: string; providerId?: string; redirect?: string };
+    const known = body.email
+      ? ssoProviderFor(body.email)
+      : Object.values(getDb().orgs)
+          .flatMap((o) => o.sso.providers)
+          .some((p) => p.providerId === body.providerId && p.domainVerified);
+    if (!known) return fail(404, "sso_not_configured", "Single sign-on is not set up for this email domain.");
+    // No IdP in mock mode: pretend it signed us in.
+    const d = getDb();
+    d.session = "in";
+    d.me.security = { ...d.me.security, authMethod: "sso", mfa: "satisfied" };
+    audit(d.me.user.name, "auth.login", { type: "user", id: d.me.user.id }, { method: "sso" });
+    saveDb();
+    return HttpResponse.json({ url: body.redirect ?? "/" });
   }),
 
   http.post(url("/auth/signup"), async ({ request }) => {
@@ -214,7 +404,8 @@ export const handlers = [
     if (csrf) return csrf;
     const body = await parse(request, signupBody);
     if (body instanceof Response) return body;
-    if (body.email.startsWith("taken@")) return fail(409, "email_taken", "An account with this email already exists.");
+    if (body.email.startsWith("taken@"))
+      return fail(409, "signup_failed", "Unable to create an account with this email.");
     const d = getDb();
     const orgId = crypto.randomUUID();
     const userId = `u_${orgId.slice(0, 8)}`;
@@ -237,11 +428,13 @@ export const handlers = [
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
+      security: { authMethod: "password", mfa: "enrollment_required", totp: false, passkeys: 0, hasPassword: true },
     };
+    d.passkeys = [];
     d.session = "in";
     audit(body.name, "auth.signup", { type: "organization", id: orgId });
     saveDb();
-    return HttpResponse.json(d.me, { status: 201 });
+    return HttpResponse.json({ status: "mfa_enrollment_required", me: d.me } satisfies SignInResult, { status: 201 });
   }),
 
   http.post(url("/auth/logout"), async ({ request }) => {
@@ -253,40 +446,92 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.post(
-    url("/auth/mfa/setup"),
-    guarded(() => {
-      const secret = "JBSWY3DPEHPK3PXPKESTREL7Q";
-      const email = getDb().me.user.email;
-      return HttpResponse.json({
-        secret,
-        otpauthUrl: `otpauth://totp/slai:${encodeURIComponent(email)}?secret=${secret}&issuer=slai&digits=6&period=30`,
-      });
-    }),
+  // ------------------------------------------------ org SSO (admins)
+  http.get(
+    url("/org/sso"),
+    guarded(() => HttpResponse.json(org().sso), { admin: true }),
   ),
-
-  http.post(url("/auth/mfa/verify"), async ({ request }) => {
-    await latency(250, 500);
-    const csrf = requireCsrf(request);
-    if (csrf) return csrf;
-    const d = getDb();
-    let totp = "";
-    try {
-      totp = ((await request.json()) as { totp?: string }).totp ?? "";
-    } catch {
-      /* empty */
-    }
-    if (!/^\d{6}$/.test(totp)) return fail(400, "validation_failed", "Enter the 6-digit code.");
-    if (totp === "000000") return fail(401, "invalid_totp", "That code didn't match. Codes change every 30 seconds.");
-    if (d.session === "mfa") d.session = "in";
-    if (d.session !== "in") return fail(401, "unauthorized", "Please sign in.");
-    d.me.user.mfaEnabled = true;
-    const member = org().members.find((m) => m.userId === d.me.user.id);
-    if (member) member.mfaEnabled = true;
-    audit(d.me.user.name, "auth.mfa_enabled", { type: "user", id: d.me.user.id });
-    saveDb();
-    return HttpResponse.json(d.me);
-  }),
+  http.patch(
+    url("/org/sso"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, updateOrgSsoBody);
+        if (body instanceof Response) return body;
+        const o = org();
+        if (body.enforceSso && !o.sso.providers.some((p) => p.domainVerified)) {
+          return fail(409, "sso_not_ready", "Verify a domain for an SSO provider before enforcing SSO.");
+        }
+        o.sso = {
+          ...o.sso,
+          ...(body.enforceSso !== undefined && { enforceSso: body.enforceSso }),
+          ...(body.requireMfaForSso !== undefined && { requireMfaForSso: body.requireMfaForSso }),
+        };
+        audit(actor(), "sso.settings_changed", { type: "organization", id: o.settings.id }, body);
+        return HttpResponse.json(o.sso);
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/org/sso/providers"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, createSsoProviderBody);
+        if (body instanceof Response) return body;
+        const providerId = `${body.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
+        const base = "http://localhost:8787/api/v1/auth/sso";
+        const p: SsoProvider = {
+          id: crypto.randomUUID(),
+          providerId,
+          name: body.name,
+          protocol: body.protocol,
+          issuer: body.protocol === "oidc" ? body.issuer : "https://idp.example/entity",
+          domains: body.domains,
+          domainVerified: false,
+          domainVerification: {
+            recordName: "_slai-verification",
+            recordValue: `slai-verification=${crypto.randomUUID().slice(0, 18)}`,
+          },
+          clientId: body.protocol === "oidc" ? body.clientId : null,
+          metadataUrl: body.protocol === "saml" ? (body.metadataUrl ?? null) : null,
+          callbackUrl:
+            body.protocol === "oidc" ? `${base}/callback/${providerId}` : `${base}/saml2/sp/acs/${providerId}`,
+          createdAt: new Date().toISOString(),
+        };
+        org().sso.providers.push(p);
+        audit(actor(), "sso.provider_created", { type: "sso_provider", id: p.id }, { protocol: p.protocol });
+        return HttpResponse.json(p, { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/org/sso/providers/:id/verify-domain"),
+    guarded(
+      ({ params }) => {
+        const p = org().sso.providers.find((x) => x.id === params.id);
+        if (!p) return fail(404, "not_found", "SSO provider not found.");
+        p.domainVerified = true;
+        p.domainVerification = null;
+        audit(actor(), "sso.domain_verified", { type: "sso_provider", id: p.id });
+        return HttpResponse.json(p);
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/org/sso/providers/:id"),
+    guarded(
+      ({ params }) => {
+        const o = org();
+        o.sso.providers = o.sso.providers.filter((x) => x.id !== params.id);
+        if (!o.sso.providers.some((p) => p.domainVerified)) o.sso.enforceSso = false;
+        audit(actor(), "sso.provider_deleted", { type: "sso_provider", id: String(params.id) });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
+  ),
 
   http.post(
     url("/auth/switch-org"),
