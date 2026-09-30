@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { createKeyring, decryptJson } from "../src/crypto.js";
 import { verifyPassword } from "../src/passwords.js";
-import { connections, customerAccounts, slaPolicies, users } from "../src/schema.js";
+import { connections, customerAccounts, knowledgeSources, slaPolicies, users } from "../src/schema.js";
 import { DEMO, seed } from "../src/seed.js";
 import { openDbs, urls } from "./helpers.js";
 
@@ -21,6 +21,7 @@ describe("seed", () => {
       policies: await tx.select().from(slaPolicies),
       customers: await tx.select().from(customerAccounts),
       conns: await tx.select().from(connections),
+      knowledge: await tx.select().from(knowledgeSources),
     }));
     expect(counts.customers.map((c) => c.name).sort()).toEqual([
       "Bluepeak Logistics",
@@ -36,6 +37,14 @@ describe("seed", () => {
     );
     expect(counts.conns).toHaveLength(1);
     expect(counts.conns[0]!.provider).toBe("demo");
+    // A fresh install syncs the demo help center: one never-synced article source on the demo connection.
+    expect(counts.knowledge).toHaveLength(1);
+    expect(counts.knowledge[0]).toMatchObject({
+      id: first.knowledgeSourceId,
+      connectionId: first.connectionId,
+      kind: "helpdesk_articles",
+      lastSyncAt: null,
+    });
     expect(decryptJson(counts.conns[0]!.credentials, { keyring, aad: `connection:${first.connectionId}` })).toEqual({});
 
     const active = counts.policies.filter((p) => p.status === "active");
