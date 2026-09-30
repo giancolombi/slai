@@ -21,8 +21,8 @@ function Body() {
           <li>
             <B>Webhooks</B> tell slai the moment a ticket changes. Right after connecting, the connection page shows how
             to set them up: either paste the secret slai generated into your help desk, or (for Zendesk, Intercom,
-            HubSpot and a few others) paste your help desk's signing secret into slai. Deliveries with a bad signature
-            are rejected.
+            HubSpot and a few others) paste your help desk's signing secret into slai. slai ignores any update that
+            isn't signed with it.
           </li>
           <li>
             A <B>catch-up sync</B> runs every few minutes anyway, so a missed webhook only delays an update; it never
@@ -46,7 +46,7 @@ function Body() {
           ]}
         />
         <P>
-          Each connector ships a default mapping from your help desk's statuses and priorities. If your team uses custom
+          slai starts with a default mapping of your help desk's statuses and priorities. If your team uses custom
           statuses (say "Waiting on engineering"), open the connection and map them. Values slai has seen but cannot map
           are listed there. Saving a change re-reads the affected tickets, so their clocks are recalculated.
         </P>

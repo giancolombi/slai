@@ -62,8 +62,8 @@ function Body() {
           </li>
         </Ul>
         <P>
-          All of these come from the deterministic clock and your contract terms, never from a model. See{" "}
-          <GuideLink to="sla-clock">How the SLA clock works</GuideLink>.
+          All of these are calculated exactly from your contract terms and each ticket's history, never guessed by AI.
+          See <GuideLink to="sla-clock">How the SLA clock works</GuideLink>.
         </P>
       </Section>
     </>

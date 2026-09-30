@@ -62,7 +62,7 @@ function Body() {
       <Section id="assign" title="Assign it to customers">
         <P>
           A policy measures a customer's tickets once it is assigned to that customer on{" "}
-          <AppLink to="/customers">Customers</AppLink>. Tickets are matched to customers by help-desk organization id
+          <AppLink to="/customers">Customers</AppLink>. Tickets are matched to customers by help-desk organization
           first, then by the most specific email domain. Mark one policy as the <B>default</B> to measure everything
           else. A contract linked to a customer at upload makes the assignment easy to find, but you still choose the
           policy on the customer.

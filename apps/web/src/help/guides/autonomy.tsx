@@ -37,7 +37,7 @@ function Body() {
             <B>Trigger</B>: the risk (warning, at risk or breached) at which agents start on a ticket.
           </li>
           <li>
-            <B>Minimum confidence</B> (0.8 by default): autopilot only sends drafts the agent is at least this sure of.
+            <B>Minimum confidence</B> (80% by default): autopilot only sends drafts the agent is at least this sure of.
           </li>
         </Ul>
         <H3>The most specific rule wins</H3>
@@ -69,7 +69,7 @@ function Body() {
             it contains a <B>link or email address</B> that is not in the ticket thread or your knowledge;
           </li>
           <li>
-            it looks like it contains <B>secrets or personal data</B> (a payment card number, a key or token).
+            it looks like it contains <B>secrets or personal data</B> (a payment card number, a password or an API key).
           </li>
         </Ul>
         <P>
