@@ -1,0 +1,28 @@
+{
+  "name": "slai",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "ci": "pnpm lint && pnpm typecheck && pnpm test",
+    "db:up": "docker compose up -d postgres mailpit",
+    "db:migrate": "pnpm --filter @slai/db migrate",
+    "db:seed": "pnpm --filter @slai/db seed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}
