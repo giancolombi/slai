@@ -8,7 +8,8 @@
  * micro-dollars, for margin reporting; it does not count against the cap.
  */
 import type { RunMetering } from "@slai/agents";
-import { audit, organizations, type Tx, usageLedger } from "@slai/db";
+import { audit, creditState, loadOrgBilling, type Tx, usageLedger } from "@slai/db";
+import type { AgentCeiling } from "@slai/shared";
 import { gte, sql } from "drizzle-orm";
 import { monthKey, monthStart } from "./clock.js";
 import { type SpendState, spendState } from "./decide.js";
@@ -31,14 +32,30 @@ export async function creditsThisMonth(tx: Tx, now: Date): Promise<number> {
   return row?.credits ?? 0;
 }
 
-export async function spendCapCents(tx: Tx): Promise<number | null> {
-  const [org] = await tx.select({ cap: organizations.monthlySpendCapCents }).from(organizations);
-  return org?.cap ?? null;
+export interface BillingGate {
+  /** The plan's agent ceiling now (T-65): trial, past due and canceled states lower it. */
+  ceiling: AgentCeiling;
+  spend: SpendState;
+  usedCredits: number;
+  /** The spend cap in credits (included + purchased + allowance, or the owner's override). */
+  capCredits: number | null;
+}
+
+/** The plan ceiling and spend state for dispatch decisions. */
+export async function currentBilling(tx: Tx, now: Date): Promise<BillingGate> {
+  const org = await loadOrgBilling(tx);
+  if (!org) return { ceiling: "observe", spend: "ok", usedCredits: 0, capCredits: null };
+  const cs = await creditState(tx, org, now);
+  return {
+    ceiling: cs.entitlements.ceiling,
+    spend: spendState(cs.used, cs.balance.cap),
+    usedCredits: cs.used,
+    capCredits: cs.balance.cap,
+  };
 }
 
 export async function currentSpend(tx: Tx, now: Date): Promise<SpendState> {
-  const [credits, cap] = await Promise.all([creditsThisMonth(tx, now), spendCapCents(tx)]);
-  return spendState(credits * 10_000, cap);
+  return (await currentBilling(tx, now)).spend;
 }
 
 /**
@@ -106,9 +123,8 @@ function refs(r: LedgerRef) {
  * Recorded as audit events, so each fires once per month.
  */
 export async function reachedCapThresholds(tx: Tx, orgId: string, now: Date): Promise<number[]> {
-  const cap = await spendCapCents(tx);
+  const { capCredits: cap, usedCredits: credits } = await currentBilling(tx, now);
   if (cap === null || cap <= 0) return [];
-  const credits = await creditsThisMonth(tx, now);
   const month = monthKey(now);
   const reached = CAP_THRESHOLDS.filter((p) => credits * 100 >= cap * p);
   if (!reached.length) return [];
@@ -124,7 +140,7 @@ export async function reachedCapThresholds(tx: Tx, orgId: string, now: Date): Pr
       actor: { type: "system", id: null, name: "slai" },
       action: "usage.cap_threshold",
       target: { type: "organization", id: orgId },
-      metadata: { month, percent, creditsUsed: credits, capCents: cap },
+      metadata: { month, percent, creditsUsed: credits, capCredits: cap },
     });
   }
   return fresh;

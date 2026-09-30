@@ -260,7 +260,8 @@
   micro-dollars), plus `sandbox_seconds` rows. Credits are on the first row of a
   successful run: triage 3, draft 20. An autopilot send adds an `autopilot_reply`
   row at 60. The spend cap compares this month's credits (1 credit = 1 cent) with
-  `monthly_spend_cap_cents`. Reaching 50/80/100% is recorded once per month
+  the cap from TR-33 (included + purchased + 50%, or `monthly_spend_cap_cents`
+  when the owner set one). Reaching 50/80/100% is recorded once per month
   (`usage.cap_threshold` audit event) and sent to every enabled channel.
 - **TR-21e** Breach Replay stores the replayed tickets through the same idempotent
   ingest, but sends no alerts and dispatches no agents. Exposure is
@@ -342,7 +343,27 @@
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
   errors as `{error:{code,message}}`, lists as `{items,nextCursor}`, money in cents,
-  durations in ms, times as ISO strings.
+  durations in ms, times as ISO strings. Who-did-it fields (`approvedBy`, `uploadedBy`,
+  `decidedBy`) are user ids, each with a `…ByName` display name beside it; a null
+  `decidedBy` with `decidedAt` set means slai decided (autopilot or an assist note).
+- **TR-22a** Live updates: producers call `notifyEvent` inside their transaction
+  (`slai_events`, ids only); `GET /events` forwards only the session org's events.
+  Types: `ticket.updated` (ticket, evaluation or one of its agent runs),
+  `action.created`, `action.updated` (approved, sending, sent, failed, rejected),
+  `replay.progress` (queued, running, progress, done), `contract.updated`. The web
+  keeps one EventSource per tab, invalidates the matching query caches (coalesced per
+  300 ms), reconnects with jittered backoff (1 s to 30 s) and then refetches all, and
+  reconnects on org switch. Polling is only the fallback while the stream is down
+  (lists 60 s, in-flight extraction or replay 5 s).
+- **TR-22b** Contract text: `GET /contracts/:id/text` extracts on demand with the
+  extraction agent's loader (`@slai/agents/documents`: unpdf per PDF page, mammoth for
+  DOCX), so pages and quotes match the citations. It returns at most 400k characters
+  (`truncated` beyond), is cached per file hash in-process, reads through RLS, and is
+  audited as `contract.text_viewed`. The review screen places quotes with the
+  extractor's normalization and maps them back to exact offsets.
+- **TR-22c** Web bundle: routes are lazy; React, TanStack and zod are separate vendor
+  chunks; `@slai/shared` is side-effect free and `API_BASE` lives in its own module, so
+  the entry chunk has no zod.
 - **TR-23** Auth is **better-auth 1.7** (`better-auth`, with the `twoFactor`
   plugin, `@better-auth/passkey` and `@better-auth/sso`), configured in
   `apps/api/src/auth/better-auth.ts`. slai keeps organizations, memberships,
@@ -481,10 +502,71 @@
   | CC6.8 Uploads | Magic-byte sniffing; 20 MB cap; sanitized names; server-generated storage keys |
   | CC7.2 Audit and logs | `audit()` in the same transaction; a trigger blocks UPDATE/DELETE/TRUNCATE; pino redaction; no request bodies in logs |
   | CC8.1 Change integrity | Policies need `parsePolicy` and admin approval; versions are superseded, never edited in place |
-  | PI1 Billing integrity | Append-only `usage_ledger`; money figures come only from the engine |
+  | PI1 Billing integrity | Append-only `usage_ledger` and `credit_grants`; money figures come only from the engine; plans and billing rules are pure code (`plans.ts`); Stripe webhooks signature-verified and applied once per event (`billing_events`); overage reported once per closed month |
 
 - **TR-31** CI (lint, typecheck, test against Postgres) must pass before merging to
   main.
+
+### Billing (PR-23, T-65)
+- **TR-33** Plans, entitlements and credits are pure code in
+  `packages/shared/src/plans.ts` (`PLANS`, `TRIAL`, `entitlements`,
+  `creditBalance`, `cycleLiveIn`, `mapStripeStatus`); `packages/db/src/billing.ts`
+  only loads their inputs inside `withOrg`.
+  - Stored on `organizations`: `plan`, `billing_status` (`trialing | active |
+    past_due | canceled`), `trial_ends_at` (a column default of now + 14 days, so
+    every signup path starts the trial with no hook), `past_due_since`,
+    `stripe_customer_id`, `stripe_subscription_id`.
+  - `entitlements(org, now)` derives the state (`trialing`, `trial_expired`,
+    `active`, `past_due` within 7 days, `degraded` after, `canceled`), the agent
+    ceiling (`observe < triage < assist < autopilot`), included credits and
+    whether overage is billed.
+  - The worker enforces the ceiling in `decideDispatch` and again when a run
+    starts (`decideRunLevel`): the rule's level is capped at the ceiling (a
+    triage ceiling queues a triage run only, and refuses a draft; manual runs
+    are capped too). Over the spend cap, agents observe. Alerts, evaluation and
+    the timer sweep never read billing state.
+  - Credits: `creditBalance` draws included, then purchased (`credit_grants`,
+    append-only; available = grants − what earlier periods drew), then overage.
+    `spendState(usedCredits, capCredits)` compares against the cap.
+- **TR-34** Periods and metering. The billing period is the UTC calendar month
+  (the same as the spend cap).
+  - Tracked tickets = distinct tickets in `sla_outcomes` with a cycle live in
+    the period (`started_at < end and (stopped_at is null or stopped_at >= start)`).
+  - The `billing-snapshot` job (scheduled per org, hourly, by the sweep; ids
+    only across orgs) upserts the month's row in `billing_periods` (tracked,
+    limit, overage, credits used/included/purchased/overage, billable cents),
+    closes the previous month once, and sends owner emails once each (audit-event
+    keys): tracked overage per month, trial ending (≤ 3 days), trial ended,
+    degraded after a failed payment.
+  - A closed month's billable overage is reported to Stripe **Billing Meter
+    events** (`billing.meterEvents.create`; legacy usage records are gone since
+    2025-03-31.basil): `slai_tracked_ticket_overage` (tickets) and
+    `slai_credit_overage` (credits), keyed `orgId:YYYY-MM:kind` (Stripe dedupes
+    identifiers), timestamped inside the month, then marked `reported_at`.
+    Subscriptions are anchored to the 1st of the month so Stripe's periods match.
+- **TR-35** Stripe (official `stripe` SDK, API version pinned by the SDK).
+  Keys come from env (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, price ids per
+  plan and per overage meter). Without a secret key, billing runs in **manual
+  mode**: plans come from the seed (the demo org is Scale, active) or
+  `POST /billing/manual` (owner/admin; refused in production); nothing is
+  reported.
+  - Checkout (subscription mode, plan price + both metered prices), the
+    Customer Portal (payment methods, invoices; an existing subscription changes
+    plan through the portal's `subscription_update` flow), and credit packs
+    (payment mode, inline price data from `CREDIT_PACKS`). One Stripe customer
+    per org (created on first use with an idempotency key; audited).
+  - `POST /billing/webhook` is public and CSRF-exempt; the `Stripe-Signature` is
+    verified over the raw body (bad, stale or missing → 400). The org is found by
+    the stored customer id, else our org id in the event metadata. Each event id
+    is claimed in `billing_events` in the same transaction that applies it, so a
+    redelivery is a no-op; a credit pack grants once per Checkout Session
+    (unique session id) and only when paid, with credits from the pack
+    definition, never from metadata. Handled: `checkout.session.completed`,
+    `customer.subscription.created/updated/deleted` (plan from the price id; an
+    old subscription's deletion never cancels the current one),
+    `invoice.paid` (past due → active) and `invoice.payment_failed` (→ past due,
+    keeping the first failure time). Every applied event is audited
+    (`billing.<type>` with from/to).
 
 ### Local development
 - **TR-32** `docker compose up -d` (Postgres 18 on 5433, Mailpit) →

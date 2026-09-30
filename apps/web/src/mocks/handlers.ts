@@ -4,6 +4,7 @@ import type {
   Connection,
   ConnectionMapping,
   Contract,
+  ContractText,
   CustomerAccount,
   FieldMappingTable,
   KnowledgeArticle,
@@ -23,21 +24,28 @@ import {
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
+  CREDIT_PACKS,
   createConnectionBody,
   createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   discoverBody,
   inviteBody,
   knowledgeArticleQuery,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
+  PLANS,
+  type PlanId,
   policyPreviewBody,
   rejectActionBody,
   savedReplyBody,
   signupBody,
   switchOrgBody,
+  TRIAL,
   updateKnowledgeArticleBody,
   updateMappingBody,
   updateMemberBody,
@@ -54,6 +62,7 @@ import type { z } from "zod";
 import { matchesArticle } from "../lib/knowledge";
 import {
   audit,
+  billing,
   dashboard,
   emptyOrg,
   getDb,
@@ -67,6 +76,7 @@ import {
 } from "./db";
 import {
   buildCustomers,
+  buildInvoices,
   buildTickets,
   CONNECTORS,
   knowledgeRefsFor,
@@ -148,6 +158,7 @@ function ssoProviderFor(email: string) {
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
 const actor = () => getDb().me.user.name;
+const actorId = () => getDb().me.user.id;
 
 /** Wraps a handler with session + CSRF checks, the persisted save, and latency. */
 function guarded<Args extends { request: Request; params: Record<string, string | readonly string[] | undefined> }>(
@@ -208,6 +219,7 @@ function advanceContracts(now: number) {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: policyId, name },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(readyAt).toISOString(),
     });
@@ -244,6 +256,29 @@ function advanceReplays(now: number) {
   }
 }
 
+/** Plausible contract text for the demo: each cited quote sits on its cited page among boilerplate clauses. */
+function mockContractText(c: Contract): ContractText {
+  const citations = c.extraction?.citations ?? [];
+  const boiler = [
+    "This Schedule forms part of the Agreement between the parties and is subject to its terms.",
+    "Capitalised terms not defined here have the meaning given in the Master Services Agreement.",
+    "The Supplier shall provide the Support Services with reasonable skill, care and diligence.",
+    "Nothing in this Schedule limits either party's rights under clause 14 (Liability).",
+  ];
+  const paged = citations.some((x) => x.page !== null);
+  const last = Math.max(1, ...citations.map((x) => x.page ?? 1));
+  const pages: ContractText["pages"] = [];
+  for (let n = 1; n <= (paged ? last : 1); n++) {
+    const quotes = citations.filter((x) => (paged ? x.page === n : true)).map((x) => x.quote);
+    const clauses = [...new Set(quotes)].flatMap((q, i) => [`${n}.${i + 1} ${q}`, boiler[(n + i) % boiler.length]!]);
+    pages.push({
+      page: paged ? n : null,
+      text: [`${c.filename}`, "", boiler[n % boiler.length]!, "", ...clauses.map((x) => `${x}\n`)].join("\n"),
+    });
+  }
+  return { contractId: c.id, filename: c.filename, pages, truncated: false };
+}
+
 function customerView(c: ReturnType<typeof org>["customers"][number], now: number): CustomerAccount {
   const o = org();
   const mine = o.tickets.filter((t) => t.customerId === c.id && t.status !== "solved" && t.status !== "closed");
@@ -257,6 +292,31 @@ function customerView(c: ReturnType<typeof org>["customers"][number], now: numbe
 }
 
 // ---------------------------------------------------------------- handlers
+
+/** Sets the org's plan everywhere the app reads it (settings, the session). */
+function setPlan(plan: PlanId) {
+  const o = org();
+  o.billing.plan = plan;
+  o.settings.plan = plan;
+  getDb().me.organization.plan = plan;
+}
+
+/**
+ * The mock stands in for Stripe: checkout "completes" at once and the
+ * redirect stays in the app (the real API returns a Stripe-hosted URL).
+ */
+function subscribe(plan: PlanId) {
+  const o = org();
+  setPlan(plan);
+  Object.assign(o.billing, {
+    status: "active",
+    trialEndsAt: null,
+    pastDueSince: null,
+    hasCustomer: true,
+    hasSubscription: true,
+  });
+  if (o.billing.invoices.length === 0) o.billing.invoices = buildInvoices(Date.now(), PLANS[plan].priceCents ?? 0);
+}
 
 export const handlers = [
   // ------------------------------------------------ auth (mirrors the API's step results and MFA gate)
@@ -470,7 +530,7 @@ export const handlers = [
         id: orgId,
         name: body.organizationName,
         slug: body.organizationName.toLowerCase().replace(/\W+/g, "-"),
-        plan: "replay",
+        plan: TRIAL.plan,
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
@@ -900,6 +960,14 @@ export const handlers = [
       return c ? HttpResponse.json(c) : fail(404, "not_found", "Contract not found.");
     }),
   ),
+  http.get(
+    url("/contracts/:id/text"),
+    guarded(({ params }) => {
+      const c = org().contracts.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Contract not found.");
+      return HttpResponse.json(mockContractText(c));
+    }),
+  ),
   http.get(url("/contracts/:id/file"), async ({ params }) => {
     const c = org().contracts.find((x) => x.id === params.id);
     if (!c) return fail(404, "not_found", "Contract not found.");
@@ -925,7 +993,8 @@ export const handlers = [
         customerAccountId,
         status: "extracting",
         uploadedAt: new Date().toISOString(),
-        uploadedBy: actor(),
+        uploadedBy: actorId(),
+        uploadedByName: actor(),
         error: null,
         extraction: null,
       };
@@ -974,6 +1043,7 @@ export const handlers = [
         isDefault: body.isDefault,
         definition: body.definition,
         approvedBy: null,
+        approvedByName: null,
         approvedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -1014,7 +1084,8 @@ export const handlers = [
         for (const x of o.policies)
           if (x.status === "active" && x.name === p.name && x.id !== p.id) x.status = "superseded";
         p.status = "active";
-        p.approvedBy = actor();
+        p.approvedBy = actorId();
+        p.approvedByName = actor();
         p.approvedAt = new Date().toISOString();
         const contract = o.contracts.find((c) => c.id === p.contractId);
         if (contract?.extraction?.policyIds.every((id) => o.policies.find((x) => x.id === id)?.status === "active")) {
@@ -1140,6 +1211,7 @@ export const handlers = [
           blockedReason: null,
           createdAt: new Date(now).toISOString(),
           decidedBy: null,
+          decidedByName: null,
           decidedAt: null,
         });
       }
@@ -1175,7 +1247,8 @@ export const handlers = [
       const edited = body.body !== undefined && body.body !== a.body;
       if (body.body !== undefined) a.body = body.body;
       a.status = "sent";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       const t = o.tickets.find((x) => x.id === a.ticketId);
       if (t) {
@@ -1219,7 +1292,8 @@ export const handlers = [
       if (a.status !== "proposed" && a.status !== "blocked")
         return fail(409, "already_decided", "This draft was already decided.");
       a.status = "rejected";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       audit(actor(), "action.rejected", { type: "agent_action", id: a.id }, { reason: body.reason ?? null });
       return HttpResponse.json(a);
@@ -1533,6 +1607,79 @@ export const handlers = [
   http.get(
     url("/usage"),
     guarded(() => HttpResponse.json(usage(Date.now()))),
+  ),
+
+  // ------------------------------------------------ billing (T-65)
+  http.get(
+    url("/billing"),
+    guarded(() => HttpResponse.json(billing(Date.now()))),
+  ),
+  http.post(
+    url("/billing/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, billingCheckoutBody);
+        if (body instanceof Response) return body;
+        subscribe(body.plan);
+        audit(actor(), "billing.checkout_completed", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json({ url: "/billing?checkout=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/credit-packs/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, creditPackCheckoutBody);
+        if (body instanceof Response) return body;
+        const pack = CREDIT_PACKS.find((p) => p.id === body.pack);
+        if (!pack) return fail(400, "validation_failed", "Unknown credit pack.");
+        const o = org();
+        o.billing.purchasedCredits += pack.credits;
+        o.billing.hasCustomer = true;
+        audit(actor(), "billing.credits_purchased", { type: "organization", id: o.settings.id }, body);
+        return HttpResponse.json({ url: "/billing?credits=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/portal"),
+    guarded(
+      () => {
+        if (!org().billing.hasCustomer) return fail(409, "no_customer", "Choose a plan first.");
+        return HttpResponse.json({ url: "/billing?portal=return" });
+      },
+      { admin: true },
+    ),
+  ),
+  // The mock accepts this in any mode so the demo can show every billing state.
+  http.post(
+    url("/billing/manual"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, manualBillingBody);
+        if (body instanceof Response) return body;
+        const b = org().billing;
+        if (body.plan) setPlan(body.plan);
+        if (body.status) {
+          b.status = body.status;
+          b.pastDueSince = body.status === "past_due" ? (b.pastDueSince ?? new Date().toISOString()) : null;
+          if (body.status !== "trialing") {
+            b.hasCustomer = true;
+            b.hasSubscription = body.status !== "canceled";
+            if (b.invoices.length === 0) b.invoices = buildInvoices(Date.now(), PLANS[b.plan].priceCents ?? 0);
+          }
+        }
+        if (body.trialEndsAt !== undefined) b.trialEndsAt = body.trialEndsAt;
+        if (body.pastDueSince !== undefined) b.pastDueSince = body.pastDueSince;
+        if (body.grantCredits) b.purchasedCredits += body.grantCredits;
+        audit(actor(), "billing.manual_update", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json(billing(Date.now()));
+      },
+      { admin: true },
+    ),
   ),
   http.get(
     url("/audit-events"),

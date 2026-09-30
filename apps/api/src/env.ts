@@ -61,6 +61,18 @@ export const envSchema = z.object({
   OAUTH_HELP_SCOUT_CLIENT_SECRET: z.string().min(1).optional(),
   STORAGE_DRIVER: z.enum(["local"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default(".data/uploads"),
+  /**
+   * Stripe billing (T-65), test-mode keys in development. Without STRIPE_SECRET_KEY,
+   * billing runs in manual mode (plans set by an admin via seed or POST /billing/manual).
+   */
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
+  STRIPE_PRICE_STARTER: z.string().startsWith("price_").optional(),
+  STRIPE_PRICE_GROWTH: z.string().startsWith("price_").optional(),
+  STRIPE_PRICE_SCALE: z.string().startsWith("price_").optional(),
+  /** Metered prices on the Billing Meters the worker reports overage to. */
+  STRIPE_PRICE_TICKET_OVERAGE: z.string().startsWith("price_").optional(),
+  STRIPE_PRICE_CREDIT_OVERAGE: z.string().startsWith("price_").optional(),
   /** Honor X-Forwarded-For for the client IP. Only enable behind a trusted proxy. */
   TRUST_PROXY: z
     .enum(["true", "false"])

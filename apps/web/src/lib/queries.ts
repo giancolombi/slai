@@ -1,5 +1,20 @@
-import { keepPreviousData, QueryCache, QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
-import { api, isApiError, type KnowledgeArticleQuery, type TicketQuery } from "./api";
+import {
+  keepPreviousData,
+  QueryCache,
+  QueryClient,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { api, errorMessage, isApiError, type KnowledgeArticleQuery, type TicketQuery } from "./api";
+import { useLivePolling } from "./live";
+
+/**
+ * Freshness comes from live updates (`lib/live.ts`). Polling is only the fallback while
+ * the stream is down: lists every minute, and in-flight work (an extraction, a replay) every 5s.
+ */
+const PROGRESS_FALLBACK_MS = 5_000;
 
 export const qk = {
   me: ["me"] as const,
@@ -14,6 +29,8 @@ export const qk = {
   customers: ["customers"] as const,
   contracts: ["contracts"] as const,
   contract: (id: string) => ["contracts", id] as const,
+  // Not under "contracts": a file's text never changes, so contract events needn't refetch it.
+  contractText: (id: string) => ["contract-text", id] as const,
   policies: ["policies"] as const,
   policy: (id: string) => ["policies", id] as const,
   tickets: (q: TicketQuery = {}) => ["tickets", q] as const,
@@ -25,6 +42,7 @@ export const qk = {
   replays: ["replays"] as const,
   replay: (id: string) => ["replays", id] as const,
   usage: ["usage"] as const,
+  billing: ["billing"] as const,
   audit: ["audit"] as const,
   knowledgeSources: ["knowledge", "sources"] as const,
   knowledgeArticles: (q: KnowledgeArticleQuery = {}) => ["knowledge", "articles", q] as const,
@@ -71,19 +89,29 @@ export const useConnection = (id: string) =>
 export const useConnectionMapping = (id: string) =>
   useQuery({ queryKey: qk.connectionMapping(id), queryFn: () => api.connections.mapping(id) });
 export const useCustomers = () => useQuery({ queryKey: qk.customers, queryFn: api.customers.list });
-export const useContracts = (poll = false) =>
-  useQuery({
+export const useContracts = (poll = false) => {
+  const fallback = useLivePolling(PROGRESS_FALLBACK_MS);
+  return useQuery({
     queryKey: qk.contracts,
     queryFn: api.contracts.list,
     refetchInterval: (q) =>
-      poll || q.state.data?.items.some((c) => c.status === "extracting" || c.status === "uploaded") ? 2_500 : false,
+      poll || q.state.data?.items.some((c) => c.status === "extracting" || c.status === "uploaded") ? fallback : false,
   });
-export const useContract = (id: string) =>
-  useQuery({
+};
+export const useContract = (id: string) => {
+  const fallback = useLivePolling(PROGRESS_FALLBACK_MS);
+  return useQuery({
     queryKey: qk.contract(id),
     queryFn: () => api.contracts.get(id),
     refetchInterval: (q) =>
-      q.state.data?.status === "extracting" || q.state.data?.status === "uploaded" ? 2_000 : false,
+      q.state.data?.status === "extracting" || q.state.data?.status === "uploaded" ? fallback : false,
+  });
+};
+export const useContractText = (id: string) =>
+  useQuery({
+    queryKey: qk.contractText(id),
+    queryFn: () => api.contracts.text(id),
+    staleTime: Number.POSITIVE_INFINITY,
   });
 export const usePolicies = () => useQuery({ queryKey: qk.policies, queryFn: api.policies.list });
 export const usePolicy = (id: string | null | undefined) =>
@@ -93,29 +121,38 @@ export const useTickets = (q: TicketQuery) =>
     queryKey: qk.tickets(q),
     queryFn: ({ signal }) => api.tickets.list(q, signal),
     placeholderData: keepPreviousData,
-    refetchInterval: 30_000,
+    refetchInterval: useLivePolling(),
   });
 export const useTicket = (id: string) =>
-  useQuery({ queryKey: qk.ticket(id), queryFn: () => api.tickets.get(id), refetchInterval: 30_000 });
+  useQuery({ queryKey: qk.ticket(id), queryFn: () => api.tickets.get(id), refetchInterval: useLivePolling() });
 export const useActions = (status: "proposed" | "sent" | "rejected" | "blocked" = "proposed") =>
-  useQuery({ queryKey: qk.actions(status), queryFn: () => api.actions.list(status), refetchInterval: 30_000 });
+  useQuery({
+    queryKey: qk.actions(status),
+    queryFn: () => api.actions.list(status),
+    refetchInterval: useLivePolling(),
+  });
 export const useAutonomy = () => useQuery({ queryKey: qk.autonomy, queryFn: api.autonomy.list });
 export const useChannels = () => useQuery({ queryKey: qk.channels, queryFn: api.notifications.list });
 export const useDashboard = () =>
-  useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard.get, refetchInterval: 30_000 });
-export const useReplays = () =>
-  useQuery({
+  useQuery({ queryKey: qk.dashboard, queryFn: api.dashboard.get, refetchInterval: useLivePolling() });
+export const useReplays = () => {
+  const fallback = useLivePolling(PROGRESS_FALLBACK_MS);
+  return useQuery({
     queryKey: qk.replays,
     queryFn: api.replays.list,
     refetchInterval: (q) =>
-      q.state.data?.items.some((r) => r.status === "queued" || r.status === "running") ? 1_500 : false,
+      q.state.data?.items.some((r) => r.status === "queued" || r.status === "running") ? fallback : false,
   });
-export const useReplay = (id: string) =>
-  useQuery({
+};
+export const useReplay = (id: string) => {
+  const fallback = useLivePolling(PROGRESS_FALLBACK_MS);
+  return useQuery({
     queryKey: qk.replay(id),
     queryFn: () => api.replays.get(id),
-    refetchInterval: (q) => (q.state.data?.status === "queued" || q.state.data?.status === "running" ? 1_000 : false),
+    refetchInterval: (q) =>
+      q.state.data?.status === "queued" || q.state.data?.status === "running" ? fallback : false,
   });
+};
 export const useKnowledgeSources = () =>
   useQuery({
     queryKey: qk.knowledgeSources,
@@ -130,3 +167,45 @@ export const useKnowledgeArticles = (q: KnowledgeArticleQuery, enabled = true) =
     enabled,
   });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.usage.get });
+export const useBilling = () => useQuery({ queryKey: qk.billing, queryFn: api.billing.get, staleTime: 60_000 });
+
+/** Sends the browser to a Stripe-hosted page (Checkout or the Customer Portal). */
+function redirectTo({ url }: { url: string }) {
+  window.location.assign(url);
+}
+
+export interface RedirectMutationOptions {
+  onError?: (message: string) => void;
+}
+
+export const useCheckout = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.checkout,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+export const useCreditPackCheckout = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.creditPackCheckout,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+export const useBillingPortal = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.portal,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+/** Manual mode (local dev, and the mock API): set the plan, status or trial directly. */
+export const useManualBilling = (o: RedirectMutationOptions = {}) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.billing.manual,
+    onSuccess: (next) => {
+      queryClient.setQueryData(qk.billing, next);
+      void queryClient.invalidateQueries({ queryKey: qk.me });
+      void queryClient.invalidateQueries({ queryKey: qk.org });
+    },
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+};

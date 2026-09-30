@@ -61,9 +61,30 @@ export async function scheduleSyncs(deps: WorkerDeps): Promise<number> {
   return n;
 }
 
+export const BILLING_INTERVAL_MS = 60 * 60_000;
+
+/**
+ * Enqueues each org's billing snapshot (T-65), at most once per interval per
+ * org (a pg-boss singleton). Reads only organization ids across orgs.
+ */
+export async function scheduleBilling(deps: WorkerDeps): Promise<number> {
+  const interval = deps.config.billingIntervalMs ?? BILLING_INTERVAL_MS;
+  const rows = await deps.systemDb.db.execute<{ id: string }>(sql`select id from organizations`);
+  for (const r of rows) {
+    await deps.queue.send(
+      "billing-snapshot",
+      { orgId: r.id },
+      { singletonKey: `billing:${r.id}`, singletonSeconds: Math.max(1, Math.round(interval / 1000)) },
+    );
+  }
+  return rows.length;
+}
+
 /** Runs the sweep and scheduling every `intervalMs`, never overlapping itself. */
 export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Promise<void> } {
   let running: Promise<void> | null = null;
+  let lastBilling = 0;
+  const billingEvery = Math.min(deps.config.billingIntervalMs ?? BILLING_INTERVAL_MS, 10 * 60_000);
   const tick = () => {
     if (running) return;
     running = (async () => {
@@ -71,6 +92,10 @@ export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Prom
         const claimed = await sweepDueTickets(deps);
         const syncs = await scheduleSyncs(deps);
         const knowledge = await scheduleKnowledgeSyncs(deps);
+        if (Date.now() - lastBilling >= billingEvery) {
+          lastBilling = Date.now();
+          await scheduleBilling(deps);
+        }
         if (claimed || syncs || knowledge) deps.logger.debug({ claimed, syncs, knowledge }, "sweep");
       } catch (e) {
         deps.logger.error({ err: e instanceof Error ? e.message : String(e) }, "sweep failed");

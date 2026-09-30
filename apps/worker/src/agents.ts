@@ -28,10 +28,10 @@ import {
 import type { Priority } from "@slai/sla-engine";
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { clientFor, connectorFor, loadConnection, markConnectionError } from "./connection.js";
-import { type Autonomy, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
+import { type Autonomy, decideRunLevel, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
-import { CREDITS, currentSpend, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
+import { CREDITS, currentBilling, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
 import { loadRules } from "./react.js";
 import { notifyCapThresholds } from "./spend.js";
 
@@ -156,13 +156,18 @@ async function finishRun<T>(
     ticketId: run.ticketId,
     agentRunId: run.id,
   });
+  await notifyEvent(tx, { orgId, type: "ticket.updated", id: run.ticketId });
   return reachedCapThresholds(tx, orgId, now);
 }
 
-async function failRun(deps: WorkerDeps, orgId: string, runId: string, error: string) {
-  await deps.orgDb.withOrg(orgId, (tx) =>
-    tx.update(agentRuns).set({ status: "failed", error, finishedAt: deps.clock.now() }).where(eq(agentRuns.id, runId)),
-  );
+async function failRun(deps: WorkerDeps, orgId: string, runId: string, error: string, ticketId: string) {
+  await deps.orgDb.withOrg(orgId, async (tx) => {
+    await tx
+      .update(agentRuns)
+      .set({ status: "failed", error, finishedAt: deps.clock.now() })
+      .where(eq(agentRuns.id, runId));
+    await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticketId });
+  });
 }
 
 function internalNoteBody(triage: TriageResult | null, draft: DraftReplyResult, blockedReason: string | null) {
@@ -198,21 +203,27 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
       customerAccountId: ticket.customerAccountId,
       priority: ticket.priority as Priority | null,
     });
-    const manual = run.requestedBy !== null;
-    let level: Autonomy = manual && rule.level === "observe" ? "assist" : rule.level;
-    let reason = "";
-    if ((await currentSpend(tx, now)) === "over_cap") {
-      level = "observe";
-      reason = "spend cap reached: observe only";
-    } else if (level === "observe") reason = "autonomy is observe";
-    if (level === "observe") {
+    const billing = await currentBilling(tx, now);
+    const decided = decideRunLevel({
+      kind: run.kind === "triage" ? "triage" : "draft_reply",
+      ruleLevel: rule.level,
+      manual: run.requestedBy !== null,
+      ceiling: billing.ceiling,
+      spend: billing.spend,
+    });
+    if (decided.level === "observe") {
       await tx
         .update(agentRuns)
-        .set({ status: "failed", error: reason, finishedAt: now })
+        .set({ status: "failed", error: decided.reason ?? "autonomy is observe", finishedAt: now })
         .where(eq(agentRuns.id, runId));
+      await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
       return null;
     }
+    // "triage" only reaches here for a triage run, which never drafts or sends.
+    const level: Autonomy = decided.level === "triage" ? "assist" : decided.level;
     await tx.update(agentRuns).set({ status: "running", startedAt: now }).where(eq(agentRuns.id, runId));
+    // The ticket page lists its runs: show this one as running now, not at the next refetch.
+    await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
     const { ctx, knowledgeIds } = await buildContextWithRefs(tx, deps, orgId, ticket);
     let triageRunId: string | null = null;
     if (run.kind === "draft_reply") {
@@ -235,7 +246,7 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
   if (!prep) return;
   const { run, ticket, rule, level, ctx, knowledgeIds } = prep;
   if (run.kind !== "triage" && run.kind !== "draft_reply") {
-    await failRun(deps, orgId, runId, `unsupported run kind ${run.kind}`);
+    await failRun(deps, orgId, runId, `unsupported run kind ${run.kind}`, ticket.id);
     return;
   }
 
@@ -334,7 +345,7 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
     }
     await notifyCapThresholds(deps, orgId, thresholds);
   } catch (e) {
-    await failRun(deps, orgId, runId, errorMessage(e));
+    await failRun(deps, orgId, runId, errorMessage(e), ticket.id);
     if (prep.triageRunId) {
       await deps.orgDb.withOrg(orgId, (tx) =>
         tx
@@ -433,6 +444,7 @@ async function claimSend(tx: Tx, deps: WorkerDeps, orgId: string, a: ActionRow, 
     )
     .returning();
   if (!claimed) return null;
+  await notifyEvent(tx, { orgId, type: "action.updated", id: a.id });
   await deps.queue.send(
     "execute-action",
     { orgId, actionId: a.id },
@@ -532,9 +544,10 @@ export async function performAction(deps: WorkerDeps, orgId: string, actionId: s
     if (e instanceof ConnectorError && e.kind === "rate_limited") {
       // Nothing was written: release the claim, and the job retries after Retry-After.
       const held = action;
-      await deps.orgDb.withOrg(orgId, (tx) =>
-        tx.update(agentActions).set({ status: "approved", sendingAt: null }).where(holdsClaim(held)),
-      );
+      await deps.orgDb.withOrg(orgId, async (tx) => {
+        await tx.update(agentActions).set({ status: "approved", sendingAt: null }).where(holdsClaim(held));
+        await notifyEvent(tx, { orgId, type: "action.updated", id: held.id });
+      });
       throw e;
     }
     // Anything but a clear refusal may have landed (a timeout, a 5xx, a crash): keep the claim; reconcile decides.
@@ -586,7 +599,7 @@ async function recordWrite(
       await meterAction(tx, orgId, now, "autopilot_reply", { ticketId: ticket.id, agentRunId: action.agentRunId });
       reached = await reachedCapThresholds(tx, orgId, now);
     }
-    await notifyEvent(tx, { orgId, type: "action.created", id: action.id });
+    await notifyEvent(tx, { orgId, type: "action.updated", id: action.id });
     await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
     if (!error) {
       await deps.queue.send(

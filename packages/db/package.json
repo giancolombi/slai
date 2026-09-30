@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",
+    "@slai/shared": "workspace:*",
     "@slai/sla-engine": "workspace:*",
     "better-auth": "1.7.6",
     "drizzle-orm": "^0.45.3",

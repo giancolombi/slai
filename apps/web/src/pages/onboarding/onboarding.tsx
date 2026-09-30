@@ -15,6 +15,7 @@ import {
 import { type ReactNode, useEffect, useState } from "react";
 import { ErrorState } from "../../components/page";
 import { providerLabel } from "../../lib/labels";
+import { useLiveUpdates } from "../../lib/live";
 import { useConnections, useContract, useMe, useReplay } from "../../lib/queries";
 import type { OnboardingStep } from "../../router";
 import { ConnectHelpDesk } from "../connections/connector-form";
@@ -434,6 +435,8 @@ export function OnboardingPage() {
   const { step = "connect" } = route.useSearch();
   const navigate = useNavigate();
   const me = useMe();
+  // Extraction and replay progress arrive as live events here too (the wizard has no app shell).
+  useLiveUpdates(me.data?.organization.id, import.meta.env.VITE_MOCK_API !== "1");
   const [state, set] = useWizardState();
   const index = STEPS.findIndex((s) => s.id === step);
   const go = (s: OnboardingStep) => navigate({ to: "/onboarding", search: { step: s } });

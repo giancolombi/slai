@@ -10,13 +10,16 @@
 import type {
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
   createConnectionBody,
   createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   inviteBody,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
@@ -41,12 +44,16 @@ import {
   type AuditEvent,
   type AutonomyRule,
   type BackupCodes,
+  type BillingRedirect,
+  type BillingSummary,
   type Connection,
   type ConnectionMapping,
   type ConnectorInfo,
   type Contract,
+  type ContractText,
   type CustomerAccount,
   type DashboardSummary,
+  type Invitation,
   type KnowledgeArticle,
   type KnowledgeSource,
   type List,
@@ -248,14 +255,6 @@ const del = <T = void>(path: string) => request<T>("DELETE", path);
 type In<S extends z.ZodType> = z.input<S>;
 const id = encodeURIComponent;
 
-/** `POST /members/invite` response. The contract doesn't name it; the API returns the pending invitation. */
-export interface Invitation {
-  id?: string;
-  email: string;
-  role: Role;
-  expiresAt?: string;
-}
-
 export interface TicketQuery {
   risk?: Risk | "";
   status?: TicketStatus | "";
@@ -363,6 +362,7 @@ export const api = {
     },
     extract: (contractId: string) => post<void>(`/contracts/${id(contractId)}/extract`),
     fileUrl: (contractId: string) => `${API_BASE}/contracts/${id(contractId)}/file`,
+    text: (contractId: string) => get<ContractText>(`/contracts/${id(contractId)}/text`),
   },
   policies: {
     list: () => get<List<Policy>>("/policies"),
@@ -425,6 +425,14 @@ export const api = {
   },
   usage: {
     get: () => get<UsageSummary>("/usage"),
+  },
+  billing: {
+    get: () => get<BillingSummary>("/billing"),
+    checkout: (body: In<typeof billingCheckoutBody>) => post<BillingRedirect>("/billing/checkout", body),
+    portal: () => post<BillingRedirect>("/billing/portal"),
+    creditPackCheckout: (body: In<typeof creditPackCheckoutBody>) =>
+      post<BillingRedirect>("/billing/credit-packs/checkout", body),
+    manual: (body: In<typeof manualBillingBody>) => post<BillingSummary>("/billing/manual", body),
   },
   audit: {
     list: (cursor?: string | null) => get<List<AuditEvent>>("/audit-events", { cursor }),

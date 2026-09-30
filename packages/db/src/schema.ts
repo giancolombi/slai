@@ -95,6 +95,7 @@ export const knowledgeSourceKindEnum = pgEnum("knowledge_source_kind", [
 export const knowledgeSourceStatusEnum = pgEnum("knowledge_source_status", ["idle", "syncing", "error"]);
 
 const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
+export const billingStatusEnum = pgEnum("billing_status", ["trialing", "active", "past_due", "canceled"]);
 
 // ---------- identity ----------
 
@@ -102,12 +103,21 @@ export const organizations = pgTable("organizations", {
   id: id(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  plan: text("plan").notNull().default("trial"),
+  /** A `PlanId` from @slai/shared plans.ts. New orgs start on the Growth trial (T-65). */
+  plan: text("plan").notNull().default("growth"),
+  /** The owner's explicit monthly AI cap; null uses the default (included + purchased + 50% of included). */
   monthlySpendCapCents: integer("monthly_spend_cap_cents"),
   /** Password and passkey sign-in are refused for emails on this org's verified SSO domains. */
   enforceSso: boolean("enforce_sso").notNull().default(false),
   /** SSO sessions must also pass slai MFA (by default the IdP's MFA is trusted). */
   ssoRequireMfa: boolean("sso_require_mfa").notNull().default(false),
+  billingStatus: billingStatusEnum("billing_status").notNull().default("trialing"),
+  /** Every new org gets the 14-day trial from this default, whatever creates the row. */
+  trialEndsAt: ts("trial_ends_at").default(sql`now() + interval '14 days'`),
+  /** Set on the first failed payment; the grace period runs from here. */
+  pastDueSince: ts("past_due_since"),
+  stripeCustomerId: text("stripe_customer_id").unique(),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -714,6 +724,65 @@ export const knowledgeArticles = pgTable(
   ],
 );
 
+// ---------- billing (T-65) ----------
+
+/**
+ * One row per org per calendar month (UTC): the tracked-ticket and credit
+ * snapshot. The worker refreshes the open period and closes the previous one,
+ * reporting billable overage to Stripe once (`reported_at`).
+ */
+export const billingPeriods = pgTable(
+  "billing_periods",
+  {
+    id: id(),
+    orgId: orgId(),
+    periodStart: ts("period_start").notNull(),
+    periodEnd: ts("period_end").notNull(),
+    plan: text("plan").notNull(),
+    trackedTickets: integer("tracked_tickets").notNull().default(0),
+    trackedLimit: integer("tracked_limit"),
+    ticketOverage: integer("ticket_overage").notNull().default(0),
+    creditsUsed: integer("credits_used").notNull().default(0),
+    includedCredits: integer("included_credits").notNull().default(0),
+    purchasedCreditsUsed: integer("purchased_credits_used").notNull().default(0),
+    creditOverage: integer("credit_overage").notNull().default(0),
+    /** Billable overage in cents (tickets + credits); 0 when overage is only flagged. */
+    overageCents: integer("overage_cents").notNull().default(0),
+    closedAt: ts("closed_at"),
+    reportedAt: ts("reported_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique().on(t.orgId, t.periodStart)],
+);
+
+/** Purchased (credit packs) and manually granted credits. Append-only. */
+export const creditGrants = pgTable(
+  "credit_grants",
+  {
+    id: id(),
+    orgId: orgId(),
+    credits: integer("credits").notNull(),
+    /** "credit_pack" | "manual". */
+    source: text("source").notNull(),
+    amountCents: integer("amount_cents").notNull().default(0),
+    /** The Checkout Session that paid for it (unique: a session grants once). */
+    stripeCheckoutSessionId: text("stripe_checkout_session_id").unique(),
+    grantedBy: uuid("granted_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.orgId, t.createdAt)],
+);
+
+/** Stripe webhook events already applied (idempotency). */
+export const billingEvents = pgTable("billing_events", {
+  id: id(),
+  orgId: orgId(),
+  stripeEventId: text("stripe_event_id").notNull().unique(),
+  type: text("type").notNull(),
+  createdAt: createdAt(),
+});
+
 /** Every org-scoped table (RLS applies). Used by tests to assert coverage. */
 export const ORG_SCOPED_TABLES = [
   "memberships",
@@ -736,4 +805,7 @@ export const ORG_SCOPED_TABLES = [
   "usage_ledger",
   "knowledge_sources",
   "knowledge_articles",
+  "billing_periods",
+  "credit_grants",
+  "billing_events",
 ] as const;
