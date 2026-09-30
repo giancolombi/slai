@@ -199,6 +199,14 @@ export const gorgias: ConnectorDefinition<GorgiasCredentials> = {
     { key: "apiKey", label: "API key", secret: true, help: "Settings → REST API (private app key)" },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Settings → HTTP integration → Add HTTP integration, URL {url}, POST, application/json.",
+      "Triggers: Ticket created, Ticket updated, Ticket message created, Ticket self unsnoozed.",
+      'Header X-Slai-Webhook-Secret: {secret}; body {"ticket_id": "{{ticket.id}}"}.',
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developers.gorgias.com/reference/introduction",

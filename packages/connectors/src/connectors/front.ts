@@ -248,6 +248,13 @@ export const front: ConnectorDefinition<FrontCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Settings → Developers → your app → Webhooks: set the URL to {url} and enable the conversation events.",
+      "Paste the app's signing secret below (for a rule webhook, use the company's API secret).",
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://dev.frontapp.com/reference/introduction",

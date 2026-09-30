@@ -319,6 +319,13 @@ export const linear: ConnectorDefinition<LinearCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Settings → API → Webhooks → New webhook, URL {url}, resource types Issues and Comments.",
+      "Linear shows a signing secret after you create it: paste it below.",
+    ],
+  },
   write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://linear.app/developers/graphql",

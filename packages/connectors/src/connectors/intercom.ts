@@ -23,6 +23,7 @@ import { dropNoopChanges, finalizeEvents, openingEventAuthor } from "../lib/even
 import { header, verifyHmac } from "../lib/hmac.js";
 import { HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
+import { readTokens } from "../lib/oauth.js";
 import { decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
@@ -182,6 +183,22 @@ export const intercom: ConnectorDefinition<IntercomCredentials> = {
     { key: "adminId", label: "Admin ID (optional)", secret: false, help: "Admin that notes and replies are sent as" },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Developer Hub → your app → Webhooks: set the endpoint URL to {url}.",
+      "Subscribe to conversation.* and ticket.* topics (created, replied, assigned, state changes, notes).",
+      "Intercom signs deliveries with the app's client secret (Basic information page): paste it below.",
+    ],
+  },
+  oauth: {
+    authorizeUrl: "https://app.intercom.com/oauth",
+    tokenUrl: "https://api.intercom.io/auth/eagle/token",
+    // Intercom configures scopes on the app and its tokens do not expire.
+    scopes: [],
+    pkce: false,
+    toCredentials: ({ token, now }) => ({ accessToken: readTokens(token, now).accessToken }),
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/conversations",

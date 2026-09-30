@@ -229,6 +229,13 @@ export const github: ConnectorDefinition<GithubCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Repository → Settings → Webhooks → Add webhook, payload URL {url}, content type application/json.",
+      "Secret {secret}; events: Issues and Issue comments.",
+    ],
+  },
   write: { internalNote: false, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://docs.github.com/en/rest/issues",

@@ -231,6 +231,28 @@ export const salesforce: ConnectorDefinition<SalesforceCredentials> = {
   // CDC and Platform Events need a streaming client (CometD or Pub/Sub API over
   // gRPC); a stateless HTTP adapter can't hold that subscription, so the worker polls.
   supportsWebhooks: false,
+  oauth: {
+    authorizeUrl: "https://{environment}.salesforce.com/services/oauth2/authorize",
+    tokenUrl: "https://{environment}.salesforce.com/services/oauth2/token",
+    scopes: ["api", "refresh_token"],
+    pkce: true,
+    params: [
+      {
+        key: "environment",
+        label: "Environment",
+        options: ["login", "test"],
+        pattern: "login|test",
+        help: "login for production and Developer Edition, test for sandboxes",
+      },
+    ],
+    toCredentials: ({ token, clientId, clientSecret }) => {
+      // The refresh token grant is how the connector gets access tokens (the app needs the refresh_token scope).
+      if (typeof token.refresh_token !== "string" || typeof token.instance_url !== "string") {
+        throw new ConnectorError("Salesforce returned no refresh token or instance URL", "auth");
+      }
+      return { instanceUrl: token.instance_url, clientId, clientSecret, refreshToken: token.refresh_token };
+    },
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",

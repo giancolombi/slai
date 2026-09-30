@@ -285,6 +285,13 @@ export const servicenow: ConnectorDefinition<ServiceNowCredentials> = {
     { key: "accessToken", label: "OAuth access token (optional)", secret: true },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "System Web Services → Outbound → REST Message: new message with endpoint {url}, POST method, header X-Slai-Webhook-Secret: {secret}.",
+      'System Definition → Business Rules: new rule on Incident, after insert and update, that sends the message with a JSON body whose sys_id is current.sys_id.',
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl:

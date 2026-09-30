@@ -21,6 +21,7 @@ import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "
 import { header, verifyHmac } from "../lib/hmac.js";
 import { basicAuth, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
+import { oauthFetch, oauthTokenFields, readTokens } from "../lib/oauth.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
@@ -35,15 +36,20 @@ import {
   type FieldMapping,
 } from "../types.js";
 
-const credentialsSchema = z.object({
-  subdomain: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9][a-z0-9-]*$/, "Just the subdomain, e.g. acme for acme.zendesk.com"),
-  email: z.email(),
-  apiToken: z.string().min(1),
-});
+const SUBDOMAIN = /^[a-z0-9][a-z0-9-]*$/;
+const credentialsSchema = z
+  .object({
+    subdomain: z.string().trim().toLowerCase().regex(SUBDOMAIN, "Just the subdomain, e.g. acme for acme.zendesk.com"),
+    /** API token auth (email + token), or an OAuth access token from the connect flow. */
+    email: z.email().optional(),
+    apiToken: z.string().min(1).optional(),
+    accessToken: z.string().min(1).optional(),
+    ...oauthTokenFields,
+  })
+  .refine((c) => c.accessToken !== undefined || (c.email !== undefined && c.apiToken !== undefined), {
+    message: "Agent email and API token are required.",
+    path: ["apiToken"],
+  });
 export type ZendeskCredentials = z.infer<typeof credentialsSchema>;
 
 const defaultMapping: FieldMapping = {
@@ -156,6 +162,36 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Admin Center → Apps and integrations → Webhooks → Create webhook → Trigger or automation.",
+      "Endpoint URL {url}, method POST, format JSON, no authentication. Create it.",
+      "Open the webhook, choose Reveal secret, and paste the signing secret below.",
+      'Objects and rules → Triggers: add a trigger on "Ticket is Created or Updated" that notifies this webhook with the body {"ticket_id": "{{ticket.id}}"}.',
+    ],
+  },
+  oauth: {
+    authorizeUrl: "https://{subdomain}.zendesk.com/oauth/authorizations/new",
+    tokenUrl: "https://{subdomain}.zendesk.com/oauth/tokens",
+    scopes: ["read", "write"],
+    pkce: true,
+    params: [
+      {
+        key: "subdomain",
+        label: "Zendesk subdomain",
+        placeholder: "acme",
+        help: "acme for acme.zendesk.com",
+        pattern: "[a-z0-9][a-z0-9-]*",
+      },
+    ],
+    toCredentials: ({ token, clientId, clientSecret, params, now }) => ({
+      subdomain: params.subdomain,
+      ...readTokens(token, now),
+      clientId,
+      clientSecret,
+    }),
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developer.zendesk.com/api-reference/",
@@ -164,9 +200,11 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
     const sub = creds.subdomain;
     const http = new HttpClient({
       baseUrl: `https://${sub}.zendesk.com`,
-      fetch: ctx.fetch,
+      fetch: creds.accessToken ? oauthFetch(ctx, creds, `https://${sub}.zendesk.com/oauth/tokens`) : ctx.fetch,
       signal: ctx.signal,
-      headers: { Authorization: basicAuth(`${creds.email}/token`, creds.apiToken) },
+      headers: creds.accessToken
+        ? {}
+        : { Authorization: basicAuth(`${creds.email ?? ""}/token`, creds.apiToken ?? "") },
     });
     const key = (...parts: (string | number)[]) => ["zendesk", sub, ...parts].join(":");
 
