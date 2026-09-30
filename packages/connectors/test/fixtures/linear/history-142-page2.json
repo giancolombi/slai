@@ -1,0 +1,94 @@
+{
+  "data": {
+    "issue": {
+      "history": {
+        "nodes": [
+          {
+            "id": "a1000005-0000-4000-8000-000000000005",
+            "createdAt": "2026-09-28T11:00:00.000Z",
+            "fromState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+              "name": "In Progress",
+              "type": "started"
+            },
+            "toState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a03",
+              "name": "Waiting on customer",
+              "type": "started"
+            },
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000006-0000-4000-8000-000000000006",
+            "createdAt": "2026-09-28T12:05:00.000Z",
+            "fromState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a03",
+              "name": "Waiting on customer",
+              "type": "started"
+            },
+            "toState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+              "name": "In Progress",
+              "type": "started"
+            },
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000007-0000-4000-8000-000000000007",
+            "createdAt": "2026-09-28T13:00:00.000Z",
+            "fromState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+              "name": "In Progress",
+              "type": "started"
+            },
+            "toState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a04",
+              "name": "Done",
+              "type": "completed"
+            },
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000008-0000-4000-8000-000000000008",
+            "createdAt": "2026-09-28T14:05:00.000Z",
+            "fromState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a04",
+              "name": "Done",
+              "type": "completed"
+            },
+            "toState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+              "name": "In Progress",
+              "type": "started"
+            },
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "aGlzdG9yeS1lbmQ"
+        }
+      }
+    }
+  }
+}

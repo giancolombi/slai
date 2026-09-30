@@ -1,0 +1,61 @@
+{
+  "id": 7001,
+  "number": 1042,
+  "threads": 9,
+  "type": "email",
+  "folderId": 4410,
+  "status": "active",
+  "state": "published",
+  "subject": "Invoices export times out for March",
+  "preview": "Invoices export times out for March",
+  "mailboxId": 3100,
+  "assignee": {
+    "id": 802,
+    "type": "user",
+    "first": "Tess",
+    "last": "Moreno",
+    "email": "tess.moreno@acmesupport.example"
+  },
+  "createdBy": {
+    "id": 5501,
+    "type": "customer",
+    "email": "priya.raman@lumenfield.example"
+  },
+  "createdAt": "2026-09-28T09:00:00Z",
+  "userUpdatedAt": "2026-09-28T14:05:00Z",
+  "customerWaitingSince": {
+    "time": "2026-09-28T14:05:00Z",
+    "friendly": "1 hour ago"
+  },
+  "source": {
+    "type": "email",
+    "via": "customer"
+  },
+  "tags": [
+    {
+      "id": 9100,
+      "color": "#929499",
+      "tag": "priority-high"
+    },
+    {
+      "id": 9101,
+      "color": "#929499",
+      "tag": "billing"
+    }
+  ],
+  "primaryCustomer": {
+    "id": 5501,
+    "type": "customer",
+    "first": "Priya",
+    "last": "Raman",
+    "email": "priya.raman@lumenfield.example"
+  },
+  "_links": {
+    "self": {
+      "href": "https://api.helpscout.net/v2/conversations/7001"
+    },
+    "web": {
+      "href": "https://secure.helpscout.net/conversation/7001/1042"
+    }
+  }
+}

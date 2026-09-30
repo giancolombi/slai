@@ -12,16 +12,46 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   jira_service_management: { siteUrl: "https://acme.atlassian.net", email: "a@acme.com", apiToken: "t" },
   hubspot: { accessToken: "t" },
   zammad: { baseUrl: "https://support.acme.example", apiToken: "t" },
+  salesforce: { instanceUrl: "https://acme.my.salesforce.com", clientId: "id", clientSecret: "s" },
+  servicenow: { instanceUrl: "https://acme.service-now.com", username: "slai.integration", password: "p" },
+  zoho_desk: {
+    dataCenter: "com",
+    orgId: "60012345",
+    clientId: "1000.CLIENTID",
+    clientSecret: "s",
+    refreshToken: "1000.r.t",
+  },
+  front: { apiToken: "t" },
+  help_scout: { clientId: "id", clientSecret: "s" },
+  gorgias: { domain: "acme", email: "a@acme.com", apiKey: "k" },
+  linear: { apiKey: "lin_api_t" },
+  github: { token: "t", owner: "acme", repo: "support" },
   demo: {},
 };
 
 describe("registry", () => {
-  it("registers the tier-1 connectors and the demo", () => {
+  it("registers every connector and the demo", () => {
     expect(
       listConnectors()
         .map((c) => c.provider)
         .sort(),
-    ).toEqual(["demo", "freshdesk", "hubspot", "intercom", "jira_service_management", "zammad", "zendesk"]);
+    ).toEqual([
+      "demo",
+      "freshdesk",
+      "front",
+      "github",
+      "gorgias",
+      "help_scout",
+      "hubspot",
+      "intercom",
+      "jira_service_management",
+      "linear",
+      "salesforce",
+      "servicenow",
+      "zammad",
+      "zendesk",
+      "zoho_desk",
+    ]);
     expect(getConnector("nope")).toBeNull();
   });
 

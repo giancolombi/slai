@@ -1,0 +1,79 @@
+{
+  "totalSize": 11,
+  "done": false,
+  "nextRecordsUrl": "/services/data/v66.0/query/0r8Hs00000Qry02AAA-6",
+  "records": [
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst01AAA"
+      },
+      "Id": "017Hs00000Hst01AAA",
+      "Field": "created",
+      "DataType": "Text",
+      "OldValue": null,
+      "NewValue": null,
+      "CreatedDate": "2026-09-28T09:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst02AAA"
+      },
+      "Id": "017Hs00000Hst02AAA",
+      "Field": "ownerAssignment",
+      "DataType": "EntityId",
+      "OldValue": "005Hs00000Auto1AAA",
+      "NewValue": "00GHs00000Tier1AAA",
+      "CreatedDate": "2026-09-28T09:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst03AAA"
+      },
+      "Id": "017Hs00000Hst03AAA",
+      "Field": "ownerAssignment",
+      "DataType": "Text",
+      "OldValue": "Automated Process",
+      "NewValue": "Tier 1 Support",
+      "CreatedDate": "2026-09-28T09:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst04AAA"
+      },
+      "Id": "017Hs00000Hst04AAA",
+      "Field": "Owner",
+      "DataType": "EntityId",
+      "OldValue": "00GHs00000Tier1AAA",
+      "NewValue": "005Hs00000Agnt1AAA",
+      "CreatedDate": "2026-09-28T09:40:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst05AAA"
+      },
+      "Id": "017Hs00000Hst05AAA",
+      "Field": "Owner",
+      "DataType": "Text",
+      "OldValue": "Tier 1 Support",
+      "NewValue": "Priya Raman",
+      "CreatedDate": "2026-09-28T09:40:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst06AAA"
+      },
+      "Id": "017Hs00000Hst06AAA",
+      "Field": "Status",
+      "DataType": "DynamicEnum",
+      "OldValue": "New",
+      "NewValue": "Working",
+      "CreatedDate": "2026-09-28T09:40:00.000+0000"
+    }
+  ]
+}

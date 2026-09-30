@@ -1,0 +1,72 @@
+{
+  "totalSize": 3,
+  "done": true,
+  "records": [
+    {
+      "attributes": {
+        "type": "EmailMessage",
+        "url": "/services/data/v66.0/sobjects/EmailMessage/02sHs00000Eml01AAA"
+      },
+      "Id": "02sHs00000Eml01AAA",
+      "Incoming": false,
+      "FromName": "Priya Raman",
+      "FromAddress": "support@northwind.example",
+      "TextBody": "Hi Tomas, could you send the export job id and the timestamp of the last failed run?",
+      "HtmlBody": "<p>Hi Tomas, could you send the export job id and the timestamp of the last failed run?</p>",
+      "CreatedDate": "2026-09-28T10:30:00.000+0000",
+      "CreatedById": "005Hs00000Agnt1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman",
+        "UserType": "Standard"
+      }
+    },
+    {
+      "attributes": {
+        "type": "EmailMessage",
+        "url": "/services/data/v66.0/sobjects/EmailMessage/02sHs00000Eml02AAA"
+      },
+      "Id": "02sHs00000Eml02AAA",
+      "Incoming": true,
+      "FromName": "Tomas Lindqvist",
+      "FromAddress": "tomas.lindqvist@harborline.example",
+      "TextBody": "Job id EXP-88213, failed at 02:14 UTC.",
+      "HtmlBody": "<p>Job id EXP-88213, failed at 02:14 UTC.</p>",
+      "CreatedDate": "2026-09-28T13:00:00.000+0000",
+      "CreatedById": "005Hs00000Auto1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Auto1AAA"
+        },
+        "Name": "Automated Process",
+        "UserType": "AutomatedProcess"
+      }
+    },
+    {
+      "attributes": {
+        "type": "EmailMessage",
+        "url": "/services/data/v66.0/sobjects/EmailMessage/02sHs00000Eml03AAA"
+      },
+      "Id": "02sHs00000Eml03AAA",
+      "Incoming": true,
+      "FromName": "Tomas Lindqvist",
+      "FromAddress": "tomas.lindqvist@harborline.example",
+      "TextBody": null,
+      "HtmlBody": "<div>Still failing tonight &mdash; stopped at 81%.</div>",
+      "CreatedDate": "2026-09-28T15:00:00.000+0000",
+      "CreatedById": "005Hs00000Auto1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Auto1AAA"
+        },
+        "Name": "Automated Process",
+        "UserType": "AutomatedProcess"
+      }
+    }
+  ]
+}
