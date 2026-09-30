@@ -110,7 +110,10 @@ Each task references the requirements it serves.
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
       approve → sent (with an automated e2e test)
-- [ ] T-61 E2B template built and pinned; a real run with API keys
+- [~] T-61 E2B: template built and pinned (`slai-agent:f909ab1b-1681-4a58-9488-38276ca77b7f`, 2026-09-30).
+      Verified live with `scripts/try-e2b.ts` and the mock model: triage 5.5s and PDF extraction 3.7s per
+      sandbox, with 0 sandboxes left running afterwards. Remaining: a run with a real model key through
+      egress header injection (needs a Console API key).
 - [ ] T-62 A real Zendesk sandbox account and a verified live sync
 - [x] T-63 Deployment, cloud-agnostic: hardened images for api (and migrate), worker, web and backup;
       `docker-compose.prod.yml` with MinIO verified end to end; s3 storage driver with SSE; production
