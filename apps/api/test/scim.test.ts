@@ -228,6 +228,22 @@ describe("SCIM Users (Okta)", () => {
     expect(sw.status).toBe(404);
   });
 
+  it("a session still pointing at a deactivated org falls back to the user's other org", async () => {
+    const pending = await signupPending(ctx, "Stale", `stale-${randomUUID().slice(0, 6)}@${acme.domain}`);
+    await enrollTotp(pending.client);
+    const created = await acme.idp.post("/Users", okta.createUser(pending.email, "00uSTALE"));
+    expect((await acme.idp.patch(`/Users/${created.body.id}`, okta.setActive(false))).status).toBe(200);
+    // E.g. a switch that raced the deactivation: the session row names the disabled org.
+    await ctx.owner.db
+      .update(sessions)
+      .set({ activeOrgId: acme.admin.orgId })
+      .where(eq(sessions.userId, pending.userId));
+    const me = await pending.client.get<Me>("/auth/me");
+    expect(me.status).toBe(200);
+    expect(me.body.organization.id).toBe(pending.orgId);
+    expect(me.body.organizations.map((o) => o.id)).toEqual([pending.orgId]);
+  });
+
   it("never deactivates or removes the org's last owner", async () => {
     const list = await acme.idp.get(okta.filterUser(acme.admin.email));
     const ownerId = list.body.Resources[0].id;
@@ -294,13 +310,26 @@ describe("SCIM Groups and group → role mapping", () => {
     expect(group.body).toMatchObject({ displayName: "SLAI-Admins", members: [] });
     expect((await acme.idp.post("/Groups", okta.createGroup("slai-admins"))).status).toBe(409);
 
-    const added = await acme.idp.patch(`/Groups/${group.body.id}`, okta.addMembers([user.body.id, ownerId]));
+    // A SCIM-provisioned user whom slai made an owner.
+    const coOwnerEmail = `coowner-${randomUUID().slice(0, 6)}@${acme.domain}`;
+    const coOwner = await acme.idp.post("/Users", okta.createUser(coOwnerEmail, "00uCOOWNER"));
+    await ctx.owner.db.update(memberships).set({ role: "owner" }).where(eq(memberships.id, coOwner.body.id));
+
+    const added = await acme.idp.patch(
+      `/Groups/${group.body.id}`,
+      okta.addMembers([user.body.id, ownerId, coOwner.body.id]),
+    );
     expect(added.status).toBe(200);
-    expect(added.body.members.map((m: Json) => m.value).sort()).toEqual([user.body.id, ownerId].sort());
+    expect(added.body.members.map((m: Json) => m.value).sort()).toEqual(
+      [user.body.id, ownerId, coOwner.body.id].sort(),
+    );
     const roleOf = async (e: string) =>
       (await acme.admin.client.get<{ items: Member[] }>("/members")).body.items.find((m) => m.email === e)?.role;
     expect(await roleOf(email)).toBe("admin");
     expect(await roleOf(acme.admin.email)).toBe("owner");
+    expect(await roleOf(coOwnerEmail)).toBe("owner");
+    await acme.idp.patch(`/Groups/${group.body.id}`, okta.removeMember(coOwner.body.id));
+    expect(await roleOf(coOwnerEmail)).toBe("owner");
     expect((await acme.idp.get(`/Users/${user.body.id}`)).body.groups).toEqual([
       expect.objectContaining({ value: group.body.id, display: "SLAI-Admins" }),
     ]);
