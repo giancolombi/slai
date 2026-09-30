@@ -532,7 +532,7 @@ export const notificationChannelBody = z.object({
  *   POST   /auth/two-factor/disable              disableTotpBody → 204 (needs another factor)
  *   GET    /auth/passkey/generate-register-options   → WebAuthn creation options
  *   POST   /auth/passkey/verify-registration     { response, name? } → Passkey
- *   GET|POST /auth/passkey/generate-authenticate-options → WebAuthn request options
+ *   GET    /auth/passkey/generate-authenticate-options → WebAuthn request options
  *   POST   /auth/passkey/verify-authentication   { response } → SignInResult
  *   GET    /auth/passkey/list-user-passkeys      → Passkey[] (MFA done)
  *   POST   /auth/passkey/delete-passkey          deletePasskeyBody → 204 (needs another factor)

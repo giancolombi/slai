@@ -47,7 +47,11 @@ export class SoftAuthenticator {
         ["authData", this.authData(flags, attested)],
       ]) as never,
     );
-    const clientDataJSON = JSON.stringify({ type: "webauthn.create", challenge: options.challenge, origin: this.origin });
+    const clientDataJSON = JSON.stringify({
+      type: "webauthn.create",
+      challenge: options.challenge,
+      origin: this.origin,
+    });
     return {
       id: b64u(this.credentialId),
       rawId: b64u(this.credentialId),

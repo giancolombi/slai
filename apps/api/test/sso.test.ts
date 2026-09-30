@@ -4,7 +4,7 @@ import type { Me, OrgSsoSettings, SignInDiscovery, SsoProvider } from "@slai/sha
 import { and, eq } from "drizzle-orm";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { addMember, APP_URL, Client, dnsTxt, PASSWORD, setupApp, signup, signupPending } from "./harness.js";
+import { APP_URL, addMember, Client, dnsTxt, PASSWORD, setupApp, signup, signupPending } from "./harness.js";
 
 // A local OIDC IdP (no network beyond localhost). Started before the app so its
 // origin can be allowlisted as an internal IdP (SSO_TRUSTED_IDP_ORIGINS).
@@ -60,7 +60,12 @@ describe("SSO provider management (org admins)", () => {
     });
     expect(res.status).toBe(201);
     provider = res.body;
-    expect(provider).toMatchObject({ protocol: "oidc", domains: [domain], domainVerified: false, clientId: "slai-client" });
+    expect(provider).toMatchObject({
+      protocol: "oidc",
+      domains: [domain],
+      domainVerified: false,
+      clientId: "slai-client",
+    });
     expect(provider.callbackUrl).toBe(`http://localhost:8787/api/v1/auth/sso/callback/${provider.providerId}`);
     expect(provider.domainVerification?.recordName).toBe("_slai-verification");
     expect(JSON.stringify(res.body)).not.toContain(CLIENT_SECRET);
@@ -72,6 +77,34 @@ describe("SSO provider management (org admins)", () => {
     expect(row!.oidcConfig).not.toContain(CLIENT_SECRET);
     expect(JSON.parse(row!.oidcConfig!).clientSecret).toMatch(/^v1\.k1\./);
     expect(row!.orgId).toBe(admin.orgId);
+  });
+
+  it("creates a SAML provider from metadata XML (URL or pasted) and returns the ACS URL", async () => {
+    const xml = `<?xml version="1.0"?>
+<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://idp.saml.example/entity">
+  <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+    <md:KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data>
+      <ds:X509Certificate>MIIBszCCAVmgAwIBAgIUXYZ</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor>
+    <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.saml.example/sso"/>
+  </md:IDPSSODescriptor>
+</md:EntityDescriptor>`;
+    const bad = await admin.client.post("/org/sso/providers", {
+      protocol: "saml",
+      name: "Broken",
+      domains: [`saml-${randomUUID().slice(0, 6)}.example`],
+      metadataXml: "<nope/>",
+    });
+    expect(bad.status).toBe(422);
+    const res = await admin.client.post<SsoProvider>("/org/sso/providers", {
+      protocol: "saml",
+      name: "Acme ADFS",
+      domains: [`saml-${randomUUID().slice(0, 6)}.example`],
+      metadataXml: xml,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ protocol: "saml", issuer: "https://idp.saml.example/entity", clientId: null });
+    expect(res.body.callbackUrl).toBe(`http://localhost:8787/api/v1/auth/sso/saml2/sp/acs/${res.body.providerId}`);
+    expect((await admin.client.del(`/org/sso/providers/${res.body.id}`)).status).toBe(204);
   });
 
   it("is admin-only", async () => {
@@ -213,7 +246,12 @@ describe("enforce SSO", () => {
 
     const events = await ctx.owner.db.select().from(auditEvents).where(eq(auditEvents.orgId, admin.orgId));
     expect(events.map((e) => e.action)).toEqual(
-      expect.arrayContaining(["sso.provider_created", "sso.domain_verified", "sso.enforcement_enabled", "sso.mfa_policy_changed"]),
+      expect.arrayContaining([
+        "sso.provider_created",
+        "sso.domain_verified",
+        "sso.enforcement_enabled",
+        "sso.mfa_policy_changed",
+      ]),
     );
     await admin.client.patch("/org/sso", { enforceSso: false });
   });

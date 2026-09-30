@@ -48,7 +48,7 @@ const RULES: [RegExp, string[], Access][] = [
   [/^\/two-factor\/disable$/, ["POST"], "mfa"],
   [/^\/passkey\/generate-register-options$/, ["GET"], "session"],
   [/^\/passkey\/verify-registration$/, ["POST"], "session"],
-  [/^\/passkey\/generate-authenticate-options$/, ["GET", "POST"], "public"],
+  [/^\/passkey\/generate-authenticate-options$/, ["GET"], "public"],
   [/^\/passkey\/verify-authentication$/, ["POST"], "public"],
   [/^\/passkey\/list-user-passkeys$/, ["GET"], "mfa"],
   [/^\/passkey\/delete-passkey$/, ["POST"], "mfa"],

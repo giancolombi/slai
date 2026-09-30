@@ -93,9 +93,7 @@ beforeAll(async () => {
   const rows = await owner.db.select().from(tickets).where(eq(tickets.orgId, orgId));
   ticket = rows.find((t) => t.status === "open" || t.status === "new") ?? rows[0]!;
   userId = randomUUID();
-  await owner.db
-    .insert(users)
-    .values({ id: userId, email: `${userId}@example.com`, name: "Approver" });
+  await owner.db.insert(users).values({ id: userId, email: `${userId}@example.com`, name: "Approver" });
 });
 
 describe("idempotent help-desk writes", () => {
