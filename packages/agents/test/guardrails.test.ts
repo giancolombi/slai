@@ -21,18 +21,25 @@ describe("decideAutopilot", () => {
   });
 
   describe("flags", () => {
-    for (const flag of ["promisesTimeline", "mentionsPricingOrRefund", "legalOrSecurity", "unsureOfFacts"] as const) {
-      it(`refuses when ${flag} is set, whatever the confidence`, () => {
+    const labels = {
+      promisesTimeline: "promises a timeline",
+      mentionsPricingOrRefund: "mentions pricing or a refund",
+      legalOrSecurity: "touches a legal or security topic",
+      unsureOfFacts: "is unsure of the facts",
+    } as const;
+    for (const flag of Object.keys(labels) as (keyof typeof labels)[]) {
+      it(`refuses when ${flag} is set, whatever the confidence, in plain words`, () => {
         const d = decide({ confidence: 1, flags: { ...good.flags, [flag]: true } });
         expect(d.send).toBe(false);
-        expect(d.reason).toContain(flag);
+        expect(d.reason).toContain(labels[flag]);
+        expect(d.reason).not.toContain(flag);
       });
     }
     it("lists every raised flag", () => {
       const d = decide({
         flags: { promisesTimeline: true, mentionsPricingOrRefund: true, legalOrSecurity: false, unsureOfFacts: true },
       });
-      expect(d.reason).toBe("draft flagged: promisesTimeline, mentionsPricingOrRefund, unsureOfFacts");
+      expect(d.reason).toBe("draft flagged: promises a timeline, mentions pricing or a refund, is unsure of the facts");
     });
     it("treats a missing (non-false) flag as raised", () => {
       const flags = { ...good.flags } as Record<string, boolean | undefined>;
@@ -43,7 +50,7 @@ describe("decideAutopilot", () => {
 
   describe("confidence", () => {
     it("refuses below the minimum", () => {
-      expect(decide({ confidence: 0.79 })).toEqual({ send: false, reason: "confidence 0.79 below minimum 0.8" });
+      expect(decide({ confidence: 0.79 })).toEqual({ send: false, reason: "confidence 79% is below the 80% minimum" });
     });
     it("accepts exactly the minimum", () => {
       expect(decide({ confidence: 0.8 }).send).toBe(true);
@@ -57,21 +64,21 @@ describe("decideAutopilot", () => {
   describe("triage", () => {
     it("refuses when triage says a human is needed", () => {
       const d = decide({}, { triage: { ...okTriage, needsHuman: true, needsHumanReason: "Refund request." } });
-      expect(d).toEqual({ send: false, reason: "triage requires a human: Refund request." });
+      expect(d).toEqual({ send: false, reason: "triage says a person should handle this: Refund request." });
     });
     it("refuses without triage", () => {
-      expect(decide({}, { triage: null })).toEqual({ send: false, reason: "no triage for this ticket" });
+      expect(decide({}, { triage: null })).toEqual({ send: false, reason: "the ticket hasn't been triaged yet" });
     });
   });
 
   describe("body", () => {
     it("refuses an empty or whitespace-only body", () => {
-      expect(decide({ body: "" })).toEqual({ send: false, reason: "empty body" });
-      expect(decide({ body: " \n\t " })).toEqual({ send: false, reason: "empty body" });
+      expect(decide({ body: "" })).toEqual({ send: false, reason: "the draft is empty" });
+      expect(decide({ body: " \n\t " })).toEqual({ send: false, reason: "the draft is empty" });
     });
     it("refuses an overlong body, with a configurable limit", () => {
       expect(decide({ body: "a".repeat(DEFAULT_MAX_BODY_CHARS) }).send).toBe(true);
-      expect(decide({ body: "a".repeat(DEFAULT_MAX_BODY_CHARS + 1) }).reason).toMatch(/body too long/);
+      expect(decide({ body: "a".repeat(DEFAULT_MAX_BODY_CHARS + 1) }).reason).toMatch(/too long to send automatically/);
       expect(decide({ body: "hello there" }, { maxBodyChars: 5 }).send).toBe(false);
     });
   });
@@ -95,7 +102,7 @@ describe("decideAutopilot", () => {
       ]) {
         const d = decide({ body });
         expect(d.send, body).toBe(false);
-        expect(d.reason).toMatch(/URL not found/);
+        expect(d.reason).toMatch(/URL that isn't in the ticket or your knowledge/);
       }
     });
     it("refuses email addresses not in the thread or knowledge", () => {
@@ -122,7 +129,7 @@ describe("decideAutopilot", () => {
       it(`refuses a ${name}: ${body.slice(0, 24)}`, () => {
         const d = decide({ body });
         expect(d.send).toBe(false);
-        expect(d.reason).toBe(`body contains what looks like a ${name}`);
+        expect(d.reason).toBe(`the draft contains what looks like a ${name}`);
       });
     }
     it("refuses a secret even when the customer pasted it into the thread", () => {
@@ -140,7 +147,7 @@ describe("decideAutopilot", () => {
       { body: "", confidence: 0, flags: { ...good.flags, unsureOfFacts: true } },
       { triage: { ...okTriage, needsHuman: true } },
     );
-    expect(everythingWrong.reason).toBe("empty body");
+    expect(everythingWrong.reason).toBe("the draft is empty");
     expect(decide({ confidence: 0, flags: { ...good.flags, unsureOfFacts: true } }).reason).toMatch(/^draft flagged/);
   });
 

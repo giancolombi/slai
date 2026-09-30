@@ -18,6 +18,7 @@ import { type AnyConnector, type AppDeps, type AppEnv, auditBase, auth, type Ctx
 import { ApiError, badRequest, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { oauthApp } from "../oauth.js";
+import { helpDeskErrorByKind, userFacingError } from "../user-errors.js";
 import { body, idParam } from "../validate.js";
 import { addKnowledgeSource } from "./knowledge.js";
 
@@ -126,7 +127,7 @@ export function connectionRoutes(deps: AppDeps) {
     name: row.name,
     status: row.status,
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    lastError: row.lastError,
+    lastError: userFacingError("connection", row.lastError),
     mappingIssues: row.mappingIssues,
     webhookUrl: webhookUrl(row),
     ticketCount,
@@ -149,7 +150,7 @@ export function connectionRoutes(deps: AppDeps) {
 
   const connectorOf = (row: ConnectionRow) => {
     const def = deps.connectors.get(row.provider);
-    if (!def) throw badRequest(`Provider "${row.provider}" is not available.`);
+    if (!def) throw badRequest("slai no longer supports this help desk. Contact support.");
     return def;
   };
 
@@ -193,14 +194,14 @@ export function connectionRoutes(deps: AppDeps) {
     const a = auth(c);
     const input = await body(c, createConnectionBody);
     const def = deps.connectors.get(input.provider);
-    if (!def) throw badRequest(`Unknown provider "${input.provider}".`);
+    if (!def) throw badRequest("slai doesn't support that help desk yet.");
     const creds = def.credentialsSchema.safeParse(input.credentials);
     // Field names only: never echo credential values back.
     if (!creds.success)
       throw new ApiError(
         400,
         "invalid_credentials",
-        "Credentials are invalid.",
+        "Some connection details are missing or invalid. Check the highlighted fields.",
         creds.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
       );
     const row = await deps.orgDb.withOrg(a.orgId, (tx) =>
@@ -269,8 +270,12 @@ export function connectionRoutes(deps: AppDeps) {
       result = { ok: true, accountName: r.accountName };
     } catch (e) {
       const kind = e instanceof ConnectorError ? e.kind : "upstream";
-      const message = e instanceof ConnectorError ? e.message : "The help desk could not be reached.";
-      result = { ok: false, accountName: null, error: { kind, message } };
+      // The raw provider detail goes to the log only; the user (and last_error) get a sentence.
+      deps.logger.warn(
+        { orgId: a.orgId, connectionId: id, kind, err: (e as Error)?.message },
+        "connection test failed",
+      );
+      result = { ok: false, accountName: null, error: { kind, message: helpDeskErrorByKind(kind) } };
     }
     await deps.orgDb.withOrg(a.orgId, async (tx) => {
       await tx

@@ -19,6 +19,7 @@ import { type AnyConnector, type AppDeps, type AppEnv, auditBase, auth, type Ctx
 import { badRequest, conflict, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { decodeCursor, encodeCursor } from "../pagination.js";
+import { userFacingError } from "../user-errors.js";
 import { body, idParam, query } from "../validate.js";
 
 type SourceRow = typeof knowledgeSources.$inferSelect;
@@ -34,7 +35,7 @@ const toSource = (s: SourceRow, counts: { total: number; enabled: number }): Kno
   name: s.name,
   status: s.status,
   lastSyncAt: s.lastSyncAt?.toISOString() ?? null,
-  lastError: s.lastError,
+  lastError: userFacingError("knowledge_source", s.lastError),
   articleCount: counts.total,
   enabledCount: counts.enabled,
   createdAt: s.createdAt.toISOString(),

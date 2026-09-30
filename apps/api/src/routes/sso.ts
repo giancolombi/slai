@@ -114,10 +114,11 @@ export function ssoRoutes(deps: AppDeps) {
     try {
       found = await discoverOIDCConfig({ issuer, isTrustedOrigin: idpUrlAllowed });
     } catch (e) {
+      deps.logger.warn({ issuer, err: (e as Error).message }, "OIDC discovery failed");
       throw new ApiError(
         422,
         "oidc_discovery_failed",
-        `Could not read the issuer's OpenID configuration (${(e as Error).message}).`,
+        "slai couldn't read your identity provider's configuration at that issuer URL. Check the URL and try again.",
       );
     }
     return {
@@ -143,7 +144,12 @@ export function ssoRoutes(deps: AppDeps) {
       const res = await deps
         .fetch(metadataUrl, { redirect: "error", signal: AbortSignal.timeout(10_000) })
         .catch(() => null);
-      if (!res?.ok) throw new ApiError(422, "saml_metadata_unreachable", "Could not download the SAML metadata.");
+      if (!res?.ok)
+        throw new ApiError(
+          422,
+          "saml_metadata_unreachable",
+          "slai couldn't download the SAML metadata from that URL. Check the URL, or paste the metadata XML instead.",
+        );
       xml = await res.text();
     }
     if (!xml || xml.length > MAX_METADATA_BYTES) throw badRequest("The SAML metadata is missing or too large.");
@@ -390,9 +396,14 @@ export function ssoRoutes(deps: AppDeps) {
         target: { type: "sso_provider", id: current.id },
         metadata: { missing },
       });
-      throw new ApiError(422, "domain_not_verified", `No matching TXT record found for ${missing.join(", ")}.`, {
-        missing,
-      });
+      throw new ApiError(
+        422,
+        "domain_not_verified",
+        `slai couldn't find the TXT record for ${missing.join(", ")} yet. DNS changes can take a while; try again later.`,
+        {
+          missing,
+        },
+      );
     }
     const row = await authDb.transaction(async (tx) => {
       const [r] = await tx

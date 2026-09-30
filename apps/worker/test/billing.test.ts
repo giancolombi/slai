@@ -294,7 +294,7 @@ describe("billing snapshot", () => {
     }
     expect(mailTo(ownerEmail).map((m) => m.subject)).toEqual([
       "[slai] Your trial ends in 3 days",
-      "[slai] Your trial has ended: agents are observe-only",
+      "[slai] Your trial has ended: agents are paused, alerts continue",
     ]);
     // A trial with plenty left says nothing.
     const fresh = await createOrg(owner, {
@@ -313,7 +313,7 @@ describe("billing snapshot", () => {
     await billingSnapshotJob(h.deps, { orgId });
     await billingSnapshotJob(h.deps, { orgId });
     const mail = mailTo(ownerEmail);
-    expect(mail.map((m) => m.subject)).toEqual(["[slai] Payment past due: agents are observe-only"]);
+    expect(mail.map((m) => m.subject)).toEqual(["[slai] Payment past due: agents are paused, alerts continue"]);
     expect(mail[0]!.text).toMatch(/monitoring and alerts continue/);
   });
 

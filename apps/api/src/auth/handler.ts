@@ -92,7 +92,7 @@ function toApiError(status: number, json: { code?: string; message?: string } | 
     case "SESSION_NOT_FRESH":
       return new ApiError(403, "reauth_required", "Sign in again to make this change.");
   }
-  if (status >= 500) return new ApiError(500, "internal", "Something went wrong.");
+  if (status >= 500) return new ApiError(500, "internal", "Something went wrong on our side. Try again in a moment.");
   if (status === 401) return unauthorized();
   if (status === 404) return notFound();
   return new ApiError(
@@ -208,7 +208,7 @@ export function authHandler(deps: AppDeps, auth: Auth) {
 
   const parse = <S extends z.ZodType>(schema: S, value: unknown): z.infer<S> => {
     const r = schema.safeParse(value);
-    if (!r.success) throw badRequest("The request body is not valid.", r.error.issues);
+    if (!r.success) throw badRequest("Some details aren't valid. Check them and try again.", r.error.issues);
     return r.data;
   };
 

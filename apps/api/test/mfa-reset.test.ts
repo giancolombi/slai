@@ -201,7 +201,7 @@ describe("admin reset of a member's second factors", () => {
     const res = await reset(admin.client, solo.userId);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("last_owner");
-    expect(res.body.error.message).toMatch(/break-glass/);
+    expect(res.body.error.message).toMatch(/slai support/);
     expect(await ctx.owner.db.select().from(twoFactors).where(eq(twoFactors.userId, solo.userId))).toHaveLength(1);
   });
 

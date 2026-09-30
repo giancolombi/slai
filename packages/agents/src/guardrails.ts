@@ -75,39 +75,49 @@ function secretIn(body: string): string | null {
 
 const refuse = (reason: string): AutopilotDecision => ({ send: false, reason });
 
+/** Reasons are shown to support leads (approvals inbox, the internal note): plain words, no field names. */
+const FLAG_LABEL: Record<keyof DraftReplyResult["flags"], string> = {
+  promisesTimeline: "promises a timeline",
+  mentionsPricingOrRefund: "mentions pricing or a refund",
+  legalOrSecurity: "touches a legal or security topic",
+  unsureOfFacts: "is unsure of the facts",
+};
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
 export function decideAutopilot(draft: DraftReplyResult, opts: AutopilotOptions): AutopilotDecision {
   const body = draft.body ?? "";
   const max = opts.maxBodyChars ?? DEFAULT_MAX_BODY_CHARS;
-  if (body.trim().length === 0) return refuse("empty body");
-  if (body.length > max) return refuse(`body too long (${body.length} > ${max} characters)`);
+  if (body.trim().length === 0) return refuse("the draft is empty");
+  if (body.length > max)
+    return refuse(`the draft is too long to send automatically (${body.length} characters; the limit is ${max})`);
 
   const raised = (Object.keys(draft.flags) as (keyof DraftReplyResult["flags"])[]).filter(
     (k) => draft.flags[k] !== false,
   );
-  if (raised.length) return refuse(`draft flagged: ${raised.join(", ")}`);
+  if (raised.length) return refuse(`draft flagged: ${raised.map((k) => FLAG_LABEL[k] ?? k).join(", ")}`);
 
   if (!Number.isFinite(draft.confidence) || !Number.isFinite(opts.minConfidence))
-    return refuse("confidence is not a number");
+    return refuse("the agent's confidence is unknown");
   if (draft.confidence < opts.minConfidence) {
-    return refuse(`confidence ${draft.confidence} below minimum ${opts.minConfidence}`);
+    return refuse(`confidence ${pct(draft.confidence)} is below the ${pct(opts.minConfidence)} minimum`);
   }
 
-  if (!opts.triage) return refuse("no triage for this ticket");
+  if (!opts.triage) return refuse("the ticket hasn't been triaged yet");
   if (opts.triage.needsHuman)
-    return refuse(`triage requires a human: ${opts.triage.needsHumanReason ?? "no reason given"}`);
+    return refuse(`triage says a person should handle this: ${opts.triage.needsHumanReason ?? "no reason given"}`);
 
   const source = sourceText(opts.ctx);
   const knownUrls = new Set([...source.matchAll(URL_RE)].map((m) => normalizeUrl(m[0])));
   for (const k of opts.ctx.knowledge) if (k.url) knownUrls.add(normalizeUrl(k.url));
   const unknownUrl = [...body.matchAll(URL_RE)].map((m) => m[0]).find((u) => !knownUrls.has(normalizeUrl(u)));
-  if (unknownUrl) return refuse(`body contains a URL not found in the thread or knowledge: ${unknownUrl}`);
+  if (unknownUrl) return refuse(`the draft links to a URL that isn't in the ticket or your knowledge: ${unknownUrl}`);
 
   const knownEmails = new Set([...source.matchAll(EMAIL_RE)].map((m) => m[0].toLowerCase()));
   const unknownEmail = [...body.matchAll(EMAIL_RE)].map((m) => m[0]).find((e) => !knownEmails.has(e.toLowerCase()));
-  if (unknownEmail) return refuse("body contains an email address not found in the thread or knowledge");
+  if (unknownEmail) return refuse("the draft includes an email address that isn't in the ticket or your knowledge");
 
   const secret = secretIn(body);
-  if (secret) return refuse(`body contains what looks like a ${secret}`);
+  if (secret) return refuse(`the draft contains what looks like a ${secret}`);
 
   return { send: true, reason: "all guardrails passed" };
 }

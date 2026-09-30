@@ -140,7 +140,12 @@ export async function planReaction(tx: Tx, deps: WorkerDeps, orgId: string, ev: 
   };
 }
 
-const LABEL: Record<RiskLevel, string> = { ok: "OK", warning: "Warning", at_risk: "At risk", breached: "Breached" };
+const LABEL: Record<RiskLevel, string> = {
+  ok: "On track",
+  warning: "Warning",
+  at_risk: "At risk",
+  breached: "Breached",
+};
 
 export async function performReaction(deps: WorkerDeps, r: Reaction | null): Promise<void> {
   if (!r?.channels.length) return;
@@ -151,7 +156,7 @@ export async function performReaction(deps: WorkerDeps, r: Reaction | null): Pro
     r.channels,
     {
       subject: `[slai] ${r.displayKey} is ${LABEL[r.risk].toLowerCase()}`,
-      text: `Ticket ${r.displayKey} "${r.subject}" moved from ${r.prevRisk ? LABEL[r.prevRisk] : "new"} to ${LABEL[r.risk]}.\n\n${link}`,
+      text: `Ticket ${r.displayKey} "${r.subject}" is now ${LABEL[r.risk].toLowerCase()}${r.prevRisk ? ` (it was ${LABEL[r.prevRisk].toLowerCase()})` : ""}.\n\nOpen the ticket in slai to see its SLA clocks and due times: ${link}`,
     },
     { target: { type: "ticket", id: r.ticketId }, metadata: { from: r.prevRisk, to: r.risk } },
   );

@@ -15,7 +15,7 @@ export function decodeCursor<T>(cursor: string | undefined, schema: z.ZodType<T>
   try {
     return schema.parse(JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")));
   } catch {
-    throw badRequest("Invalid cursor.");
+    throw badRequest("This list is out of date. Refresh the page and try again.");
   }
 }
 

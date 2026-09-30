@@ -42,7 +42,8 @@ export type Metric = "first_response" | "next_response" | "periodic_update" | "r
 export type MetricState = "running" | "paused" | "achieved" | "breached" | "not_applicable";
 
 export interface ApiError {
-  error: { code: string; message: string; details?: unknown };
+  /** `requestId` is set on 5xx responses: a short reference the user can quote to support. */
+  error: { code: string; message: string; details?: unknown; requestId?: string };
 }
 export interface List<T> {
   items: T[];
@@ -584,9 +585,12 @@ export interface AgentRun {
   id: string;
   kind: "contract_extraction" | "triage" | "draft_reply";
   status: "queued" | "running" | "succeeded" | "failed";
+  /** Internal (margin reporting, support): the web app does not render these three. */
   model: string | null;
   costCents: number;
   sandboxSeconds: number | null;
+  /** Credits this run consumed (its triage/draft, plus the autopilot reply it sent); 0 when nothing was billed. */
+  credits: number;
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
@@ -759,12 +763,21 @@ export interface Replay {
   createdAt: string;
 }
 
+/**
+ * Usage by what the customer buys (not internal meters): model calls and agent
+ * time are folded into the action they served. `contract_extraction` appears only
+ * when it consumed credits.
+ */
+export type UsageKind = "triage" | "draft_reply" | "autopilot_reply" | "contract_extraction";
+
 export interface UsageSummary {
   period: { start: string; end: string };
   creditsUsed: number;
+  /** Internal cost of model calls and agent time (not shown to customers). */
   costCents: number;
   spendCapCents: number | null;
-  byKind: { kind: string; count: number; credits: number; costCents: number }[];
+  /** `count` is the number of billed actions of that kind. */
+  byKind: { kind: UsageKind; count: number; credits: number; costCents: number }[];
   trackedTickets: number;
 }
 

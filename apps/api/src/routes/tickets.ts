@@ -15,10 +15,11 @@ import {
   tickets,
   toEngineEvents,
   toStoredEvaluation,
+  usageLedger,
 } from "@slai/db";
 import { RISK, type TicketDetail } from "@slai/shared";
 import { evaluateTicket, parsePolicy } from "@slai/sla-engine";
-import { and, asc, desc, eq, ilike, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type AppDeps, type AppEnv, auditBase, auth } from "../context.js";
@@ -54,10 +55,19 @@ function selectSummaries(tx: Tx) {
     .leftJoin(slaPolicies, eq(slaPolicies.id, tickets.policyId));
 }
 
+/** An enum value as words: "on_hold" → "on hold". */
+const words = (v: unknown) => String(v).replace(/_/g, " ");
+const METRIC_WORDS: Record<string, string> = {
+  first_response: "First response",
+  next_response: "Next response",
+  periodic_update: "Periodic update",
+  resolution: "Resolution",
+};
+
 const EVENT_LABEL: Record<string, (p: Record<string, unknown>) => string> = {
-  created: (p) => `Ticket created${p.priority ? ` (${p.priority})` : ""}`,
-  priority_changed: (p) => `Priority changed to ${p.priority ?? "none"}`,
-  status_changed: (p) => `Status changed to ${p.status}`,
+  created: (p) => `Ticket created${p.priority ? ` (${words(p.priority)} priority)` : ""}`,
+  priority_changed: (p) => `Priority changed to ${p.priority ? words(p.priority) : "none"}`,
+  status_changed: (p) => `Status changed to ${words(p.status)}`,
   assignee_changed: () => "Assignee changed",
   tags_changed: () => "Tags updated",
 };
@@ -148,14 +158,14 @@ export function ticketRoutes(deps: AppDeps) {
             ...(cm?.authorName ? { author: cm.authorName } : {}),
           };
         }
-        return { at: e.at.toISOString(), type: e.type, label: (EVENT_LABEL[e.type] ?? (() => e.type))(p) };
+        return { at: e.at.toISOString(), type: e.type, label: (EVENT_LABEL[e.type] ?? (() => words(e.type)))(p) };
       });
       for (const b of breaches) {
         if (b.breachAt)
           timeline.push({
             at: b.breachAt.toISOString(),
             type: "sla_breached",
-            label: `SLA breached: ${b.metric.replace("_", " ")}`,
+            label: `${METRIC_WORDS[b.metric] ?? words(b.metric)} SLA breached`,
           });
       }
       timeline.sort((x, y) => x.at.localeCompare(y.at));
@@ -173,12 +183,29 @@ export function ticketRoutes(deps: AppDeps) {
         tx,
         actions.map((x) => x.decidedBy),
       );
+      const runCredits = new Map<string, number>();
+      if (runs.length) {
+        const spent = await tx
+          .select({
+            runId: usageLedger.agentRunId,
+            credits: sql<number>`coalesce(sum(${usageLedger.credits}), 0)::int`,
+          })
+          .from(usageLedger)
+          .where(
+            inArray(
+              usageLedger.agentRunId,
+              runs.map((r) => r.id),
+            ),
+          )
+          .groupBy(usageLedger.agentRunId);
+        for (const s of spent) if (s.runId) runCredits.set(s.runId, s.credits);
+      }
       return {
         ...summary,
         requester: { name: row.t.requesterName, email: row.t.requesterEmail },
         metrics: (evaluation?.metrics ?? []).map(toMetricView),
         timeline,
-        agentRuns: runs.map(toAgentRun),
+        agentRuns: runs.map((r) => toAgentRun(r, runCredits.get(r.id) ?? 0)),
         actions: actions.map((x) => toAgentAction(x, row.t, nameOf(names, x.decidedBy))),
       };
     });

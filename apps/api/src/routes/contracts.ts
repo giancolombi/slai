@@ -157,7 +157,8 @@ export function contractRoutes(deps: AppDeps) {
     const id = idParam(c, "id", "Contract");
     await deps.orgDb.withOrg(a.orgId, async (tx) => {
       const { c: row } = await loadOne(tx, id);
-      if (row.status === "extracting") throw conflict("Extraction is already running.");
+      if (row.status === "extracting")
+        throw conflict("slai is already reading this contract. It will be ready for review shortly.");
       if (row.status === "archived") throw conflict("This contract is archived.");
       await tx
         .update(contracts)
