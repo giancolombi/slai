@@ -113,7 +113,13 @@ export async function persistTicket(
     await tx
       .insert(ticketEvents)
       .values(events.slice(i, i + CHUNK))
-      .onConflictDoNothing({ target: [ticketEvents.ticketId, ticketEvents.idempotencyKey] });
+      // Same key, same source event. Only the mapped payload can differ (the connection's
+      // status/priority mapping changed, T-25), so a re-ingest rewrites it and the clock recomputes.
+      .onConflictDoUpdate({
+        target: [ticketEvents.ticketId, ticketEvents.idempotencyKey],
+        set: { payload: sql`excluded.payload` },
+        setWhere: sql`${ticketEvents.payload} is distinct from excluded.payload`,
+      });
   }
 
   const comments = h.comments.map((c) => ({

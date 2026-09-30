@@ -3,7 +3,7 @@
  * decrypted just in time, only in memory, and never logged.
  */
 import { type ConnectorClient, ConnectorError, type FieldMapping, type MappingIssue } from "@slai/connectors";
-import { AAD, audit, connections, decryptJson, type Tx } from "@slai/db";
+import { AAD, audit, connections, decryptJson, encryptJson, type Tx } from "@slai/db";
 import { eq } from "drizzle-orm";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
@@ -21,6 +21,15 @@ export function connectorFor(deps: WorkerDeps, conn: ConnectionRow) {
   return def;
 }
 
+/** The connector's default mapping with the connection's overrides on top. */
+export function mappingFor(def: ReturnType<typeof connectorFor>, conn: ConnectionRow): FieldMapping {
+  const override = conn.mapping as Partial<FieldMapping> | null;
+  return {
+    status: { ...def.defaultMapping.status, ...(override?.status ?? {}) },
+    priority: { ...def.defaultMapping.priority, ...(override?.priority ?? {}) },
+  };
+}
+
 export function clientFor(deps: WorkerDeps, conn: ConnectionRow): ConnectorClient {
   const def = connectorFor(deps, conn);
   const credentials = def.credentialsSchema.parse(
@@ -31,12 +40,21 @@ export function clientFor(deps: WorkerDeps, conn: ConnectionRow): ConnectorClien
     conn.provider === "demo"
       ? { ...conn.config, connectionId: conn.id, now: () => deps.clock.now() }
       : (conn.config ?? {});
-  const override = conn.mapping as Partial<FieldMapping> | null;
-  const mapping: FieldMapping = {
-    status: { ...def.defaultMapping.status, ...(override?.status ?? {}) },
-    priority: { ...def.defaultMapping.priority, ...(override?.priority ?? {}) },
-  };
-  return def.create({ credentials, config, mapping, fetch: deps.fetch });
+  const mapping = mappingFor(def, conn);
+  return def.create({
+    credentials,
+    config,
+    mapping,
+    fetch: deps.fetch,
+    // A refreshed (possibly rotated) OAuth token is re-encrypted and stored for the next job.
+    onCredentialsRefreshed: (next: unknown) =>
+      deps.orgDb.withOrg(conn.orgId, async (tx) => {
+        await tx
+          .update(connections)
+          .set({ credentials: encryptJson(next, { keyring: deps.keyring, aad: AAD.connectionCredentials(conn.id) }) })
+          .where(eq(connections.id, conn.id));
+      }),
+  });
 }
 
 /** Marks the connection broken (bad credentials) so the UI asks the user to reconnect. */
