@@ -19,15 +19,31 @@ in time.
 
 ## Quick start
 
+Requires Node 24+, pnpm 11 (`corepack enable`), and Docker.
+
 ```bash
 pnpm install
-cp .env.example .env   # then fill ENCRYPTION_KEY and SESSION_SECRET (see .env.example)
-pnpm db:up && pnpm db:migrate && pnpm db:seed
-pnpm dev               # web :5173, api :8787, worker
+pnpm setup:env                       # writes .env with generated secrets
+docker compose up -d postgres mailpit
+pnpm db:migrate && pnpm db:seed
+pnpm dev                             # web :5173 · api :8787 · worker
 ```
 
-With `MODEL_PROVIDER=mock` and `AGENT_RUNTIME=local`, everything runs without API keys,
-and the `demo` connector simulates a help desk.
+Open http://localhost:5173 and sign in as `demo@slai.dev` / `slai-demo-password-1`.
+The seeded **Demo Help Desk** syncs about 450 realistic tickets within a minute. The
+worker evaluates them, and agents draft replies for at-risk tickets under the
+seeded autonomy rules. Alert emails land in Mailpit at http://localhost:8025.
+
+By default `MODEL_PROVIDER=mock` and `AGENT_RUNTIME=local`, so nothing needs API
+keys. The mock only understands simple SLA wording. For real contracts, set
+`MODEL_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` in `.env` (plus
+`OPENAI_API_KEY` for fallback), then restart `pnpm dev`.
+
+**Test with your own SLA:** go to Contracts, then Upload (PDF, DOCX, TXT or MD).
+Resolve the questions on the review screen, approve, and assign the policy to a
+customer under Customers.
+
+`pnpm check` runs lint, typecheck and every test (tests need the Postgres container).
 
 ## Specs
 
