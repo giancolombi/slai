@@ -35,6 +35,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.10)
+      '@simplewebauthn/server':
+        specifier: 13.3.3
+        version: 13.3.3
       '@slai/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors

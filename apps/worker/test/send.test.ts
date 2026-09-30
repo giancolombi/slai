@@ -95,7 +95,7 @@ beforeAll(async () => {
   userId = randomUUID();
   await owner.db
     .insert(users)
-    .values({ id: userId, email: `${userId}@example.com`, name: "Approver", passwordHash: "x" });
+    .values({ id: userId, email: `${userId}@example.com`, name: "Approver" });
 });
 
 describe("idempotent help-desk writes", () => {

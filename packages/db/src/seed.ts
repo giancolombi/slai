@@ -7,8 +7,8 @@
 import { randomBytes } from "node:crypto";
 import { type PolicyInput, parsePolicy } from "@slai/sla-engine";
 import { and, eq, sql } from "drizzle-orm";
-import { connect, type Tx } from "./client.js";
 import { type AuthSecret, authSecrets, sealForAuth } from "./auth-secrets.js";
+import { connect, type Tx } from "./client.js";
 import { AAD, encrypt, encryptJson, type Keyring } from "./crypto.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import {
@@ -215,7 +215,10 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
         failedVerificationCount: 0,
         lockedUntil: null,
       };
-      await tx.insert(twoFactors).values({ userId, ...totp }).onConflictDoUpdate({ target: twoFactors.userId, set: totp });
+      await tx
+        .insert(twoFactors)
+        .values({ userId, ...totp })
+        .onConflictDoUpdate({ target: twoFactors.userId, set: totp });
       await tx
         .insert(memberships)
         .values({ orgId, userId, role: "owner" })

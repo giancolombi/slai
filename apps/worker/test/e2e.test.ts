@@ -183,7 +183,7 @@ describe("end to end with the demo help desk", () => {
     const userId = randomUUID();
     await owner.db
       .insert(users)
-      .values({ id: userId, email: `${userId}@example.com`, name: "Approver", passwordHash: "x" });
+      .values({ id: userId, email: `${userId}@example.com`, name: "Approver" });
     const [reply] = await owner.db
       .update(agentActions)
       .set({ status: "approved", decidedBy: userId, decidedAt: h.clock.now() })

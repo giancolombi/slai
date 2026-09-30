@@ -117,11 +117,9 @@ describe("the app role cannot bypass RLS", () => {
     });
     expect(await app.withOrg(a.orgId, (tx) => tx.select().from(ssoProviders))).toHaveLength(1);
     expect(await app.withOrg(b.orgId, (tx) => tx.select().from(ssoProviders))).toHaveLength(0);
-    expect(
-      await failure(
-        app.withOrg(a.orgId, (tx) => tx.update(ssoProviders).set({ domainVerified: true })),
-      ),
-    ).toMatch(/permission denied/);
+    expect(await failure(app.withOrg(a.orgId, (tx) => tx.update(ssoProviders).set({ domainVerified: true })))).toMatch(
+      /permission denied/,
+    );
   });
 
   it("every org-scoped table has forced RLS and the org_isolation policy", async () => {
