@@ -918,6 +918,27 @@ export const billingEvents = pgTable("billing_events", {
   createdAt: createdAt(),
 });
 
+/**
+ * Per-user, per-org onboarding preferences (in-product help): whether the
+ * getting-started checklist was dismissed and the first-run welcome was seen.
+ * The checklist's steps themselves are derived from real org state, never stored.
+ */
+export const onboardingState = pgTable(
+  "onboarding_state",
+  {
+    id: id(),
+    orgId: orgId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    checklistDismissedAt: ts("checklist_dismissed_at"),
+    welcomeSeenAt: ts("welcome_seen_at"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [unique().on(t.orgId, t.userId)],
+);
+
 /** Every org-scoped table (RLS applies). Used by tests to assert coverage. */
 export const ORG_SCOPED_TABLES = [
   "memberships",
@@ -948,4 +969,5 @@ export const ORG_SCOPED_TABLES = [
   "billing_periods",
   "credit_grants",
   "billing_events",
+  "onboarding_state",
 ] as const;
