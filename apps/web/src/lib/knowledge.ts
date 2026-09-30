@@ -1,4 +1,30 @@
-import type { KnowledgeArticle, KnowledgeRef, KnowledgeSourceKind } from "@slai/shared";
+import type {
+  Connection,
+  ConnectorInfo,
+  KnowledgeArticle,
+  KnowledgeRef,
+  KnowledgeSource,
+  KnowledgeSourceKind,
+} from "@slai/shared";
+
+/** Source kinds slai syncs from a help desk connection. */
+export type SyncedKind = Exclude<KnowledgeSourceKind, "manual">;
+
+/** Connections that can still add a source of `kind`: the connector supports it, and it isn't a source yet. */
+export function eligibleConnections(
+  kind: SyncedKind,
+  connectors: Pick<ConnectorInfo, "provider" | "supportsKnowledge" | "supportsSavedReplies">[],
+  connections: Connection[],
+  sources: Pick<KnowledgeSource, "kind" | "connectionId">[],
+): Connection[] {
+  const supports = new Set(
+    connectors
+      .filter((c) => (kind === "saved_replies" ? c.supportsSavedReplies : c.supportsKnowledge))
+      .map((c) => c.provider),
+  );
+  const taken = new Set(sources.filter((s) => s.kind === kind).map((s) => s.connectionId));
+  return connections.filter((c) => supports.has(c.provider) && !taken.has(c.id));
+}
 
 export const SOURCE_KIND_LABEL: Record<KnowledgeSourceKind, string> = {
   helpdesk_articles: "Help-center articles",

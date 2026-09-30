@@ -1,5 +1,6 @@
+import type { Connection } from "@slai/shared";
 import { describe, expect, it } from "vitest";
-import { matchesArticle, safeHref, uniqueRefs, urlHost } from "../src/lib/knowledge";
+import { eligibleConnections, matchesArticle, safeHref, uniqueRefs, urlHost } from "../src/lib/knowledge";
 
 const article = {
   title: "Fix SAML audience mismatch errors",
@@ -39,5 +40,24 @@ describe("uniqueRefs", () => {
     const gone = { id: null, title: "Old", url: "https://x.example/old" };
     expect(uniqueRefs([a, gone, { ...a }, { ...gone }])).toEqual([a, gone]);
     expect(uniqueRefs(undefined)).toEqual([]);
+  });
+});
+
+describe("eligibleConnections", () => {
+  const conn = (id: string, provider: string) => ({ id, provider }) as unknown as Connection;
+  const connectors = [
+    { provider: "zendesk", supportsKnowledge: true, supportsSavedReplies: true },
+    { provider: "help_scout", supportsSavedReplies: true },
+    { provider: "jira_sm" },
+  ];
+  const connections = [conn("z", "zendesk"), conn("h", "help_scout"), conn("j", "jira_sm")];
+
+  it("offers each kind only where the connector supports it and no source of that kind exists", () => {
+    const sources = [{ kind: "helpdesk_articles" as const, connectionId: "z" }];
+    expect(eligibleConnections("helpdesk_articles", connectors, connections, sources)).toEqual([]);
+    const replies = eligibleConnections("saved_replies", connectors, connections, sources);
+    expect(replies.map((c) => c.id)).toEqual(["z", "h"]);
+    const all = [...sources, { kind: "saved_replies" as const, connectionId: "h" }];
+    expect(eligibleConnections("saved_replies", connectors, connections, all).map((c) => c.id)).toEqual(["z"]);
   });
 });

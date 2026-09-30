@@ -49,7 +49,7 @@ import {
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage, isApiError } from "../../lib/api";
-import { SOURCE_KIND_LABEL, safeHref, urlHost } from "../../lib/knowledge";
+import { eligibleConnections, SOURCE_KIND_LABEL, type SyncedKind, safeHref, urlHost } from "../../lib/knowledge";
 import { providerLabel } from "../../lib/labels";
 import { useConnections, useConnectors, useKnowledgeArticles, useKnowledgeSources, useMe } from "../../lib/queries";
 
@@ -159,7 +159,11 @@ function SourceCard({ source: s, canManage }: { source: KnowledgeSource; canMana
   const sync = useMutation({
     mutationFn: () => api.knowledge.syncSource(s.id),
     onSuccess: () => {
-      toast({ tone: "info", title: "Sync started", description: "New and changed articles will appear shortly." });
+      toast({
+        tone: "info",
+        title: "Sync started",
+        description: `New and changed ${s.kind === "saved_replies" ? "saved replies" : "articles"} will appear shortly.`,
+      });
       void invalidate();
     },
     onError: (e) => toast({ tone: "error", title: "Couldn't start a sync", description: errorMessage(e) }),
@@ -169,7 +173,7 @@ function SourceCard({ source: s, canManage }: { source: KnowledgeSource; canMana
     <Card className="flex flex-col">
       <div className="flex items-start gap-3 px-5 pt-5">
         <span className="grid size-9 shrink-0 place-items-center rounded-md border border-line bg-sunken text-ink-muted">
-          {s.kind === "manual" ? (
+          {s.kind !== "helpdesk_articles" ? (
             <MessageSquareText className="size-4" aria-hidden />
           ) : (
             <BookOpen className="size-4" aria-hidden />
@@ -192,7 +196,7 @@ function SourceCard({ source: s, canManage }: { source: KnowledgeSource; canMana
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4 text-sm">
         <div>
-          <dt className="text-xs text-ink-muted">{s.kind === "manual" ? "Replies" : "Articles"}</dt>
+          <dt className="text-xs text-ink-muted">{s.kind === "helpdesk_articles" ? "Articles" : "Replies"}</dt>
           <dd className="font-mono text-ink tnum">
             {formatNumber(s.enabledCount)}
             <span className="text-ink-muted"> / {formatNumber(s.articleCount)} on</span>
@@ -239,29 +243,39 @@ function SourceCard({ source: s, canManage }: { source: KnowledgeSource; canMana
   );
 }
 
+const SYNCED_KINDS: { kind: SyncedKind; label: string; suffix: string }[] = [
+  { kind: "helpdesk_articles", label: "Help-center articles", suffix: "articles" },
+  { kind: "saved_replies", label: "Saved replies and macros", suffix: "saved replies" },
+];
+
 function AddSourceDialog({ onClose }: { onClose: () => void }) {
   const connections = useConnections();
   const connectors = useConnectors();
   const sources = useKnowledgeSources();
   const invalidate = useInvalidateKnowledge();
-  const eligible = useMemo(() => {
-    const supports = new Set((connectors.data ?? []).filter((c) => c.supportsKnowledge).map((c) => c.provider));
-    const taken = new Set(
-      (sources.data?.items ?? []).filter((s) => s.kind === "helpdesk_articles").map((s) => s.connectionId),
-    );
-    return (connections.data?.items ?? []).filter((c) => supports.has(c.provider) && !taken.has(c.id));
+  const [kindChoice, setKindChoice] = useState<SyncedKind | undefined>(undefined);
+  const eligibleByKind = useMemo(() => {
+    const args = [connectors.data ?? [], connections.data?.items ?? [], sources.data?.items ?? []] as const;
+    return {
+      helpdesk_articles: eligibleConnections("helpdesk_articles", ...args),
+      saved_replies: eligibleConnections("saved_replies", ...args),
+    };
   }, [connections.data, connectors.data, sources.data]);
+  const kinds = SYNCED_KINDS.filter((k) => eligibleByKind[k.kind].length > 0);
+  const kind = kinds.find((k) => k.kind === kindChoice) ?? kinds[0];
+  const eligible = kind ? eligibleByKind[kind.kind] : [];
   const [connectionId, setConnectionId] = useState<string | undefined>(undefined);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const selected = connectionId ?? eligible[0]?.id;
+  const selected = eligible.find((c) => c.id === connectionId)?.id ?? eligible[0]?.id;
   const conn = eligible.find((c) => c.id === selected);
+  const defaultName = `${conn?.name ?? "Help desk"} ${kind?.suffix ?? "articles"}`;
 
   const create = useMutation({
     mutationFn: () =>
       api.knowledge.createSource({
-        kind: "helpdesk_articles",
-        name: name.trim() || `${conn?.name ?? "Help center"} articles`,
+        kind: kind?.kind ?? "helpdesk_articles",
+        name: name.trim() || defaultName,
         connectionId: selected ?? null,
       }),
     onSuccess: (s) => {
@@ -287,8 +301,8 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
     <Dialog
       open
       onOpenChange={(o) => !o && onClose()}
-      title="Add help-center articles"
-      description="slai syncs the help center of a connected help desk daily. You choose which articles drafts may use."
+      title="Add a help-desk source"
+      description="slai syncs a connected help desk's help-center articles or saved replies daily. You choose which ones drafts may use."
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -311,7 +325,7 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
           compact
           icon={<BookOpen />}
           title="No help desk to add"
-          description="Every connected help desk that has a help center is already a source. Saved replies need no source: write them on the Saved replies tab."
+          description="Every connected help desk's help center and saved replies are already sources. You can also write saved replies on the Saved replies tab."
         />
       ) : (
         <form id="knowledge-source-form" onSubmit={submit} className="flex flex-col gap-4" noValidate>
@@ -319,6 +333,16 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
             <p role="alert" className="rounded-md bg-breached-subtle px-3 py-2 text-sm text-breached-text">
               {error}
             </p>
+          )}
+          {kinds.length > 1 && (
+            <Field label="What to sync">
+              <Select
+                value={kind?.kind}
+                onValueChange={(v) => setKindChoice(v as SyncedKind)}
+                options={kinds.map((k) => ({ value: k.kind, label: k.label }))}
+                className="w-full"
+              />
+            </Field>
           )}
           <Field label="Help desk">
             <Select
@@ -329,12 +353,7 @@ function AddSourceDialog({ onClose }: { onClose: () => void }) {
             />
           </Field>
           <Field label="Name" hint="Optional. Shown on this page and in draft notes.">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={`${conn?.name ?? "Help center"} articles`}
-              maxLength={120}
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={defaultName} maxLength={120} />
           </Field>
         </form>
       )}
@@ -528,7 +547,7 @@ function SavedRepliesPanel({ sources, canManage }: { sources: KnowledgeSource[];
     <Card>
       <CardHeader
         title="Saved replies"
-        description="Answers your team already trusts. Drafts can quote them like help-center articles."
+        description="Answers your team already trusts. Drafts can quote them like help-center articles. Saved replies synced from your help desk are listed under Articles."
         actions={items.length > 0 ? newButton : undefined}
       />
       {manual && replies.isPending ? (
