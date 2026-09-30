@@ -13,6 +13,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   hubspot: { accessToken: "t" },
   zammad: { baseUrl: "https://support.acme.example", apiToken: "t" },
   salesforce: { instanceUrl: "https://acme.my.salesforce.com", clientId: "id", clientSecret: "s" },
+  servicenow: { instanceUrl: "https://acme.service-now.com", username: "slai.integration", password: "p" },
   demo: {},
 };
 
@@ -29,6 +30,7 @@ describe("registry", () => {
       "intercom",
       "jira_service_management",
       "salesforce",
+      "servicenow",
       "zammad",
       "zendesk",
     ]);

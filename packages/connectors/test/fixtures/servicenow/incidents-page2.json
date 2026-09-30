@@ -1,0 +1,26 @@
+{
+  "result": [
+    {
+      "sys_id": "e8caedcbc0a80164017df472f39eaed1",
+      "number": "INC0010043",
+      "short_description": "SSO login loops back to the sign-in page",
+      "description": "After the IdP certificate rotation, users bounce back to the login page.",
+      "state": "3",
+      "hold_reason": "7",
+      "priority": "2",
+      "caller_id": "a8f98bb0eb32010045e1a5115206fe3a",
+      "caller_id.user_name": "noah.lindqvist",
+      "caller_id.name": "Noah Lindqvist",
+      "caller_id.email": "noah.lindqvist@kestrelworks.example",
+      "company": "31bea3d53790200044e0bfc8bcbe5dec",
+      "company.name": "Kestrel Works",
+      "assigned_to": "46d44a23a9fe19810012d100cca80666",
+      "assigned_to.name": "Dana Reyes",
+      "assignment_group": "8a5055c9c61122780043563ef53438e3",
+      "contact_type": "phone",
+      "sys_created_on": "2026-09-28 10:05:00",
+      "sys_created_by": "dana.reyes",
+      "sys_updated_on": "2026-09-28 10:31:00"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "result": [
+    {
+      "sys_id": "b0020001c611228701d22104cc950001",
+      "element": "comments",
+      "value": "Thank you for contacting Acme Support. Your incident INC0010042 has been received.",
+      "sys_created_on": "2026-09-28 09:00:05",
+      "sys_created_by": "system"
+    },
+    {
+      "sys_id": "b0020001c611228701d22104cc950002",
+      "element": "work_notes",
+      "value": "Queue lag on the eu-west delivery workers. Checking the consumer group.",
+      "sys_created_on": "2026-09-28 09:30:00",
+      "sys_created_by": "dana.reyes"
+    },
+    {
+      "sys_id": "b0020001c611228701d22104cc950003",
+      "element": "comments",
+      "value": "Hi Liam, can you confirm the webhook endpoint URL and whether it responds within 10 seconds?",
+      "sys_created_on": "2026-09-28 10:30:00",
+      "sys_created_by": "dana.reyes"
+    },
+    {
+      "sys_id": "b0020001c611228701d22104cc950004",
+      "element": "comments",
+      "value": "Endpoint is https://hooks.bluepeak.example/orders and it answers in under 2 seconds.",
+      "sys_created_on": "2026-09-28 13:00:00",
+      "sys_created_by": "liam.okafor"
+    },
+    {
+      "sys_id": "b0020001c611228701d22104cc950005",
+      "element": "comments",
+      "value": "We rebalanced the delivery workers; deliveries are back under a minute.",
+      "sys_created_on": "2026-09-28 15:58:00",
+      "sys_created_by": "dana.reyes"
+    },
+    {
+      "sys_id": "b0020001c611228701d22104cc950006",
+      "element": "comments",
+      "value": "Still seeing 20 minute delays on the 16:30 batch.",
+      "sys_created_on": "2026-09-28 17:00:00",
+      "sys_created_by": "liam.okafor"
+    }
+  ]
+}

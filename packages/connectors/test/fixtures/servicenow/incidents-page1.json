@@ -1,0 +1,48 @@
+{
+  "result": [
+    {
+      "sys_id": "1c741bd70b2322007518478d83673af3",
+      "number": "INC0010041",
+      "short_description": "Invoice shows wrong seat count",
+      "description": "Our September invoice lists 48 seats; we have 40.",
+      "state": "7",
+      "hold_reason": "",
+      "priority": "4",
+      "caller_id": "71826bf03710200044e0bfc8bcbe5d0a",
+      "caller_id.user_name": "sofia.garcia",
+      "caller_id.name": "Sofia Garcia",
+      "caller_id.email": "sofia.garcia@harborfinch.example",
+      "company": "",
+      "company.name": "",
+      "assigned_to": "",
+      "assigned_to.name": "",
+      "assignment_group": "8a5055c9c61122780043563ef53438e3",
+      "contact_type": "email",
+      "sys_created_on": "2026-09-27 12:00:00",
+      "sys_created_by": "sofia.garcia",
+      "sys_updated_on": "2026-09-28 08:00:00"
+    },
+    {
+      "sys_id": "9d385017c611228701d22104cc95c371",
+      "number": "INC0010042",
+      "short_description": "Webhook deliveries delayed by 30+ minutes",
+      "description": "Since this morning our order webhooks arrive 30 to 45 minutes late. Nothing changed on our side.",
+      "state": "3",
+      "hold_reason": "1",
+      "priority": "3",
+      "caller_id": "62826bf03710200044e0bfc8bcbe5df1",
+      "caller_id.user_name": "liam.okafor",
+      "caller_id.name": "Liam Okafor",
+      "caller_id.email": "liam.okafor@bluepeak.example",
+      "company": "81fd65ecac1d55eb42a426568fc87a63",
+      "company.name": "Bluepeak Logistics",
+      "assigned_to": "46d44a23a9fe19810012d100cca80666",
+      "assigned_to.name": "Dana Reyes",
+      "assignment_group": "8a5055c9c61122780043563ef53438e3",
+      "contact_type": "self-service",
+      "sys_created_on": "2026-09-28 09:00:00",
+      "sys_created_by": "liam.okafor",
+      "sys_updated_on": "2026-09-28 10:31:00"
+    }
+  ]
+}
