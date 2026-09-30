@@ -7,6 +7,7 @@ import { secureHeaders } from "hono/secure-headers";
 import { AUTH_BASE, createAuth } from "./auth/better-auth.js";
 import { authHandler } from "./auth/handler.js";
 import type { AppDeps, AppEnv } from "./context.js";
+import { isDatabaseSaturated } from "./db-errors.js";
 import { ApiError } from "./errors.js";
 import { requestLogger, safeErrorMessage } from "./logger.js";
 import { loadSession, requireAuth, writesNeedMember } from "./middleware/auth.js";
@@ -142,6 +143,11 @@ export function createApp(deps: AppDeps) {
         new ApiError(err.status as never, "http_error", err.message || "Request failed.").body(),
         err.status,
       );
+    }
+    if (isDatabaseSaturated(err)) {
+      deps.logger.warn({ requestId: c.get("requestId"), err: safeErrorMessage(err) }, "database saturated");
+      c.header("Retry-After", "2");
+      return c.json(new ApiError(503, "unavailable", "slai is busy. Please retry in a moment.").body(), 503);
     }
     deps.logger.error(
       { requestId: c.get("requestId"), err: { name: (err as Error).name, message: safeErrorMessage(err) } },

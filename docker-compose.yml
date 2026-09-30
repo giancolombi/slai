@@ -43,6 +43,8 @@ x-zammad-service: &zammad-service
 services:
   postgres:
     image: postgres:18
+    # Headroom for a running dev stack plus parallel test files (each opens a few pools).
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       POSTGRES_USER: slai
       POSTGRES_PASSWORD: slai

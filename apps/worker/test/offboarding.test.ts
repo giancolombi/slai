@@ -12,6 +12,9 @@ import {
   creditGrants,
   organizations,
   orgExports,
+  scimGroupRoles,
+  scimGroups,
+  scimTokens,
   ticketComments,
   tickets,
   usageLedger,
@@ -89,6 +92,17 @@ describe("export-org", () => {
     await owner.db
       .insert(orgExports)
       .values({ id: exportId, orgId: s.orgId, expiresAt: new Date(h.clock.now().getTime() + 7 * DAY) });
+    await owner.db.insert(scimTokens).values({
+      orgId: s.orgId,
+      name: "Okta",
+      tokenHash: "scim-token-hash-must-not-export",
+      tokenPrefix: "slai_scim_ab",
+    });
+    const [group] = await owner.db
+      .insert(scimGroups)
+      .values({ orgId: s.orgId, displayName: "slai-admins" })
+      .returning();
+    await owner.db.insert(scimGroupRoles).values({ orgId: s.orgId, groupName: "slai-admins", role: "admin" });
     await exportOrg(h.deps, { orgId: s.orgId, exportId });
 
     const [row] = await owner.db.select().from(orgExports).where(eq(orgExports.id, exportId));
@@ -107,6 +121,12 @@ describe("export-org", () => {
       credit_grants: 1,
     });
     expect(manifest.tables.audit_events).toBeGreaterThanOrEqual(1);
+    // SCIM provisioning state is org data too (T-18); token hashes are secrets and stay out.
+    expect(manifest.tables).toMatchObject({ scim_tokens: 1, scim_groups: 1, scim_group_roles: 1 });
+    expect(JSON.parse(files.get("data/scim_groups.json")!.toString())[0]).toMatchObject({ id: group!.id });
+    expect(JSON.parse(files.get("data/scim_tokens.json")!.toString())[0]).toMatchObject({
+      tokenPrefix: "slai_scim_ab",
+    });
 
     const ticketsJson = JSON.parse(files.get("data/tickets.json")!.toString());
     expect(ticketsJson[0]).toMatchObject({ id: s.ticketId, subject: "Printer on fire" });
@@ -122,6 +142,7 @@ describe("export-org", () => {
     const all = [...files.values()].map((b) => b.toString()).join("\n");
     expect(all).not.toContain(API_TOKEN);
     expect(all).not.toContain("very-secret");
+    expect(all).not.toContain("scim-token-hash-must-not-export");
     expect(all).not.toMatch(/"credentials"|"webhookSecret"|v1\.k1\./);
 
     const [done] = await owner.db

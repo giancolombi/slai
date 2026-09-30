@@ -1034,6 +1034,17 @@
   - Record each review (who, when, findings, changes) with the incident records;
     a key rotation (TR-27a) is recorded the same way.
 
+- **TR-32a** Postgres connection budget. Each API process opens up to
+  `DB_POOL_APP + DB_POOL_SYSTEM + DB_POOL_AUTH` (default 10+5+5), plus 2 for pg-boss,
+  1 LISTEN connection for SSE, and 1 for the shared rate-limit store. That is about 24.
+  Each worker opens `DB_POOL_APP + DB_POOL_SYSTEM` (10+5) plus pg-boss (5), about 20.
+  The total across replicas, plus migrations, backups, and headroom, must stay under
+  Postgres `max_connections` (100 by default). Two API and two worker replicas need
+  about 90, so beyond that either raise `max_connections` or put PgBouncer (transaction
+  mode) in front of the app/system/auth roles. The SSE LISTEN connection must bypass the
+  pooler. When the database is saturated (SQLSTATE 53300/53400/57P03, or a connect
+  timeout), the API answers 503 with `Retry-After` instead of 500.
+
 ### Local development
 - **TR-32** `docker compose up -d` (Postgres 18 on 5433, Mailpit) →
   `pnpm db:migrate && pnpm db:seed` → `pnpm dev`.

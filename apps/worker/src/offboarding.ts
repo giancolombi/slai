@@ -34,6 +34,10 @@ import {
   organizations,
   orgExports,
   replays,
+  scimGroupMembers,
+  scimGroupRoles,
+  scimGroups,
+  scimTokens,
   slaOutcomes,
   slaPolicies,
   ssoProviders,
@@ -66,6 +70,9 @@ const TABLES: Table[] = [
           email: users.email,
           name: users.name,
           role: memberships.role,
+          disabledAt: memberships.disabledAt,
+          scimManaged: memberships.scimManaged,
+          scimExternalId: memberships.scimExternalId,
           createdAt: memberships.createdAt,
         })
         .from(memberships)
@@ -101,6 +108,24 @@ const TABLES: Table[] = [
         })
         .from(connections),
   ],
+  [
+    "scim_tokens",
+    (tx) =>
+      tx
+        .select({
+          id: scimTokens.id,
+          name: scimTokens.name,
+          tokenPrefix: scimTokens.tokenPrefix,
+          createdBy: scimTokens.createdBy,
+          lastUsedAt: scimTokens.lastUsedAt,
+          revokedAt: scimTokens.revokedAt,
+          createdAt: scimTokens.createdAt,
+        })
+        .from(scimTokens),
+  ],
+  ["scim_groups", (tx) => tx.select().from(scimGroups)],
+  ["scim_group_members", (tx) => tx.select().from(scimGroupMembers)],
+  ["scim_group_roles", (tx) => tx.select().from(scimGroupRoles)],
   [
     "sso_providers",
     (tx) =>

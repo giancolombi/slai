@@ -20,9 +20,12 @@ import { defaultRateLimits, postgresRateLimiter } from "./rate-limit.js";
 
 const env = loadEnv();
 const logger = createLogger(env.LOG_LEVEL);
-const orgDb = createOrgDb(env.DATABASE_APP_URL, { applicationName: "slai-api" });
-const systemDb = createSystemDb(env.DATABASE_SYSTEM_URL, { applicationName: "slai-api-system" });
-const authDb = createAuthDb(env.DATABASE_AUTH_URL, { applicationName: "slai-api-auth" });
+const orgDb = createOrgDb(env.DATABASE_APP_URL, { applicationName: "slai-api", max: env.DB_POOL_APP });
+const systemDb = createSystemDb(env.DATABASE_SYSTEM_URL, {
+  applicationName: "slai-api-system",
+  max: env.DB_POOL_SYSTEM,
+});
+const authDb = createAuthDb(env.DATABASE_AUTH_URL, { applicationName: "slai-api-auth", max: env.DB_POOL_AUTH });
 const boss = createProducerBoss(env.DATABASE_APP_URL);
 boss.on("error", (err) => logger.error({ err: { message: err.message } }, "pg-boss error"));
 await boss.start();

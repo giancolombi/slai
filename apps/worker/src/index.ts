@@ -16,8 +16,11 @@ import { createConsumerBoss, registerHandlers } from "./worker.js";
 const env = loadEnv();
 const logger = createLogger(env.LOG_LEVEL);
 
-const orgDb = createOrgDb(env.DATABASE_APP_URL, { applicationName: "slai-worker" });
-const systemDb = createSystemDb(env.DATABASE_SYSTEM_URL, { applicationName: "slai-worker-sweep" });
+const orgDb = createOrgDb(env.DATABASE_APP_URL, { applicationName: "slai-worker", max: env.DB_POOL_APP });
+const systemDb = createSystemDb(env.DATABASE_SYSTEM_URL, {
+  applicationName: "slai-worker-sweep",
+  max: env.DB_POOL_SYSTEM,
+});
 const boss = createConsumerBoss(env.DATABASE_APP_URL);
 boss.on("error", (err) => logger.error({ err: errorMessage(err) }, "pg-boss error"));
 await boss.start();

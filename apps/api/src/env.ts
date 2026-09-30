@@ -19,6 +19,10 @@ export const envSchema = z.object({
   DATABASE_SYSTEM_URL: z.url(),
   /** authDb role (slai_auth): better-auth's identity tables (users, sessions, accounts, 2FA, passkeys, SSO). */
   DATABASE_AUTH_URL: z.url(),
+  /** Connection pool sizes per role. Budget them against Postgres max_connections (TR-32a). */
+  DB_POOL_APP: z.coerce.number().int().min(1).max(100).default(10),
+  DB_POOL_SYSTEM: z.coerce.number().int().min(1).max(50).default(5),
+  DB_POOL_AUTH: z.coerce.number().int().min(1).max(50).default(5),
   ENCRYPTION_KEY: base64Key("ENCRYPTION_KEY", 32),
   ENCRYPTION_KEY_ID: z
     .string()
