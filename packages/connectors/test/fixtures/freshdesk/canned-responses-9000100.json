@@ -1,0 +1,22 @@
+[
+  {
+    "id": 9100001,
+    "title": "Reset 2FA",
+    "folder_id": 9000100,
+    "content": "Hi {{ticket.requester.name}}, an admin can reset your second factor from Settings → Members.",
+    "content_html": "<div>Hi {{ticket.requester.name}},</div><div>An admin can reset your second factor from Settings → Members.</div><div>{{ticket.agent.name}}</div>",
+    "attachments": [],
+    "created_at": "2026-02-01T00:00:00Z",
+    "updated_at": "2026-08-01T10:00:00Z"
+  },
+  {
+    "id": 9100002,
+    "title": "Only a placeholder",
+    "folder_id": 9000100,
+    "content": "{{ticket.agent.signature}}",
+    "content_html": null,
+    "attachments": [],
+    "created_at": "2026-02-01T00:00:00Z",
+    "updated_at": "2026-02-01T00:00:00Z"
+  }
+]

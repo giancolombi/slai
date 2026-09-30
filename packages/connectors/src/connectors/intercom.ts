@@ -8,6 +8,14 @@
  * - API versions / changelog: https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis/api-changelog
  * - Priority writes (Preview only): https://developers.intercom.com/docs/references/preview/rest-api/api.intercom.io/conversations/updateconversation
  * - Articles (list, page/per_page, state, url): https://developers.intercom.com/docs/references/rest-api/api.intercom.io/articles/listarticles
+ * - Article translations (default_locale, translated_content keyed by locale):
+ *   https://developers.intercom.com/docs/references/rest-api/api.intercom.io/models/article_content
+ * - Macros (saved replies; per_page, starting_after, body/body_text):
+ *   https://developers.intercom.com/docs/references/rest-api/api.intercom.io/macros/listmacros
+ *
+ * Knowledge: the default-language article keeps the article id; each other
+ * published translation is its own item, `{id}:{locale}`. Macros are saved
+ * replies (T-47b); their placeholders keep only their fallback ("there").
  *
  * History comes from conversation parts. Known limits:
  * - Intercom returns at most 500 parts per conversation; older parts are lost.
@@ -20,13 +28,13 @@
  */
 import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
-import { dropNoopChanges, finalizeEvents, openingEventAuthor } from "../lib/events.js";
+import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { HttpClient } from "../lib/http.js";
+import { forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { readTokens } from "../lib/oauth.js";
 import { decodeCursor, encodeCursor } from "../lib/paginate.js";
-import { htmlToText } from "../lib/text.js";
+import { htmlToText, savedReplyText } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
 import type {
   CanonicalComment,
@@ -125,6 +133,13 @@ const zSearch = z.object({
     .loose()
     .nullish(),
 });
+const zArticleContent = z.object({
+  title: z.string().nullish(),
+  body: z.string().nullish(),
+  state: z.string().nullish(),
+  url: z.string().nullish(),
+  updated_at: z.number().nullish(),
+});
 const zArticle = z.object({
   id,
   title: z.string().nullish(),
@@ -133,11 +148,38 @@ const zArticle = z.object({
   url: z.string().nullish(),
   default_locale: z.string().nullish(),
   updated_at: z.number(),
+  /** Locale → content, plus a `type` string; only object values are translations. */
+  translated_content: z.record(z.string(), z.unknown()).nullish(),
 });
 const zArticles = z.object({
   data: z.array(zArticle),
   pages: z.object({ page: z.number().nullish(), total_pages: z.number().nullish() }).loose().nullish(),
 });
+const zMacros = z.object({
+  data: z.array(
+    z.object({
+      id,
+      name: z.string().nullish(),
+      body: z.string().nullish(),
+      body_text: z.string().nullish(),
+      updated_at: z.union([z.number(), z.string()]),
+    }),
+  ),
+  pages: z
+    .object({ next: z.object({ starting_after: z.string().nullish() }).nullish() })
+    .loose()
+    .nullish(),
+});
+/**
+ * Macro bodies write placeholders as `<attribute key="user.name" default="there"/>`:
+ * keep the default, else leave a `{{…}}` placeholder for savedReplyText to strip tidily.
+ */
+const attributesToText = (html: string) =>
+  html.replace(
+    /<attribute\b[^>]*>(?:<\/attribute>)?/gi,
+    (tag) => /\bdefault="([^"]+)"/i.exec(tag)?.[1] ?? "{{attribute}}",
+  );
+
 /** Pages of articles we read at most (50 per page). */
 const MAX_ARTICLE_PAGES = 200;
 
@@ -221,6 +263,7 @@ export const intercom: ConnectorDefinition<IntercomCredentials> = {
   defaultMapping,
   docsUrl: "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/conversations",
   supportsKnowledge: true,
+  supportsSavedReplies: true,
   create(ctx: ConnectorContext<IntercomCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const region = (ctx.config as { region?: unknown })?.region;
@@ -424,19 +467,59 @@ export const intercom: ConnectorDefinition<IntercomCredentials> = {
         const isState = (v: unknown): v is { p: number } => typeof (v as { p?: unknown })?.p === "number";
         const page = decodeCursor(cursor, isState)?.p ?? 1;
         const data = parseAs(zArticles, await http.get("/articles", { query: { page, per_page: 50 } }), "articles");
-        const items: KnowledgeArticle[] = data.data
-          .filter((a) => a.state === "published")
-          .map((a) => ({
-            sourceId: a.id,
-            title: a.title ?? "",
-            url: a.url ?? null,
-            bodyText: htmlToText(a.body),
-            locale: a.default_locale ?? null,
-            updatedAt: sec(a.updated_at),
-          }));
+        const items: KnowledgeArticle[] = [];
+        for (const a of data.data) {
+          if (a.state === "published") {
+            items.push({
+              sourceId: a.id,
+              title: a.title ?? "",
+              url: a.url ?? null,
+              bodyText: htmlToText(a.body),
+              locale: a.default_locale ?? null,
+              updatedAt: sec(a.updated_at),
+            });
+          }
+          for (const [locale, value] of Object.entries(a.translated_content ?? {})) {
+            if (locale === a.default_locale || typeof value !== "object" || value === null) continue;
+            const t = zArticleContent.safeParse(value);
+            if (!t.success || t.data.state !== "published") continue;
+            items.push({
+              sourceId: `${a.id}:${locale}`,
+              title: t.data.title ?? "",
+              url: t.data.url ?? null,
+              bodyText: htmlToText(t.data.body),
+              locale,
+              updatedAt: sec(t.data.updated_at ?? a.updated_at),
+            });
+          }
+        }
         const total = data.pages?.total_pages ?? page;
         const more = page < total && page < MAX_ARTICLE_PAGES;
         return { items, nextCursor: more ? encodeCursor({ p: page + 1 }) : null };
+      },
+
+      async listSavedReplies(cursor) {
+        const isState = (v: unknown): v is { a: string } => typeof (v as { a?: unknown })?.a === "string";
+        const after = decodeCursor(cursor, isState)?.a;
+        const data = parseAs(
+          zMacros,
+          await forbiddenAsUnsupported("Intercom macros", () =>
+            http.get("/macros", { query: { per_page: 150, starting_after: after } }),
+          ),
+          "macros",
+        );
+        const items: KnowledgeArticle[] = [];
+        for (const m of data.data) {
+          const bodyText = m.body_text
+            ? savedReplyText(m.body_text, "text")
+            : savedReplyText(attributesToText(m.body ?? ""), "html");
+          if (!bodyText) continue;
+          const updatedAt =
+            typeof m.updated_at === "number" ? sec(m.updated_at) : parseTime(m.updated_at, `macro ${m.id}.updated_at`);
+          items.push({ sourceId: m.id, title: m.name ?? "", url: null, bodyText, locale: null, updatedAt });
+        }
+        const next = data.pages?.next?.starting_after;
+        return { items, nextCursor: next ? encodeCursor({ a: next }) : null };
       },
 
       postInternalNote(sourceId, body) {

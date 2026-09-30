@@ -1,0 +1,48 @@
+{
+  "object": "list",
+  "uri": "/api/macros",
+  "data": [
+    {
+      "id": 5101,
+      "name": "Where is my order?",
+      "intent": "order/status",
+      "language": "en",
+      "usage": 812,
+      "archived_datetime": null,
+      "created_datetime": "2025-11-02T10:00:00.000000",
+      "updated_datetime": "2026-08-14T09:30:00.123456",
+      "uri": "/api/macros/5101/",
+      "actions": [
+        {
+          "name": "setResponseText",
+          "type": "user",
+          "title": "Add response text",
+          "arguments": {
+            "body_text": "Hi {{ticket.customer.firstname}},\n\nOrders ship within 2 business days.",
+            "body_html": "<div>Hi {{ticket.customer.firstname}},</div><div><br></div><div>Orders ship within 2 business days &amp; tracking follows by email.</div>"
+          }
+        },
+        { "name": "addTags", "type": "user", "arguments": { "tags": "order-status" } }
+      ]
+    },
+    {
+      "id": 5102,
+      "name": "Tag as VIP",
+      "language": null,
+      "archived_datetime": null,
+      "created_datetime": "2025-11-03T10:00:00.000000",
+      "updated_datetime": "2025-11-03T10:00:00.000000",
+      "actions": [{ "name": "addTags", "type": "user", "arguments": { "tags": "vip" } }]
+    },
+    {
+      "id": 5103,
+      "name": "Old returns policy",
+      "language": "en",
+      "archived_datetime": "2026-01-01T00:00:00.000000",
+      "created_datetime": "2025-06-01T10:00:00.000000",
+      "updated_datetime": "2026-01-01T00:00:00.000000",
+      "actions": [{ "name": "setResponseText", "type": "user", "arguments": { "body_text": "30 days." } }]
+    }
+  ],
+  "meta": { "prev_cursor": null, "next_cursor": "WyJuZXh0IiwgNTEwM10" }
+}

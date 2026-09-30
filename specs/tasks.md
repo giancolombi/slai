@@ -71,8 +71,9 @@ Each task references the requirements it serves.
 
 - [x] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
       Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17, TR-21h)
-- [ ] T-47b Knowledge follow-ups: Zammad knowledge base, help-desk saved replies/macros (`saved_replies`
-      sources), Freshdesk subfolders and translations, Intercom translations (TR-21h)
+- [x] T-47b Knowledge follow-ups: Zammad knowledge base, help-desk saved replies/macros (`saved_replies`
+      sources), Freshdesk subfolders and translations, Intercom translations (TR-21h). Also HubSpot
+      knowledge base (beta API) and Freshdesk custom portal domain (`config.portalDomain`)
 - [x] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
       sync (avoids a burst of drafts and credit spend on connect) (TR-21f)
 - [x] T-49 Make help-desk writes and their action record idempotent across retries (no double send) (TR-21g)
@@ -106,11 +107,26 @@ Each task references the requirements it serves.
       approve → sent (with an automated e2e test)
 - [ ] T-61 E2B template built and pinned; a real run with API keys
 - [ ] T-62 A real Zendesk sandbox account and a verified live sync
-- [ ] T-63 Deployment: containers, managed Postgres, secrets manager, TLS, backups
-- [ ] T-64 SOC 2 readiness: access reviews, vendor list (E2B, Anthropic, OpenAI), incident
-      response, retention and deletion jobs
+- [x] T-63 Deployment, cloud-agnostic: hardened images for api (and migrate), worker, web and backup;
+      `docker-compose.prod.yml` with MinIO verified end to end; s3 storage driver with SSE; production
+      guard; trusted-proxy client IPs; optional Postgres rate-limit store; image CI to GHCR with Trivy
+      and SBOMs; `db:backup`/`db:restore` with off-site upload and retention; Railway config as code
+      (TR-24a, TR-25a, TR-36 to TR-40)
+- [x] T-64 SOC 2 readiness in code: retention job, org export and scheduled/cancellable/audited deletion
+      (API, worker, Settings UI), `keys:rotate`; vendor list, data-flow classification, incident response
+      and access-review procedures (TR-27a, TR-30b, TR-30c, TR-41 to TR-44)
 - [x] T-65 Billing: plans as code, plan ceilings in dispatch, tracked-ticket counting and monthly
       snapshots, credits ledger and spend cap, 14-day trial, Stripe Checkout/Portal/credit packs,
       signed idempotent webhook, past-due grace, overage via Billing Meters, manual mode (PR-23, TR-33 to TR-35)
 - [ ] T-66 Billing with a real Stripe test account: products, prices and Billing Meters created; Customer
       Portal configured (plan switching); webhook endpoint registered; a full checkout → invoice → overage run
+- [ ] T-67 First Railway deploy (needs the founder's Railway account/token and project): create the
+      services and buckets per TR-40, set variables and generated secrets, domains, config-file paths;
+      confirm the pre-deploy migration, bucket compatibility (SSE header, conditional puts), the
+      `TRUST_PROXY` ranges and static egress IPs against real client IPs, native Postgres backups, and a
+      restore drill; point `APP_URL`/`API_URL` at the custom domains
+- [ ] T-68 Choose the email provider (SMTP over TLS, DPA, SOC 2) and add it to TR-41
+- [ ] T-69 Stream org exports to storage (multipart upload) before any org's bundle nears a few hundred MB
+- [ ] T-70 If we leave Railway for AWS/GCP: provider IaC, customer-managed KMS keys (`S3_SSE=aws:kms`),
+      workload identity instead of storage keys, bucket versioning with a noncurrent-version lifecycle,
+      and managed PITR settings (TR-25a, TR-38)

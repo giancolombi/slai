@@ -1,5 +1,5 @@
 {
-  "id": "b35f01e1-98af-49e3-b03a-898c65bb3d9f",
+  "id": "5a4e8723-6720-4d42-ade8-603aad332a17",
   "prevId": "4fe3c6b0-6355-4f0d-9f62-6e98f4216c9d",
   "version": "7",
   "dialect": "postgresql",
@@ -678,17 +678,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "audit_events_org_id_organizations_id_fk": {
-          "name": "audit_events_org_id_organizations_id_fk",
-          "tableFrom": "audit_events",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1208,6 +1198,12 @@
           "notNull": true,
           "default": "'uploaded'"
         },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "extraction": {
           "name": "extraction",
           "type": "jsonb",
@@ -1373,15 +1369,6 @@
         }
       },
       "foreignKeys": {
-        "credit_grants_org_id_organizations_id_fk": {
-          "name": "credit_grants_org_id_organizations_id_fk",
-          "tableFrom": "credit_grants",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "credit_grants_granted_by_users_id_fk": {
           "name": "credit_grants_granted_by_users_id_fk",
           "tableFrom": "credit_grants",
@@ -1553,12 +1540,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "token_ciphertext": {
-          "name": "token_ciphertext",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "invited_by": {
           "name": "invited_by",
           "type": "uuid",
@@ -1573,18 +1554,6 @@
         },
         "accepted_at": {
           "name": "accepted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "accepted_by": {
-          "name": "accepted_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1635,15 +1604,6 @@
           "tableFrom": "invitations",
           "tableTo": "users",
           "columnsFrom": ["invited_by"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "invitations_accepted_by_users_id_fk": {
-          "name": "invitations_accepted_by_users_id_fk",
-          "tableFrom": "invitations",
-          "tableTo": "users",
-          "columnsFrom": ["accepted_by"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
@@ -2003,25 +1963,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "disabled_at": {
-          "name": "disabled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "scim_managed": {
-          "name": "scim_managed",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "scim_external_id": {
-          "name": "scim_external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -2173,6 +2114,124 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.org_exports": {
+      "name": "org_exports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "uuidv7()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sha256": {
+          "name": "sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requested_by": {
+          "name": "requested_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "org_exports_org_id_index": {
+          "name": "org_exports_org_id_index",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "org_exports_org_id_organizations_id_fk": {
+          "name": "org_exports_org_id_organizations_id_fk",
+          "tableFrom": "org_exports",
+          "tableTo": "organizations",
+          "columnsFrom": ["org_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "org_exports_requested_by_users_id_fk": {
+          "name": "org_exports_requested_by_users_id_fk",
+          "tableFrom": "org_exports",
+          "tableTo": "users",
+          "columnsFrom": ["requested_by"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.organizations": {
       "name": "organizations",
       "schema": "",
@@ -2223,12 +2282,23 @@
           "notNull": true,
           "default": false
         },
-        "sso_require_idp_mfa": {
-          "name": "sso_require_idp_mfa",
-          "type": "boolean",
+        "deletion_scheduled_for": {
+          "name": "deletion_scheduled_for",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true,
-          "default": false
+          "notNull": false
+        },
+        "deletion_requested_at": {
+          "name": "deletion_requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deletion_requested_by": {
+          "name": "deletion_requested_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "billing_status": {
           "name": "billing_status",
@@ -2410,6 +2480,38 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.rate_limit_buckets": {
+      "name": "rate_limit_buckets",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tokens": {
+          "name": "tokens",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.replays": {
       "name": "replays",
       "schema": "",
@@ -2544,341 +2646,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.scim_group_members": {
-      "name": "scim_group_members",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "group_id": {
-          "name": "group_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "membership_id": {
-          "name": "membership_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "scim_group_members_membership_id_index": {
-          "name": "scim_group_members_membership_id_index",
-          "columns": [
-            {
-              "expression": "membership_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "scim_group_members_org_id_organizations_id_fk": {
-          "name": "scim_group_members_org_id_organizations_id_fk",
-          "tableFrom": "scim_group_members",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scim_group_members_group_id_scim_groups_id_fk": {
-          "name": "scim_group_members_group_id_scim_groups_id_fk",
-          "tableFrom": "scim_group_members",
-          "tableTo": "scim_groups",
-          "columnsFrom": ["group_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scim_group_members_membership_id_memberships_id_fk": {
-          "name": "scim_group_members_membership_id_memberships_id_fk",
-          "tableFrom": "scim_group_members",
-          "tableTo": "memberships",
-          "columnsFrom": ["membership_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "scim_group_members_group_id_membership_id_unique": {
-          "name": "scim_group_members_group_id_membership_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["group_id", "membership_id"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.scim_group_roles": {
-      "name": "scim_group_roles",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "group_name": {
-          "name": "group_name",
-          "type": "citext",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "role": {
-          "name": "role",
-          "type": "role",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "scim_group_roles_org_id_organizations_id_fk": {
-          "name": "scim_group_roles_org_id_organizations_id_fk",
-          "tableFrom": "scim_group_roles",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "scim_group_roles_org_id_group_name_unique": {
-          "name": "scim_group_roles_org_id_group_name_unique",
-          "nullsNotDistinct": false,
-          "columns": ["org_id", "group_name"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.scim_groups": {
-      "name": "scim_groups",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "display_name": {
-          "name": "display_name",
-          "type": "citext",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "scim_groups_org_id_organizations_id_fk": {
-          "name": "scim_groups_org_id_organizations_id_fk",
-          "tableFrom": "scim_groups",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "scim_groups_org_id_display_name_unique": {
-          "name": "scim_groups_org_id_display_name_unique",
-          "nullsNotDistinct": false,
-          "columns": ["org_id", "display_name"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.scim_tokens": {
-      "name": "scim_tokens",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token_prefix": {
-          "name": "token_prefix",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by": {
-          "name": "created_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_used_at": {
-          "name": "last_used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "scim_tokens_org_id_index": {
-          "name": "scim_tokens_org_id_index",
-          "columns": [
-            {
-              "expression": "org_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "scim_tokens_org_id_organizations_id_fk": {
-          "name": "scim_tokens_org_id_organizations_id_fk",
-          "tableFrom": "scim_tokens",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "scim_tokens_created_by_users_id_fk": {
-          "name": "scim_tokens_created_by_users_id_fk",
-          "tableFrom": "scim_tokens",
-          "tableTo": "users",
-          "columnsFrom": ["created_by"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "scim_tokens_token_hash_unique": {
-          "name": "scim_tokens_token_hash_unique",
-          "nullsNotDistinct": false,
-          "columns": ["token_hash"]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.sessions": {
       "name": "sessions",
       "schema": "",
@@ -2925,24 +2692,6 @@
         "sso_org_id": {
           "name": "sso_org_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "step_up_at": {
-          "name": "step_up_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idp_amr": {
-          "name": "idp_amr",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "idp_acr": {
-          "name": "idp_acr",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -3628,6 +3377,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "redacted_at": {
+          "name": "redacted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -4306,17 +4061,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "usage_ledger_org_id_organizations_id_fk": {
-          "name": "usage_ledger_org_id_organizations_id_fk",
-          "tableFrom": "usage_ledger",
-          "tableTo": "organizations",
-          "columnsFrom": ["org_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4413,10 +4158,10 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "text",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "default": "uuidv7()::text"
+          "default": "uuidv7()"
         },
         "identifier": {
           "name": "identifier",

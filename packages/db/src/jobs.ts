@@ -33,6 +33,12 @@ export const JOB_PAYLOADS = {
   }),
   /** Email an invitation link to the invitee (T-59a). The token is read sealed from the row, never from the payload. */
   "send-invite-email": z.object({ orgId: uuid, invitationId: uuid }),
+  /** Data retention (T-64): cross-org purge of old content, expired auth state and archived contracts. */
+  "run-retention": z.object({}),
+  /** Builds an org's export bundle (T-64). */
+  "export-org": z.object({ orgId: uuid, exportId: uuid }),
+  /** Hard-deletes an org whose deletion grace period has passed (T-64); a no-op if cancelled. */
+  "delete-org": z.object({ orgId: uuid }),
   /** The connection's status/priority mapping changed: re-ingest its open tickets so clocks recompute (T-25). */
   "remap-connection": z.object({ orgId: uuid, connectionId: uuid }),
   /** Page through one knowledge source's articles and upsert them (T-47). */
@@ -56,6 +62,9 @@ export const QUEUE = {
   ingestTicket: "ingest-ticket",
   sendSecurityEmail: "send-security-email",
   sendInviteEmail: "send-invite-email",
+  runRetention: "run-retention",
+  exportOrg: "export-org",
+  deleteOrg: "delete-org",
   remapConnection: "remap-connection",
   syncKnowledge: "sync-knowledge",
   billingSnapshot: "billing-snapshot",
@@ -68,7 +77,12 @@ export function parseJob<N extends JobName>(name: N, data: unknown): z.output<(t
 
 export interface JobSender {
   /** Enqueues within `tx` (commit-coupled). Returns the job id. */
-  send<N extends JobName>(tx: Executor, name: N, payload: JobPayload<N>): Promise<string | null>;
+  send<N extends JobName>(
+    tx: Executor,
+    name: N,
+    payload: JobPayload<N>,
+    opts?: { startAfter?: Date },
+  ): Promise<string | null>;
 }
 
 export const PGBOSS_SCHEMA = "pgboss";
@@ -88,9 +102,12 @@ export function createProducerBoss(connectionString: string): PgBoss {
 
 export function createJobSender(boss: PgBoss): JobSender {
   return {
-    async send(tx, name, payload) {
+    async send(tx, name, payload, opts = {}) {
       const data = JOB_PAYLOADS[name].parse(payload);
-      return boss.send(name, data, { db: fromDrizzle(tx as never, sql as never) });
+      return boss.send(name, data, {
+        db: fromDrizzle(tx as never, sql as never),
+        ...(opts.startAfter && { startAfter: opts.startAfter }),
+      });
     },
   };
 }

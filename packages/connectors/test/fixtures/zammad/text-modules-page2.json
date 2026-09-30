@@ -1,0 +1,18 @@
+[
+  {
+    "id": 101,
+    "name": "Password reset",
+    "keywords": "password reset",
+    "content": "<div>Hi #{ticket.customer.firstname},</div><div><br></div><div>You can reset your password under Profile → Password; the link is valid for 24 hours.</div>",
+    "active": true,
+    "updated_at": "2026-05-01T08:00:00.000Z"
+  },
+  {
+    "id": 102,
+    "name": "Old holiday notice",
+    "keywords": "holiday",
+    "content": "<div>We are closed until January 2nd.</div>",
+    "active": false,
+    "updated_at": "2025-12-20T08:00:00.000Z"
+  }
+]

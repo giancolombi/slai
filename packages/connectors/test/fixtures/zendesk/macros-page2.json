@@ -1,0 +1,26 @@
+{
+  "macros": [
+    {
+      "id": 5005,
+      "url": "https://acme.zendesk.com/api/v2/macros/5005.json",
+      "title": "Chat::Rate limits",
+      "active": true,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-04T09:00:00Z",
+      "actions": [
+        { "field": "comment_value", "value": ["channel:all", "Limits reset every minute; wait for Retry-After."] }
+      ]
+    },
+    {
+      "id": 5006,
+      "url": "https://acme.zendesk.com/api/v2/macros/5006.json",
+      "title": "Only a placeholder",
+      "active": true,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-04T09:00:00Z",
+      "actions": [{ "field": "comment_value", "value": "{{current_user.signature}}" }]
+    }
+  ],
+  "meta": { "has_more": false, "after_cursor": null, "before_cursor": "mac1" },
+  "links": { "next": null, "prev": null }
+}

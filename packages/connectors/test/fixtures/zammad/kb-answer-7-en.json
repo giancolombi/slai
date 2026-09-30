@@ -1,0 +1,31 @@
+{
+  "id": 7,
+  "assets": {
+    "KnowledgeBaseAnswer": {
+      "7": {
+        "id": 7,
+        "category_id": 3,
+        "published_at": "2026-01-10T09:00:00.000Z",
+        "internal_at": null,
+        "archived_at": null
+      }
+    },
+    "KnowledgeBaseAnswerTranslation": {
+      "20": {
+        "id": 20,
+        "title": "Reset your password",
+        "kb_locale_id": 1,
+        "answer_id": 7,
+        "content_id": 30,
+        "updated_at": "2026-04-01T10:00:00.000Z"
+      }
+    },
+    "KnowledgeBaseAnswerTranslationContent": {
+      "30": {
+        "id": 30,
+        "body": "<p>Open <b>Profile → Password</b> and choose <i>Reset</i>.</p><p>The link is valid for 24 hours.</p>",
+        "attachments": []
+      }
+    }
+  }
+}

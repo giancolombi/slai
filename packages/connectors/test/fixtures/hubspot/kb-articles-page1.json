@@ -1,0 +1,39 @@
+{
+  "results": [
+    {
+      "id": "179889003802",
+      "knowledgeBaseId": "5501",
+      "title": "Reset your password",
+      "subtitle": "Signing in",
+      "language": "en",
+      "categoryId": "77",
+      "state": "PUBLISHED",
+      "path": "reset-your-password",
+      "url": "https://help.acme.example/knowledge/reset-your-password",
+      "body": "<p>Open <strong>Profile → Password</strong> and choose Reset.</p><p>The link is valid for 24 hours.</p>",
+      "translations": { "es": { "id": "179889003803", "title": "Restablecer la contraseña", "state": "PUBLISHED" } },
+      "createdAt": "2026-01-10T09:00:00.000Z",
+      "updatedAt": "2026-04-01T10:00:00.000Z",
+      "publishedAt": "2026-01-10T09:00:00.000Z"
+    },
+    {
+      "id": "179889003803",
+      "knowledgeBaseId": "5501",
+      "title": "Restablecer la contraseña",
+      "language": "es",
+      "categoryId": "77",
+      "state": "PUBLISHED",
+      "translationOfId": "179889003802",
+      "url": "https://help.acme.example/es/knowledge/restablecer-la-contrasena",
+      "body": "<p>Abra Perfil → Contraseña.</p>",
+      "translations": {},
+      "updatedAt": "2026-04-02T10:00:00.000Z"
+    }
+  ],
+  "paging": {
+    "next": {
+      "after": "MjU%3D",
+      "link": "https://api.hubapi.com/cms/knowledge-base/2027-03-beta/articles?after=MjU%3D"
+    }
+  }
+}

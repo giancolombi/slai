@@ -50,7 +50,12 @@ export async function syncKnowledge(deps: WorkerDeps, p: { orgId: string; source
   if (conn.status === "paused") return;
   const client = clientFor(deps, conn);
   const def = deps.connectors.get(conn.provider);
-  if (source.kind !== "helpdesk_articles" || !def?.supportsKnowledge || !client.listKnowledgeArticles) {
+  // Help-center articles and saved replies sync the same way; only the call differs.
+  const list =
+    source.kind === "saved_replies"
+      ? def?.supportsSavedReplies && client.listSavedReplies?.bind(client)
+      : def?.supportsKnowledge && client.listKnowledgeArticles?.bind(client);
+  if (!list) {
     await setSource(deps, orgId, sourceId, {
       status: "error",
       lastError: `${def?.displayName ?? conn.provider} does not provide ${source.kind === "saved_replies" ? "saved replies" : "help-center articles"} to slai yet.`,
@@ -64,7 +69,7 @@ export async function syncKnowledge(deps: WorkerDeps, p: { orgId: string; source
     let cursor: string | null = null;
     for (let page = 0; ; page++) {
       if (page >= MAX_PAGES) throw new ConnectorError(`more than ${MAX_PAGES} pages of articles`, "upstream");
-      const res = await client.listKnowledgeArticles(cursor);
+      const res = await list(cursor);
       const rows = res.items.map((a) => ({
         orgId,
         sourceId,

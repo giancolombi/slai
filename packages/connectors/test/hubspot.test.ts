@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
 import { evaluateTicket } from "@slai/sla-engine";
 import { describe, expect, it } from "vitest";
-import { decodeHubspotUri, hubspot, TICKET_PROPERTIES } from "../src/connectors/hubspot.js";
+import { decodeHubspotUri, hubspot, KB_API, KB_SCOPE, TICKET_PROPERTIES } from "../src/connectors/hubspot.js";
 import { toEngineEvents } from "../src/lib/events.js";
+import { authorizeUrl } from "../src/lib/oauth.js";
 import { fakeFetch, type Route, rejection } from "./helpers/fake-fetch.js";
 import { calendarPolicy, metric } from "./helpers/policy.js";
 
@@ -299,5 +300,62 @@ describe("hubspot connector", () => {
       priority: true,
       tags: false,
     });
+  });
+});
+
+describe("hubspot knowledge base (beta)", () => {
+  it("pages through published articles in every language, skipping drafts", async () => {
+    expect(hubspot.supportsKnowledge).toBe(true);
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}${KB_API}/articles?state=PUBLISHED&limit=100`,
+        headers: { authorization: AUTH },
+        fixture: "hubspot/kb-articles-page1.json",
+      },
+      {
+        method: "GET",
+        // The percent-encoded `after` is sent once-encoded, as in HubSpot's own next link.
+        url: `${BASE}${KB_API}/articles?state=PUBLISHED&limit=100&after=MjU%3D`,
+        headers: { authorization: AUTH },
+        fixture: "hubspot/kb-articles-page2.json",
+      },
+    ]);
+    const p1 = await c.listKnowledgeArticles!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "179889003802",
+        title: "Reset your password",
+        url: "https://help.acme.example/knowledge/reset-your-password",
+        bodyText: "Open Profile → Password and choose Reset.\n\nThe link is valid for 24 hours.",
+        locale: "en",
+        updatedAt: new Date("2026-04-01T10:00:00Z"),
+      },
+      expect.objectContaining({ sourceId: "179889003803", locale: "es", title: "Restablecer la contraseña" }),
+    ]);
+    const p2 = await c.listKnowledgeArticles!(p1.nextCursor);
+    expect(p2.items.map((a) => a.sourceId)).toEqual(["179889003901"]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a portal without the scope or plan as unsupported, not an auth failure", async () => {
+    const { c } = client([
+      {
+        method: "GET",
+        url: `${BASE}${KB_API}/articles?state=PUBLISHED&limit=100`,
+        status: 403,
+        json: { category: "MISSING_SCOPES" },
+      },
+    ]);
+    expect(await rejection(c.listKnowledgeArticles!(null))).toMatchObject({ kind: "unsupported" });
+  });
+
+  it("asks for the knowledge base scope as optional in OAuth", () => {
+    const url = new URL(
+      authorizeUrl(hubspot.oauth!, { clientId: "cid", redirectUri: "https://slai.example/cb", state: "s", params: {} }),
+    );
+    expect(url.searchParams.get("optional_scope")).toBe(KB_SCOPE);
+    expect(url.searchParams.get("scope")).not.toContain(KB_SCOPE);
   });
 });

@@ -1,0 +1,22 @@
+{
+  "object": "list",
+  "uri": "/api/macros",
+  "data": [
+    {
+      "id": 5104,
+      "name": "Rückerstattung",
+      "language": "de",
+      "archived_datetime": null,
+      "created_datetime": "2026-02-01T08:00:00.000000",
+      "updated_datetime": null,
+      "actions": [
+        {
+          "name": "setResponseText",
+          "type": "user",
+          "arguments": { "body_text": "Hallo {{ticket.customer.firstname}}, Rückerstattungen dauern 5 Tage." }
+        }
+      ]
+    }
+  ],
+  "meta": { "prev_cursor": "WyJwcmV2IiwgNTEwNF0", "next_cursor": null }
+}

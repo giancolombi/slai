@@ -198,3 +198,30 @@ describe("demo help center (T-47)", () => {
     expect(await rejection(c.listKnowledgeArticles!("not-a-cursor"))).toMatchObject({ kind: "invalid" });
   });
 });
+
+describe("demo saved replies (T-47b)", () => {
+  it("lists about ten macros, paginated, with placeholders stripped and no URL", async () => {
+    expect(demo.supportsSavedReplies).toBe(true);
+    const c = client();
+    const all: KnowledgeArticle[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const page = await c.listSavedReplies!(cursor);
+      all.push(...page.items);
+      cursor = page.nextCursor;
+      pages++;
+    } while (cursor);
+    expect(pages).toBeGreaterThan(1);
+    expect(all.length).toBeGreaterThanOrEqual(10);
+    expect(new Set(all.map((a) => a.sourceId)).size).toBe(all.length);
+    for (const r of all) {
+      expect(r.url).toBeNull();
+      expect(r.bodyText).not.toMatch(/\{\{|\}\}|\{%/);
+      expect(r.bodyText).toMatch(/^Hi,\n\n/);
+      expect(r.updatedAt.getTime()).toBeLessThan(NOW.getTime());
+    }
+    expect(all.map((r) => r.title).join("\n")).toMatch(/SAML/);
+    expect(await rejection(c.listSavedReplies!("not-a-cursor"))).toMatchObject({ kind: "invalid" });
+  });
+});

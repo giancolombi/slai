@@ -304,3 +304,87 @@ describe("help scout connector", () => {
     expect(f.calls).toEqual([]);
   });
 });
+
+describe("help scout saved replies (knowledge)", () => {
+  const replyRoutes: Route[] = [
+    {
+      method: "GET",
+      url: `${BASE}/v2/mailboxes?page=1`,
+      headers: { authorization: AUTH },
+      fixture: "help_scout/mailboxes-page1.json",
+    },
+    {
+      method: "GET",
+      url: `${BASE}/v2/mailboxes?page=2`,
+      headers: { authorization: AUTH },
+      fixture: "help_scout/mailboxes-page2.json",
+    },
+    { method: "GET", url: `${BASE}/v2/mailboxes/301/saved-replies`, fixture: "help_scout/saved-replies-301.json" },
+    {
+      method: "GET",
+      url: `${BASE}/v2/mailboxes/301/saved-replies/234567`,
+      fixture: "help_scout/saved-reply-301-234567.json",
+    },
+    {
+      method: "GET",
+      url: `${BASE}/v2/mailboxes/301/saved-replies/234568`,
+      fixture: "help_scout/saved-reply-301-234568.json",
+    },
+    { method: "GET", url: `${BASE}/v2/mailboxes/302/saved-replies`, fixture: "help_scout/saved-replies-302.json" },
+    {
+      method: "GET",
+      url: `${BASE}/v2/mailboxes/302/saved-replies/234567`,
+      fixture: "help_scout/saved-reply-302-234567.json",
+    },
+  ];
+
+  it("declares saved-reply support", () => {
+    expect(helpScout.supportsSavedReplies).toBe(true);
+  });
+
+  it("walks every mailbox's saved replies, one page per mailbox, placeholders resolved", async () => {
+    const { c, f } = client(replyRoutes);
+    const p1 = await c.listSavedReplies!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "301:234567",
+        title: "Resetting two-factor authentication",
+        url: null,
+        bodyText: "Hi there,\n\nAn admin can reset your second factor from Settings > Members.\n\nThanks,",
+        locale: null,
+        updatedAt: new Date(0),
+      },
+    ]);
+    expect(p1.nextCursor).not.toBeNull();
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    // The same reply id in another mailbox is scoped by mailbox, so it does not collide.
+    expect(p2.items.map((r) => [r.sourceId, r.bodyText])).toEqual([
+      ["302:234567", "We refund annual plans within 14 days of purchase."],
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+    expect((await rejection(c.listSavedReplies!("not-a-cursor"))).kind).toBe("invalid");
+  });
+
+  it("reports a token without access to saved replies as unsupported", async () => {
+    const { c } = client([
+      {
+        method: "GET",
+        url: `${BASE}/v2/mailboxes?page=1`,
+        json: { _embedded: { mailboxes: [{ id: 302 }] }, page: { number: 1, totalPages: 1 } },
+      },
+      // A 403 on a cached token is retried once with a fresh token (auth plumbing) before it surfaces.
+      tokenRoute,
+      {
+        method: "GET",
+        url: `${BASE}/v2/mailboxes/302/saved-replies`,
+        status: 403,
+        json: { message: "Forbidden" },
+        repeat: true,
+      },
+    ]);
+    const err = await rejection(c.listSavedReplies!(null));
+    expect(err.kind).toBe("unsupported");
+    expect(err.message).toMatch(/Help Scout saved replies/);
+  });
+});

@@ -1,0 +1,30 @@
+{
+  "type": "list",
+  "data": [
+    {
+      "type": "macro",
+      "id": "123",
+      "name": "Webhook delays",
+      "body": "<p>Hi <attribute key=\"user.name\" default=\"there\"/>, webhooks are retried for 24 hours.</p>",
+      "body_text": "Hi {{user.name|fallback:\"there\"}}, webhooks are retried for 24 hours.",
+      "created_at": "2025-07-17T11:18:08.000Z",
+      "updated_at": "2026-09-10T08:00:00.000Z",
+      "visible_to": "everyone",
+      "visible_to_team_ids": [],
+      "available_on": ["inbox", "messenger"]
+    },
+    {
+      "type": "macro",
+      "id": "124",
+      "name": "Password reset",
+      "body": "<p>Hello <attribute key=\"user.first_name\"/>,</p><p>Use <b>Forgot password</b> on the sign-in page &amp; check spam.</p>",
+      "body_text": null,
+      "created_at": 1719400000,
+      "updated_at": 1719493757,
+      "visible_to": "everyone",
+      "visible_to_team_ids": [],
+      "available_on": ["inbox"]
+    }
+  ],
+  "pages": { "type": "pages", "per_page": 150, "next": { "starting_after": "WzE3MTk0OTM3NTcuMCwgIjEyNCJd" } }
+}

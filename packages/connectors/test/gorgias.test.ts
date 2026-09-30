@@ -294,3 +294,56 @@ describe("gorgias connector", () => {
 function fixtureData(name: string): any[] {
   return fixture(`gorgias/${name}`).data;
 }
+
+describe("gorgias macros (saved replies)", () => {
+  it("declares saved-reply support", () => {
+    expect(gorgias.supportsSavedReplies).toBe(true);
+  });
+
+  it("pages through reply macros as plain text, skipping archived and reply-less macros", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/macros?limit=100`,
+        headers: { authorization: AUTH },
+        fixture: "gorgias/macros-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/macros?limit=100&cursor=WyJuZXh0IiwgNTEwM10`,
+        headers: { authorization: AUTH },
+        fixture: "gorgias/macros-page2.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "5101",
+        title: "Where is my order?",
+        url: null,
+        bodyText: "Hi,\n\nOrders ship within 2 business days & tracking follows by email.",
+        locale: "en",
+        updatedAt: new Date("2026-08-14T09:30:00.123Z"),
+      },
+    ]);
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    // Plain-text body when there is no HTML; created time when never updated.
+    expect(p2.items).toEqual([
+      expect.objectContaining({
+        sourceId: "5104",
+        locale: "de",
+        bodyText: "Hallo, Rückerstattungen dauern 5 Tage.",
+        updatedAt: new Date("2026-02-01T08:00:00Z"),
+      }),
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a key without access to macros as unsupported", async () => {
+    const { c } = client([{ method: "GET", url: `${BASE}/api/macros?limit=100`, status: 403, json: {} }]);
+    const err = await rejection(c.listSavedReplies!(null));
+    expect(err.kind).toBe("unsupported");
+    expect(err.message).toMatch(/Gorgias macros/);
+  });
+});

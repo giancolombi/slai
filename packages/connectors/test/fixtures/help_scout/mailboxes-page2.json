@@ -1,0 +1,15 @@
+{
+  "_embedded": {
+    "mailboxes": [
+      {
+        "id": 302,
+        "name": "Billing",
+        "slug": "d4e5f6",
+        "email": "billing@acme.example",
+        "createdAt": "2025-02-10T09:00:00Z",
+        "updatedAt": "2026-08-02T12:00:00Z"
+      }
+    ]
+  },
+  "page": { "size": 50, "totalElements": 2, "totalPages": 2, "number": 2 }
+}

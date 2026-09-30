@@ -367,3 +367,56 @@ describe("front connector", () => {
     expect(f.calls).toEqual([]);
   });
 });
+
+describe("front message templates (saved replies)", () => {
+  it("declares saved-reply support", () => {
+    expect(front.supportsSavedReplies).toBe(true);
+  });
+
+  it("pages through message templates as plain text without variables, skipping empty ones", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/message_templates?limit=100`,
+        headers: { authorization: AUTH },
+        fixture: "front/message-templates-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/message_templates?limit=100&page_token=tpl_p2`,
+        headers: { authorization: AUTH },
+        fixture: "front/message-templates-page2.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "rsp_16yc",
+        title: "Webhook retries",
+        url: null,
+        bodyText: "Hi,\n\nWebhook deliveries are retried for 24 hours & you can replay them.",
+        locale: null,
+        updatedAt: new Date(0),
+      },
+    ]);
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    expect(p2.items).toEqual([expect.objectContaining({ sourceId: "rsp_16ye", updatedAt: new Date(1758000000250) })]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("refuses a pagination link to another host, and reports a 403 as unsupported", async () => {
+    const { c } = client([
+      {
+        method: "GET",
+        url: `${BASE}/message_templates?limit=100`,
+        json: { _pagination: { next: "https://evil.example/message_templates" }, _results: [] },
+      },
+      { method: "GET", url: `${BASE}/message_templates?limit=100`, status: 403, json: { _error: {} } },
+    ]);
+    expect((await rejection(c.listSavedReplies!(null))).kind).toBe("upstream");
+    const err = await rejection(c.listSavedReplies!(null));
+    expect(err.kind).toBe("unsupported");
+    expect(err.message).toMatch(/Front message templates/);
+  });
+});

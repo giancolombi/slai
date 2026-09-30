@@ -267,6 +267,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developer.zendesk.com/api-reference/",
     supportsKnowledge: true,
+    supportsSavedReplies: true,
   },
   {
     provider: "jira_sm",
@@ -297,6 +298,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.intercom.com/docs",
     supportsKnowledge: true,
+    supportsSavedReplies: true,
     // Mock mode can't follow a real provider redirect, so the button shows its "not set up" state.
     oauth: { configured: false, params: [] },
   },
@@ -312,6 +314,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.freshdesk.com/api/",
     supportsKnowledge: true,
+    supportsSavedReplies: true,
   },
   {
     provider: "hubspot",
@@ -321,6 +324,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: false },
     docsUrl: "https://developers.hubspot.com/docs/api/crm/tickets",
+    supportsKnowledge: true,
     oauth: { configured: false, params: [] },
   },
   {
@@ -334,6 +338,8 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://docs.zammad.org/en/latest/api/intro.html",
+    supportsKnowledge: true,
+    supportsSavedReplies: true,
   },
   {
     provider: "help_scout",
@@ -346,6 +352,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: false, tags: true },
     docsUrl: "https://developer.helpscout.com/mailbox-api/",
+    supportsSavedReplies: true,
   },
   {
     provider: "demo",
@@ -364,6 +371,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://slai.example/docs/demo",
     supportsKnowledge: true,
+    supportsSavedReplies: true,
   },
 ];
 

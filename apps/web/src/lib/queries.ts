@@ -21,6 +21,7 @@ export const qk = {
   org: ["org"] as const,
   sso: ["org-sso"] as const,
   scim: ["org-scim"] as const,
+  offboarding: ["org-offboarding"] as const,
   passkeys: ["passkeys"] as const,
   members: ["members"] as const,
   invitations: ["members", "invitations"] as const,
@@ -80,6 +81,15 @@ export const meQuery = queryOptions({ queryKey: qk.me, queryFn: api.auth.me, sta
 
 export const useMe = () => useQuery(meQuery);
 export const useOrg = () => useQuery({ queryKey: qk.org, queryFn: api.org.get });
+export const useOffboarding = (enabled = true) =>
+  useQuery({
+    queryKey: qk.offboarding,
+    queryFn: api.offboarding.get,
+    enabled,
+    // Poll while an export is being prepared.
+    refetchInterval: (q) =>
+      q.state.data?.exports.some((e) => e.status === "queued" || e.status === "running") ? 3000 : false,
+  });
 export const useOrgSso = (enabled = true) => useQuery({ queryKey: qk.sso, queryFn: api.sso.get, enabled });
 export const useOrgScim = (enabled = true) => useQuery({ queryKey: qk.scim, queryFn: api.scim.get, enabled });
 export const usePasskeys = () => useQuery({ queryKey: qk.passkeys, queryFn: api.passkeys.list });

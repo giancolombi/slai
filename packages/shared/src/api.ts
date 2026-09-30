@@ -352,6 +352,8 @@ export interface ConnectorInfo {
   };
   /** The connector can sync help-center articles into a knowledge source (T-47). */
   supportsKnowledge?: boolean;
+  /** The connector can sync the help desk's saved replies/macros into a knowledge source (T-47b). */
+  supportsSavedReplies?: boolean;
 }
 export interface Connection {
   id: string;
@@ -656,9 +658,12 @@ export interface KnowledgeSource {
   enabledCount: number;
   createdAt: string;
 }
-/** `helpdesk_articles` needs a connection whose connector supports knowledge; `manual` takes none. */
+/**
+ * `helpdesk_articles` and `saved_replies` need a connection whose connector
+ * supports them (`supportsKnowledge`, `supportsSavedReplies`); `manual` takes none.
+ */
 export const createKnowledgeSourceBody = z.object({
-  kind: z.enum(["helpdesk_articles", "manual"]),
+  kind: z.enum(KNOWLEDGE_SOURCE_KINDS),
   name: z.string().trim().min(1).max(120),
   connectionId: z.uuid().nullable().default(null),
 });
@@ -852,6 +857,37 @@ export const notificationChannelBody = z.object({
   enabled: z.boolean().default(true),
 });
 
+// ---------- offboarding (T-64, owner only) ----------
+
+export interface OrgExport {
+  id: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  sizeBytes: number | null;
+  sha256: string | null;
+  error: string | null;
+  requestedBy: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+  /** The bundle is deleted after this. */
+  expiresAt: string;
+}
+export interface OrgDeletion {
+  /** When the hard delete runs, unless cancelled. */
+  scheduledFor: string;
+  requestedAt: string;
+  requestedBy: string | null;
+}
+export interface Offboarding {
+  deletion: OrgDeletion | null;
+  exports: OrgExport[];
+  /** Days between a deletion request and the hard delete. */
+  graceDays: number;
+}
+/** Deleting needs the organization's exact name, typed by the owner. */
+/** Days between a deletion request and the hard delete. */
+export const ORG_DELETION_GRACE_DAYS = 7;
+export const scheduleDeletionBody = z.object({ confirmName: z.string().min(1).max(200) });
+
 /**
  * Route table (all under /api/v1):
  *
@@ -929,6 +965,12 @@ export const notificationChannelBody = z.object({
  *   GET    /contracts              → List<Contract>       POST /contracts (multipart) → Contract
  *   GET    /contracts/:id          → Contract             POST /contracts/:id/extract → 202
  *   GET    /contracts/:id/file     → the original file (download)
+ *   POST   /contracts/:id/archive  → Contract (admin; hard-deleted after the retention period)
+ *
+ *   GET    /org/offboarding        → Offboarding (owner)
+ *   POST   /org/exports            → 202 OrgExport (owner)   GET /org/exports/:id/download → tar.gz (owner)
+ *   POST   /org/deletion           scheduleDeletionBody → Offboarding (owner; hard delete after the grace period)
+ *   DELETE /org/deletion           → Offboarding (owner; cancels)
  *   GET    /contracts/:id/text     → ContractText (extracted plain text with page boundaries)
  *
  *   GET    /policies               → List<Policy>         POST /policies { name, definition } → Policy

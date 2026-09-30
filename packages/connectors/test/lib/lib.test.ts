@@ -2,10 +2,10 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { dropNoopChanges, finalizeEvents, firstPublicAgentReply, toEngineEvents } from "../../src/lib/events.js";
 import { safeEqual, verifyHmac, verifyHs256Jwt } from "../../src/lib/hmac.js";
-import { HttpClient, parseRetryAfter } from "../../src/lib/http.js";
+import { forbiddenAsUnsupported, HttpClient, parseRetryAfter } from "../../src/lib/http.js";
 import { mapPriority, mappingIssues, mapStatus } from "../../src/lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor, nextLink } from "../../src/lib/paginate.js";
-import { htmlToText, truncate } from "../../src/lib/text.js";
+import { htmlToText, savedReplyText, stripPlaceholders, truncate } from "../../src/lib/text.js";
 import { type CanonicalEvent, ConnectorError, type FieldMapping } from "../../src/types.js";
 import { fakeFetch, rejection } from "../helpers/fake-fetch.js";
 
@@ -25,6 +25,18 @@ describe("http", () => {
       headers: { Authorization: "Bearer t" },
     });
     expect(await http.get("/a", { query: { b: 1, c: undefined } })).toEqual({ ok: 1 });
+  });
+
+  it("turns a 403 on a knowledge read into unsupported, leaving 401s and other errors alone", async () => {
+    const f = fakeFetch([
+      { method: "GET", url: "https://x.test/macros", status: 403, repeat: true },
+      { method: "GET", url: "https://x.test/me", status: 401, repeat: true },
+    ]);
+    const http = new HttpClient({ baseUrl: "https://x.test", fetch: f.fetch });
+    const forbidden = await rejection(forbiddenAsUnsupported("Macros", () => http.get("/macros")));
+    expect(forbidden).toMatchObject({ kind: "unsupported", message: expect.stringMatching(/^Macros: .*403/) });
+    expect(await rejection(forbiddenAsUnsupported("Macros", () => http.get("/me")))).toMatchObject({ kind: "auth" });
+    expect(await forbiddenAsUnsupported("Macros", async () => 1)).toBe(1);
   });
 
   it("maps 429 to rate_limited with Retry-After seconds", async () => {
@@ -151,6 +163,26 @@ describe("text", () => {
   it("bounds length", () => {
     expect(htmlToText("<p>abcdefghij</p>", 5)).toBe("abcd…");
     expect(truncate("abc", 5)).toBe("abc");
+  });
+  it("strips saved-reply placeholders, keeping declared fallbacks and tidy punctuation", () => {
+    expect(stripPlaceholders("Hi {{ticket.requester.first_name}},\nThanks!")).toBe("Hi,\nThanks!");
+    expect(stripPlaceholders("Hello {{ first_name }} and welcome")).toBe("Hello and welcome");
+    expect(stripPlaceholders('Hi {{first_name | fallback: "there"}}, one sec.')).toBe("Hi there, one sec.");
+    expect(stripPlaceholders("Hi {%customer.firstName,fallback=there%}!")).toBe("Hi there!");
+    expect(stripPlaceholders("Hi {{recipient.first_name | 'there'}}, hello")).toBe("Hi there, hello");
+    expect(stripPlaceholders("Total {{ticket.amount | money }} due")).toBe("Total due");
+    expect(stripPlaceholders("Dear #{ticket.customer.firstname} #{ticket.customer.lastname}.")).toBe("Dear.");
+    expect(stripPlaceholders("{{ticket.requester.name}}, your order shipped")).toBe("your order shipped");
+    expect(
+      stripPlaceholders(
+        "A{% if ticket.priority == 'urgent' %} fast{% endif %} fix{% comment %}secret{% endcomment %}.",
+      ),
+    ).toBe("A fast fix.");
+    expect(stripPlaceholders("Costs {not a tag} and #hashtag stay")).toBe("Costs {not a tag} and #hashtag stay");
+    expect(savedReplyText("<p>Hi {{ticket.requester.first_name}},</p><p>Reset it &amp; retry.</p>", "html")).toBe(
+      "Hi,\n\nReset it & retry.",
+    );
+    expect(savedReplyText(null, "text")).toBe("");
   });
 });
 

@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/*.log
+.git
+.github
+.claude
+.wt
+.data
+.env
+.env.*
+!.env.example
+sandbox/dist

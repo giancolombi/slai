@@ -1,0 +1,15 @@
+{
+  "_pagination": { "next": null },
+  "_results": [
+    {
+      "id": "rsp_16ye",
+      "name": "Invoice copy",
+      "subject": "Your invoice",
+      "body": "<p>Invoices are under Settings → Billing → Invoices.</p>",
+      "is_available_for_all_inboxes": false,
+      "inbox_ids": ["inb_55"],
+      "attachments": [],
+      "updated_at": 1758000000.25
+    }
+  ]
+}

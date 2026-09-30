@@ -7,7 +7,9 @@ import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
 import { sendInviteEmail } from "./invite-email.js";
 import { syncKnowledge } from "./knowledge.js";
+import { deleteOrgIfDue, exportOrg } from "./offboarding.js";
 import { runReplay } from "./replay.js";
+import { runRetention } from "./retention.js";
 import { sendSecurityEmail } from "./security-email.js";
 import { evaluateTicketJob, ingestTicket, processWebhook, remapConnection, syncConnection } from "./sync.js";
 
@@ -27,6 +29,13 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "run-replay": (p) => runReplay(deps, p),
     "send-security-email": (p) => sendSecurityEmail(deps, p),
     "send-invite-email": (p) => sendInviteEmail(deps, p),
+    "run-retention": async () => {
+      await runRetention(deps);
+    },
+    "export-org": (p) => exportOrg(deps, p),
+    "delete-org": async (p) => {
+      await deleteOrgIfDue(deps, p.orgId);
+    },
     "sync-knowledge": (p) => syncKnowledge(deps, p),
     "billing-snapshot": (p) => billingSnapshotJob(deps, p),
   };

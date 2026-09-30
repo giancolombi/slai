@@ -7,6 +7,7 @@ import { FIRST_SEEN_GRACE_MS, SEND_RECONCILE_AFTER_MS } from "./decide.js";
 import type { Logger } from "./logger.js";
 import type { Mailer } from "./notify.js";
 import type { JobQueue } from "./queue.js";
+import { DEFAULT_RETENTION, type RetentionConfig } from "./retention.js";
 
 export interface WorkerConfig {
   /** Max tickets one sweep claims. */
@@ -23,6 +24,10 @@ export interface WorkerConfig {
   firstSeenGraceMs: number;
   /** A help-desk write claimed longer ago than this is reconciled (looked for, then retried) (TR-21g). */
   sendReconcileMs: number;
+  /** Data retention (T-64, TR-30b). */
+  retention: RetentionConfig;
+  /** How often the sweep enqueues the retention job (a singleton across workers). */
+  retentionIntervalMs: number;
   /** A help-desk knowledge source is re-synced when its last sync is older than this (T-47). */
   knowledgeSyncIntervalMs: number;
   /** Stripe Billing Meter event names for overage (T-65). */
@@ -75,5 +80,7 @@ export const DEFAULT_CONFIG: WorkerConfig = {
   appUrl: "http://localhost:5173",
   firstSeenGraceMs: FIRST_SEEN_GRACE_MS,
   sendReconcileMs: SEND_RECONCILE_AFTER_MS,
+  retention: DEFAULT_RETENTION,
+  retentionIntervalMs: 60 * 60 * 1000,
   knowledgeSyncIntervalMs: 86_400_000,
 };
