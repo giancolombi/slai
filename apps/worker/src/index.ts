@@ -2,8 +2,9 @@ import { createAgentRuntime } from "@slai/agents";
 import { getConnector } from "@slai/connectors";
 import { createKeyring, createOrgDb, createStorage, createSystemDb } from "@slai/db";
 import { systemClock } from "./clock.js";
-import { DEFAULT_CONFIG, noResources, type WorkerDeps } from "./deps.js";
+import { DEFAULT_CONFIG, type WorkerDeps } from "./deps.js";
 import { loadEnv } from "./env.js";
+import { knowledgeResources } from "./knowledge.js";
 import { createLogger, errorMessage } from "./logger.js";
 import { smtpMailer } from "./notify.js";
 import { bossQueue } from "./queue.js";
@@ -42,7 +43,7 @@ const deps: WorkerDeps = {
   mailer: smtpMailer(env.SMTP_URL, env.EMAIL_FROM),
   storage: createStorage({ driver: env.STORAGE_DRIVER, localDir: env.STORAGE_LOCAL_DIR }),
   logger,
-  resources: noResources,
+  resources: knowledgeResources({ orgDb }),
   config: {
     ...DEFAULT_CONFIG,
     sweepBatch: env.SWEEP_BATCH,

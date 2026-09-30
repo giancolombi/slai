@@ -1,5 +1,5 @@
 import { keepPreviousData, QueryCache, QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
-import { api, isApiError, type TicketQuery } from "./api";
+import { api, isApiError, type KnowledgeArticleQuery, type TicketQuery } from "./api";
 import { useLivePolling } from "./live";
 
 /**
@@ -33,6 +33,8 @@ export const qk = {
   replay: (id: string) => ["replays", id] as const,
   usage: ["usage"] as const,
   audit: ["audit"] as const,
+  knowledgeSources: ["knowledge", "sources"] as const,
+  knowledgeArticles: (q: KnowledgeArticleQuery = {}) => ["knowledge", "articles", q] as const,
 };
 
 export function createQueryClient(
@@ -136,4 +138,17 @@ export const useReplay = (id: string) => {
       q.state.data?.status === "queued" || q.state.data?.status === "running" ? fallback : false,
   });
 };
+export const useKnowledgeSources = () =>
+  useQuery({
+    queryKey: qk.knowledgeSources,
+    queryFn: api.knowledge.sources,
+    refetchInterval: (q) => (q.state.data?.items.some((s) => s.status === "syncing") ? 2_000 : false),
+  });
+export const useKnowledgeArticles = (q: KnowledgeArticleQuery, enabled = true) =>
+  useQuery({
+    queryKey: qk.knowledgeArticles(q),
+    queryFn: ({ signal }) => api.knowledge.articles(q, signal),
+    placeholderData: keepPreviousData,
+    enabled,
+  });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.usage.get });

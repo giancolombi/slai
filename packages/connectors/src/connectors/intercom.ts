@@ -7,6 +7,7 @@
  * - Webhook models and signature (X-Hub-Signature, HMAC-SHA1): https://developers.intercom.com/docs/references/webhooks/webhook-models
  * - API versions / changelog: https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis/api-changelog
  * - Priority writes (Preview only): https://developers.intercom.com/docs/references/preview/rest-api/api.intercom.io/conversations/updateconversation
+ * - Articles (list, page/per_page, state, url): https://developers.intercom.com/docs/references/rest-api/api.intercom.io/articles/listarticles
  *
  * History comes from conversation parts. Known limits:
  * - Intercom returns at most 500 parts per conversation; older parts are lost.
@@ -34,6 +35,7 @@ import type {
   ConnectorContext,
   ConnectorDefinition,
   FieldMapping,
+  KnowledgeArticle,
 } from "../types.js";
 
 export const INTERCOM_VERSION = "2.16";
@@ -122,6 +124,22 @@ const zSearch = z.object({
     .loose()
     .nullish(),
 });
+const zArticle = z.object({
+  id,
+  title: z.string().nullish(),
+  body: z.string().nullish(),
+  state: z.string().nullish(),
+  url: z.string().nullish(),
+  default_locale: z.string().nullish(),
+  updated_at: z.number(),
+});
+const zArticles = z.object({
+  data: z.array(zArticle),
+  pages: z.object({ page: z.number().nullish(), total_pages: z.number().nullish() }).loose().nullish(),
+});
+/** Pages of articles we read at most (50 per page). */
+const MAX_ARTICLE_PAGES = 200;
+
 const zMe = z.object({
   id,
   name: z.string().nullish(),
@@ -185,6 +203,7 @@ export const intercom: ConnectorDefinition<IntercomCredentials> = {
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/conversations",
+  supportsKnowledge: true,
   create(ctx: ConnectorContext<IntercomCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const region = (ctx.config as { region?: unknown })?.region;
@@ -382,6 +401,25 @@ export const intercom: ConnectorDefinition<IntercomCredentials> = {
           return { ok: true, ticketSourceIds: [item.id] };
         }
         return { ok: true, ticketSourceIds: [] };
+      },
+
+      async listKnowledgeArticles(cursor) {
+        const isState = (v: unknown): v is { p: number } => typeof (v as { p?: unknown })?.p === "number";
+        const page = decodeCursor(cursor, isState)?.p ?? 1;
+        const data = parseAs(zArticles, await http.get("/articles", { query: { page, per_page: 50 } }), "articles");
+        const items: KnowledgeArticle[] = data.data
+          .filter((a) => a.state === "published")
+          .map((a) => ({
+            sourceId: a.id,
+            title: a.title ?? "",
+            url: a.url ?? null,
+            bodyText: htmlToText(a.body),
+            locale: a.default_locale ?? null,
+            updatedAt: sec(a.updated_at),
+          }));
+        const total = data.pages?.total_pages ?? page;
+        const more = page < total && page < MAX_ARTICLE_PAGES;
+        return { items, nextCursor: more ? encodeCursor({ p: page + 1 }) : null };
       },
 
       postInternalNote(sourceId, body) {

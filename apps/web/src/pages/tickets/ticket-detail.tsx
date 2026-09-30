@@ -31,7 +31,13 @@ import { api, errorMessage, isApiError } from "../../lib/api";
 import { METRIC_LABEL, providerLabel, STATUS_LABEL } from "../../lib/labels";
 import { deciderLabel } from "../../lib/people";
 import { usePolicy, useTicket } from "../../lib/queries";
-import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog } from "../approvals/draft-parts";
+import {
+  ActionKindLabel,
+  ActionStatusBadge,
+  ConfidenceMeter,
+  RejectDialog,
+  UsedKnowledge,
+} from "../approvals/draft-parts";
 import { PriorityBadge } from "./priority-badge";
 
 const route = getRouteApi("/_app/tickets/$ticketId");
@@ -285,6 +291,7 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
                       <ActionStatusBadge status={a.status} />
                     </div>
                     <p className="line-clamp-2 text-xs text-ink-muted">{a.body}</p>
+                    <UsedKnowledge refs={a.usedKnowledge} compact />
                     {a.decidedAt && (
                       <p className="text-2xs text-ink-subtle">
                         {deciderLabel(a)} · {formatRelative(a.decidedAt)}
@@ -447,6 +454,7 @@ function DraftCard({ action: a, ticketId }: { action: AgentAction; ticketId: str
           Draft body
         </Label>
         <Textarea id={id} value={body} onChange={(e) => setBody(e.target.value)} rows={7} />
+        {a.kind === "public_reply" && <UsedKnowledge refs={a.usedKnowledge} />}
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
         {body !== (a.body ?? "") && (

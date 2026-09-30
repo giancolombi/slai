@@ -11,6 +11,7 @@ import type {
   approveActionBody,
   autonomyRuleBody,
   createConnectionBody,
+  createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
@@ -19,12 +20,14 @@ import type {
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
+  savedReplyBody,
   signupBody,
   switchOrgBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
+  updateSavedReplyBody,
   updateSsoProviderBody,
   upsertCustomerBody,
 } from "@slai/shared";
@@ -43,6 +46,8 @@ import {
   type CustomerAccount,
   type DashboardSummary,
   type Invitation,
+  type KnowledgeArticle,
+  type KnowledgeSource,
   type List,
   type Me,
   type Member,
@@ -249,6 +254,13 @@ export interface TicketQuery {
   cursor?: string | null;
 }
 
+export interface KnowledgeArticleQuery {
+  q?: string;
+  sourceId?: string;
+  cursor?: string | null;
+  limit?: number;
+}
+
 export const api = {
   auth: {
     me: () => get<Me>("/auth/me"),
@@ -360,6 +372,19 @@ export const api = {
     update: (ruleId: string, body: In<typeof autonomyRuleBody>) =>
       put<AutonomyRule>(`/autonomy-rules/${id(ruleId)}`, body),
     remove: (ruleId: string) => del(`/autonomy-rules/${id(ruleId)}`),
+  },
+  knowledge: {
+    sources: () => get<List<KnowledgeSource>>("/knowledge-sources"),
+    createSource: (body: In<typeof createKnowledgeSourceBody>) => post<KnowledgeSource>("/knowledge-sources", body),
+    syncSource: (sourceId: string) => post<{ queued: boolean }>(`/knowledge-sources/${id(sourceId)}/sync`),
+    articles: (query: KnowledgeArticleQuery = {}, signal?: AbortSignal) =>
+      get<List<KnowledgeArticle>>("/knowledge-articles", query as Query, signal),
+    setEnabled: (articleId: string, enabled: boolean) =>
+      patch<KnowledgeArticle>(`/knowledge-articles/${id(articleId)}`, { enabled }),
+    createReply: (body: In<typeof savedReplyBody>) => post<KnowledgeArticle>("/saved-replies", body),
+    updateReply: (articleId: string, body: In<typeof updateSavedReplyBody>) =>
+      patch<KnowledgeArticle>(`/saved-replies/${id(articleId)}`, body),
+    removeReply: (articleId: string) => del(`/saved-replies/${id(articleId)}`),
   },
   notifications: {
     list: () => get<NotificationChannel[]>("/notification-channels"),

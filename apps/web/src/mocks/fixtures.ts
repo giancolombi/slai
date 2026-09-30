@@ -10,6 +10,9 @@ import type {
   Connection,
   ConnectorInfo,
   Contract,
+  KnowledgeArticle,
+  KnowledgeRef,
+  KnowledgeSource,
   Me,
   Member,
   Metric,
@@ -249,6 +252,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developer.zendesk.com/api-reference/",
+    supportsKnowledge: true,
   },
   {
     provider: "jira_sm",
@@ -278,6 +282,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.intercom.com/docs",
+    supportsKnowledge: true,
   },
   {
     provider: "freshdesk",
@@ -290,6 +295,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.freshdesk.com/api/",
+    supportsKnowledge: true,
   },
   {
     provider: "hubspot",
@@ -340,6 +346,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: false,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://slai.example/docs/demo",
+    supportsKnowledge: true,
   },
 ];
 
@@ -1066,7 +1073,8 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
           "{time}",
           new Date(now + 2 * HOUR).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
         ),
-      payload: { tone: "reassuring", references: [`kb-${1200 + i}`] },
+      payload: { tone: "reassuring" },
+      usedKnowledge: blocked || i === 5 ? [] : knowledgeRefsFor(t.subject),
       confidence: blocked ? 0.91 : Number((0.71 + r.next() * 0.25).toFixed(2)),
       blockedReason: blocked ? "Guardrail: mentions a credit amount (pricing/legal commitment). Needs a human." : null,
       createdAt: new Date(now - (i * 7 + 3) * MIN).toISOString(),
@@ -1090,6 +1098,7 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
         .replace("{agent}", t.assigneeName ?? "Acme Cloud support")
         .replace("{time}", "3:00 PM"),
       payload: {},
+      usedKnowledge: knowledgeRefsFor(t.subject),
       confidence: Number((0.78 + r.next() * 0.2).toFixed(2)),
       blockedReason: null,
       createdAt: new Date(now - (i + 2) * 5 * HOUR).toISOString(),
@@ -1320,3 +1329,164 @@ export const PLAN_LIMITS: Record<string, number> = {
   scale: 25_000,
   enterprise: 100_000,
 };
+
+// ---------------------------------------------------------------- knowledge (T-47)
+
+export const KS_HELP_CENTER = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c01";
+export const KS_SAVED_REPLIES = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c02";
+const kb = (n: number) => `8d7c6b5a-4f3e-4d2c-9b1a-0f9e8d7c6b${String(n).padStart(2, "0")}`;
+const HELP = "https://help.acme-cloud.example";
+
+/** A knowledge source as the mock stores it; counts are derived from the articles at read time. */
+export type MockKnowledgeSource = Omit<KnowledgeSource, "articleCount" | "enabledCount">;
+
+const HELP_ARTICLES: [string, string, string][] = [
+  [
+    "Fix “Invalid SAML assertion: audience mismatch”",
+    "sso/saml-audience-mismatch",
+    "This error means the Audience URI (SP Entity ID) your identity provider sends doesn't match your workspace. In Okta or Azure AD, set the Audience URI to https://app.acme-cloud.example/saml/<workspace-id>, then ask affected users to sign in again from a private window.",
+  ],
+  [
+    "Rotate your SSO signing certificate without downtime",
+    "sso/rotate-certificate",
+    "Upload the new certificate under Settings → Security → SSO before you activate it in your IdP. Acme Cloud accepts both certificates for 72 hours, so users are never locked out during the switch.",
+  ],
+  [
+    "Troubleshoot SCIM provisioning with Okta",
+    "sso/scim-okta",
+    "Users are deactivated when the IdP sends a SCIM PATCH with active=false, usually after a group is unassigned. Reassign the group in Okta and the users are reactivated on the next push.",
+  ],
+  [
+    "Two-factor codes not arriving by SMS",
+    "account/2fa-sms",
+    "Some carriers delay short-code SMS. Ask affected users to switch to an authenticator app under Profile → Security, or use a backup code to sign in.",
+  ],
+  [
+    "API error codes and what to do about them",
+    "api/errors",
+    "5xx responses are safe to retry with exponential backoff; include the request ID (req_…) when you contact support. 4xx responses mean the request itself needs to change.",
+  ],
+  [
+    "Rate limits: how they work and how to raise them",
+    "api/rate-limits",
+    "Each API key has a per-minute limit that matches your plan (600 requests/minute on Growth). A 429 response carries a Retry-After header; wait that many seconds before retrying.",
+  ],
+  [
+    "Webhook delivery, retries and ordering",
+    "webhooks/delivery",
+    "Webhooks are delivered at least once, in order per resource. Your endpoint must answer within 10 seconds; slower responses are retried with backoff and can make deliveries look delayed.",
+  ],
+  [
+    "Bulk import limits and batching",
+    "api/bulk-import",
+    "The bulk import endpoint accepts up to 1,000 records per request. For larger imports, send batches sequentially and respect the Retry-After header on 429 responses.",
+  ],
+  [
+    "Export large workspaces with asynchronous exports",
+    "exports/async-exports",
+    "Exports over 5 million rows run in the background. Start the export from Settings → Data → Export and you'll get an email with a download link when the file is ready.",
+  ],
+  [
+    "Export to Amazon S3: required permissions",
+    "exports/s3-permissions",
+    "The export role needs s3:PutObject and s3:PutObjectAcl on the target bucket. AccessDenied errors almost always mean one of these is missing from the bucket policy.",
+  ],
+  [
+    "Understand your invoice and seat count",
+    "billing/invoices",
+    "Invoices count every active seat on the billing date. Deactivated users stop counting on the next invoice. You can download past invoices under Settings → Billing.",
+  ],
+  [
+    "Supported browsers",
+    "general/supported-browsers",
+    "Acme Cloud supports the latest two versions of Chrome, Edge, Firefox and Safari. If charts stay blank in Safari, turn off “Prevent cross-site tracking” for app.acme-cloud.example or update Safari.",
+  ],
+];
+
+const SAVED_REPLIES: [string, string, string | null][] = [
+  [
+    "Ask for a SAML trace",
+    "To see exactly what your identity provider sends, please capture a SAML trace with the SAML-tracer browser extension while an affected user signs in, and attach it here. Please also confirm your IdP entity ID.",
+    `${HELP}/sso/saml-tracer`,
+  ],
+  [
+    "Where to find past invoices",
+    "You can download every past invoice as a PDF under Settings → Billing → Invoices. Only workspace owners and billing admins can see this page.",
+    null,
+  ],
+];
+
+export function buildKnowledge(now: number): { sources: MockKnowledgeSource[]; articles: KnowledgeArticle[] } {
+  const sources: MockKnowledgeSource[] = [
+    {
+      id: KS_HELP_CENTER,
+      connectionId: CONN_ZENDESK,
+      kind: "helpdesk_articles",
+      name: "Acme Help Center",
+      status: "idle",
+      lastSyncAt: new Date(now - 5 * HOUR).toISOString(),
+      lastError: null,
+      createdAt: new Date(now - 90 * DAY).toISOString(),
+    },
+    {
+      id: KS_SAVED_REPLIES,
+      connectionId: null,
+      kind: "manual",
+      name: "Saved replies",
+      status: "idle",
+      lastSyncAt: null,
+      lastError: null,
+      createdAt: new Date(now - 40 * DAY).toISOString(),
+    },
+  ];
+  const articles: KnowledgeArticle[] = HELP_ARTICLES.map(([title, path, bodyText], i) => ({
+    id: kb(i + 1),
+    sourceId: KS_HELP_CENTER,
+    sourceKind: "helpdesk_articles",
+    sourceName: "Acme Help Center",
+    externalId: String(360_041_000 + i * 17),
+    title,
+    url: `${HELP}/${path}`,
+    bodyText,
+    locale: "en-us",
+    // The browser-support article is switched off to show the toggle.
+    enabled: path !== "general/supported-browsers",
+    updatedAt: new Date(now - (i * 3 + 2) * DAY).toISOString(),
+  }));
+  SAVED_REPLIES.forEach(([title, bodyText, url], i) => {
+    articles.push({
+      id: kb(50 + i),
+      sourceId: KS_SAVED_REPLIES,
+      sourceKind: "manual",
+      sourceName: "Saved replies",
+      externalId: null,
+      title,
+      url,
+      bodyText,
+      locale: null,
+      enabled: true,
+      updatedAt: new Date(now - (i * 9 + 4) * DAY).toISOString(),
+    });
+  });
+  return { sources, articles };
+}
+
+/** The help-center articles a draft about `subject` would plausibly cite (fixture stand-in for retrieval). */
+export function knowledgeRefsFor(subject: string): KnowledgeRef[] {
+  const rules: [RegExp, number[]][] = [
+    [/SSO|SAML|login|certificate/i, [1, 2]],
+    [/SCIM|provision/i, [3]],
+    [/2FA|two-factor/i, [4]],
+    [/[Rr]ate limit|429|bulk import/i, [6, 8]],
+    [/[Ww]ebhook/i, [7]],
+    [/502|500|API/i, [5]],
+    [/[Ee]xport/i, [9, 10]],
+    [/[Ii]nvoice|seat/i, [11]],
+  ];
+  const hit = rules.find(([re]) => re.test(subject));
+  if (!hit) return [];
+  return hit[1].map((n) => {
+    const [title, path] = HELP_ARTICLES[n - 1]!;
+    return { id: kb(n), title, url: `${HELP}/${path}` };
+  });
+}

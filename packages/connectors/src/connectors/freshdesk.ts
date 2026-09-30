@@ -6,6 +6,7 @@
  * - List tickets (updated_since, include=requester,stats, 300-page cap, Link header): https://developers.freshdesk.com/api/#list_all_tickets
  * - Conversations: https://developers.freshdesk.com/api/#list_all_ticket_notes
  * - Rate limits: https://support.freshdesk.com/support/solutions/articles/225439-what-are-the-rate-limits-for-the-api-calls-to-freshdesk-
+ * - Solutions (categories → folders → articles; status 2 = published): https://developers.freshdesk.com/api/#solutions
  *
  * LIMITATION — status history is synthesized. Freshdesk API v2 has no official
  * per-ticket activities endpoint, so we rebuild status transitions from the
@@ -40,6 +41,7 @@ import type {
   ConnectorContext,
   ConnectorDefinition,
   FieldMapping,
+  KnowledgeArticle,
 } from "../types.js";
 
 const credentialsSchema = z.object({
@@ -106,6 +108,21 @@ const zConversation = z.object({
 });
 type FConversation = z.infer<typeof zConversation>;
 
+const zSolutionRef = z.object({ id });
+const zSolutionArticle = z.object({
+  id,
+  title: z.string().nullish(),
+  description: z.string().nullish(),
+  description_text: z.string().nullish(),
+  status: z.number().nullish(),
+  updated_at: z.string(),
+});
+/** Solution article status: 1 draft, 2 published. */
+const PUBLISHED = 2;
+/** Folders (and pages per folder) we read at most in one knowledge sync. */
+const MAX_FOLDERS = 1000;
+const MAX_ARTICLE_PAGES = 100;
+
 const zWebhook = z.union([
   z.object({ freshdesk_webhook: z.object({ ticket_id: id }).loose() }).loose(),
   z.object({ ticket_id: id }).loose(),
@@ -134,6 +151,7 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developers.freshdesk.com/api/",
+  supportsKnowledge: true,
   create(ctx: ConnectorContext<FreshdeskCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const domain = creds.domain;
@@ -335,6 +353,57 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
         const ticketId = p.freshdesk_webhook?.ticket_id ?? p.ticket_id;
         if (!ticketId || !/^\d+$/.test(ticketId)) return { ok: false, reason: "malformed" };
         return { ok: true, ticketSourceIds: [ticketId] };
+      },
+
+      async listKnowledgeArticles(cursor) {
+        // Traversal state: the folder ids (found on the first call), which folder, and which page.
+        const isState = (v: unknown): v is { f: string[]; i: number; p: number } =>
+          Array.isArray((v as { f?: unknown })?.f) &&
+          typeof (v as { i?: unknown })?.i === "number" &&
+          typeof (v as { p?: unknown })?.p === "number";
+        let state = decodeCursor(cursor, isState);
+        if (!state) {
+          const categories = parseAs(
+            z.array(zSolutionRef),
+            await http.get("/api/v2/solutions/categories"),
+            "solution categories",
+          );
+          const folders: string[] = [];
+          for (const c of categories) {
+            const fs = parseAs(
+              z.array(zSolutionRef),
+              await http.get(`/api/v2/solutions/categories/${encodeURIComponent(c.id)}/folders`),
+              "solution folders",
+            );
+            folders.push(...fs.map((f) => f.id));
+          }
+          state = { f: folders.slice(0, MAX_FOLDERS), i: 0, p: 1 };
+        }
+        const folder = state.f[state.i];
+        if (folder === undefined) return { items: [], nextCursor: null };
+        const res = await http.request<unknown>(
+          "GET",
+          `/api/v2/solutions/folders/${encodeURIComponent(folder)}/articles`,
+          { query: { page: state.p, per_page: 100 } },
+        );
+        const articles = parseAs(z.array(zSolutionArticle), res.data, "solution articles");
+        const items: KnowledgeArticle[] = articles
+          .filter((a) => a.status === PUBLISHED)
+          .map((a) => ({
+            sourceId: a.id,
+            title: a.title ?? "",
+            url: `https://${domain}.freshdesk.com/support/solutions/articles/${a.id}`,
+            bodyText: a.description_text ? plainText(a.description_text) : htmlToText(a.description),
+            locale: null,
+            updatedAt: parseTime(a.updated_at, `article ${a.id}.updated_at`),
+          }));
+        const hasNext = /;\s*rel="?next"?/i.test(res.headers.get("link") ?? "") && state.p < MAX_ARTICLE_PAGES;
+        const next = hasNext
+          ? { ...state, p: state.p + 1 }
+          : state.i + 1 < state.f.length
+            ? { ...state, i: state.i + 1, p: 1 }
+            : null;
+        return { items, nextCursor: next ? encodeCursor(next) : null };
       },
 
       async postInternalNote(sourceId, body) {

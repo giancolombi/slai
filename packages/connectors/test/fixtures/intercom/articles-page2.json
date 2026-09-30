@@ -1,0 +1,28 @@
+{
+  "type": "list",
+  "pages": {
+    "type": "pages",
+    "page": 2,
+    "per_page": 50,
+    "total_pages": 2
+  },
+  "total_count": 3,
+  "data": [
+    {
+      "id": "6871121",
+      "type": "article",
+      "workspace_id": "abc123",
+      "parent_id": null,
+      "parent_type": null,
+      "title": "Internal-only macro guide",
+      "description": "",
+      "body": "<p>Use the SSO macro.</p>",
+      "author_id": 991,
+      "state": "published",
+      "created_at": 1750000000,
+      "updated_at": 1751000000,
+      "url": null,
+      "default_locale": "fr"
+    }
+  ]
+}
