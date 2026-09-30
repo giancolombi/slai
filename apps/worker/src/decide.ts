@@ -101,6 +101,53 @@ export function crossed(prev: RiskLevel | null, next: RiskLevel, threshold: Risk
   return RISK_RANK[next] >= RISK_RANK[threshold] && (prev === null || RISK_RANK[prev] < RISK_RANK[threshold]);
 }
 
+// ---------- first evaluation (TR-21f) ----------
+
+/** How long after a breach a ticket slai sees for the first time is still worth acting on. */
+export const FIRST_SEEN_GRACE_MS = 60 * 60_000;
+
+export interface MetricLike {
+  state: string;
+  risk: RiskLevel;
+  cycles: { stoppedAt: Date | null; breachAt: Date | null }[];
+}
+
+/**
+ * The risk that may count as a crossing on a ticket's first evaluation (first
+ * connect, a full backfill). Only live metrics count: a stopped cycle's breach
+ * is history no agent can change. A live metric that breached more than
+ * `graceMs` ago counts for nothing either: the moment to act passed before
+ * slai saw the ticket. What is left is the risk an alert or a draft can still
+ * do something about.
+ */
+export function actionableRisk(metrics: MetricLike[], now: Date, graceMs = FIRST_SEEN_GRACE_MS): RiskLevel {
+  let worst: RiskLevel = "ok";
+  for (const m of metrics) {
+    const current = m.cycles.at(-1);
+    if (!current || current.stoppedAt !== null) continue;
+    if (m.state === "breached") {
+      if (current.breachAt === null || now.getTime() - current.breachAt.getTime() > graceMs) continue;
+    }
+    if (RISK_RANK[m.risk] > RISK_RANK[worst]) worst = m.risk;
+  }
+  return worst;
+}
+
+/**
+ * A crossing of `threshold` that slai should react to. Later evaluations use
+ * the plain risk crossing; the first one (no previous risk) must also cross on
+ * the actionable risk, so connecting a help desk full of long-overdue tickets
+ * does not fire a burst of alerts and drafts.
+ */
+export function actionableCrossing(
+  prev: RiskLevel | null,
+  next: RiskLevel,
+  actionable: RiskLevel,
+  threshold: RiskLevel,
+): boolean {
+  return crossed(prev, next, threshold) && (prev !== null || crossed(null, actionable, threshold));
+}
+
 export type SpendState = "ok" | "over_cap";
 
 export interface DispatchDecision {
@@ -122,6 +169,8 @@ export interface DispatchDecision {
 export function decideDispatch(input: {
   prevRisk: RiskLevel | null;
   nextRisk: RiskLevel;
+  /** On a first evaluation (`prevRisk` null), the still-actionable risk (`actionableRisk`); ignored otherwise. */
+  actionableRisk: RiskLevel;
   ticketOpen: boolean;
   rule: Pick<AutonomyRuleLike, "level" | "triggerAt">;
   spend: SpendState;
@@ -141,6 +190,9 @@ export function decideDispatch(input: {
     return none(input.spend === "over_cap" ? "spend cap reached: observe only" : "autonomy is observe", "observe");
   }
   if (!crossed(input.prevRisk, input.nextRisk, input.rule.triggerAt)) return none("trigger not crossed");
+  if (!actionableCrossing(input.prevRisk, input.nextRisk, input.actionableRisk, input.rule.triggerAt)) {
+    return none("first seen already breached beyond the grace window");
+  }
   if (input.alreadyHandled) return none("already handled since the last customer message");
   return {
     runTriage: true,
@@ -151,13 +203,17 @@ export function decideDispatch(input: {
   };
 }
 
-/** Channels to notify for this transition (each fires once per crossing of its minimum). */
+/**
+ * Channels to notify for this transition (each fires once per crossing of its
+ * minimum). On a first evaluation, `actionable` applies as in `decideDispatch`.
+ */
 export function channelsToNotify<C extends { minRisk: Exclude<RiskLevel, "ok">; enabled: boolean }>(
   channels: C[],
   prev: RiskLevel | null,
   next: RiskLevel,
+  actionable: RiskLevel,
 ): C[] {
-  return channels.filter((c) => c.enabled && crossed(prev, next, c.minRisk));
+  return channels.filter((c) => c.enabled && actionableCrossing(prev, next, actionable, c.minRisk));
 }
 
 // ---------- spend ----------
@@ -165,4 +221,79 @@ export function channelsToNotify<C extends { minRisk: Exclude<RiskLevel, "ok">; 
 export function spendState(spentMicros: number, capCents: number | null): SpendState {
   if (capCents === null) return "ok";
   return spentMicros >= capCents * 10_000 ? "over_cap" : "ok";
+}
+
+// ---------- idempotent help-desk writes (TR-21g) ----------
+
+/** A `sending` claim younger than this may still be in flight; older ones are reconciled. */
+export const SEND_RECONCILE_AFTER_MS = 5 * 60_000;
+/** Help-desk clocks may lag ours: a comment this much before the claim still counts as ours. */
+export const SEND_MATCH_SKEW_MS = 2 * 60_000;
+
+export type SendStep =
+  /** approved: claim it (→ sending) and write. */
+  | "claim"
+  /** sending, recently: another worker may be mid-write; leave it to the reconcile job. */
+  | "wait"
+  /** sending, long enough ago that the write either landed or never will: look before resending. */
+  | "reconcile"
+  /** anything else (sent, failed, rejected, …): nothing to do. */
+  | "done";
+
+export function decideSendStep(
+  action: { status: string; sendingAt: Date | null },
+  now: Date,
+  reconcileAfterMs = SEND_RECONCILE_AFTER_MS,
+): SendStep {
+  if (action.status === "approved") return "claim";
+  if (action.status !== "sending") return "done";
+  if (action.sendingAt && now.getTime() - action.sendingAt.getTime() < reconcileAfterMs) return "wait";
+  return "reconcile";
+}
+
+/** Comparable text: help desks re-wrap, re-encode and truncate what we post. */
+export function normalizeBody(s: string): string {
+  return s.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function sameBody(ours: string, theirs: string): boolean {
+  const a = normalizeBody(ours);
+  const b = normalizeBody(theirs);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Connectors truncate long bodies with an ellipsis; a long enough prefix is still ours.
+  const trimmed = theirs.trimEnd();
+  if (trimmed.endsWith("…")) {
+    const prefix = normalizeBody(trimmed.slice(0, -1));
+    return prefix.length >= 200 && a.startsWith(prefix);
+  }
+  return false;
+}
+
+/**
+ * Finds the comment a lost write left on the help desk: same visibility, not
+ * from the requester, created no earlier than the claim (minus clock skew),
+ * with the same normalized body, and not already recorded for another action.
+ * Returns its source id, or null when the write never landed.
+ */
+export function findSentComment(
+  action: { kind: string; body: string | null; sendingAt: Date | null },
+  comments: { sourceId: string; at: Date; public: boolean; authorRole: string; bodyText: string }[],
+  opts: { skewMs?: number; knownRefs?: Iterable<string> } = {},
+): string | null {
+  if (action.kind !== "public_reply" && action.kind !== "internal_note") return null;
+  const wantPublic = action.kind === "public_reply";
+  const since = (action.sendingAt?.getTime() ?? 0) - (opts.skewMs ?? SEND_MATCH_SKEW_MS);
+  const known = new Set(opts.knownRefs ?? []);
+  const match = comments
+    .filter(
+      (c) =>
+        c.public === wantPublic &&
+        c.authorRole !== "requester" &&
+        c.at.getTime() >= since &&
+        !known.has(c.sourceId) &&
+        sameBody(action.body ?? "", c.bodyText),
+    )
+    .sort((x, y) => x.at.getTime() - y.at.getTime())[0];
+  return match?.sourceId ?? null;
 }

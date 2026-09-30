@@ -3,6 +3,8 @@
  * decides what happens to each proposal and performs (and audits) every write
  * to the help desk.
  */
+
+import { randomUUID } from "node:crypto";
 import {
   type AgentRunResult,
   type DraftReplyResult,
@@ -24,9 +26,9 @@ import {
   tickets,
 } from "@slai/db";
 import type { Priority } from "@slai/sla-engine";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { clientFor, connectorFor, loadConnection, markConnectionError } from "./connection.js";
-import { type Autonomy, resolveAutonomy } from "./decide.js";
+import { type Autonomy, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
 import { CREDITS, currentSpend, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
@@ -279,7 +281,12 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
       }
     });
     for (const id of toSend) {
-      await performAction(deps, orgId, id, { type: "agent", id: run.id, name: "slai agent" });
+      try {
+        await performAction(deps, orgId, id);
+      } catch (e) {
+        // The run itself succeeded. The claim's reconcile job finishes (or safely retries) the write.
+        deps.logger.warn({ orgId, actionId: id, err: errorMessage(e) }, "help-desk write deferred to reconcile");
+      }
     }
     await notifyCapThresholds(deps, orgId, thresholds);
   } catch (e) {
@@ -335,33 +342,134 @@ async function proposeTriageActions(
   for (const a of created) await notifyEvent(tx, { orgId, type: "action.created", id: a.id });
 }
 
+type ActionRow = typeof agentActions.$inferSelect;
+type ConnectionRow = NonNullable<Awaited<ReturnType<typeof loadConnection>>>;
+
 export interface Actor {
   type: "agent" | "user";
   id: string | null;
   name?: string | null;
 }
 
+/** A write is the approving user's; an action nobody approved was sent by the agent run that proposed it. */
+function actorFor(action: ActionRow): Actor {
+  return action.decidedBy
+    ? { type: "user", id: action.decidedBy }
+    : { type: "agent", id: action.agentRunId, name: "slai agent" };
+}
+
+/** Connector errors that mean the help desk refused the write (nothing landed). Anything else is ambiguous. */
+const REFUSED = new Set<ConnectorError["kind"]>(["auth", "not_found", "invalid", "unsupported"]);
+
+/** Only the holder of the current claim may resolve it. */
+const holdsClaim = (a: ActionRow) =>
+  and(
+    eq(agentActions.id, a.id),
+    eq(agentActions.status, "sending"),
+    a.sendAttemptId ? eq(agentActions.sendAttemptId, a.sendAttemptId) : isNull(agentActions.sendAttemptId),
+  );
+
 /**
- * Performs an approved action against the help desk, then records the result
- * and an audit event (every help-desk write is audited). Afterwards the ticket
- * is re-ingested so slai sees its own reply stop the clock.
+ * Claims the action for one write (approved → sending, or a new attempt on a
+ * lost one) and, in the same transaction, schedules the reconcile job that
+ * finishes the write if this worker dies before recording it.
  */
-export async function performAction(deps: WorkerDeps, orgId: string, actionId: string, actor: Actor): Promise<void> {
+async function claimSend(tx: Tx, deps: WorkerDeps, orgId: string, a: ActionRow, now: Date): Promise<ActionRow | null> {
+  const [claimed] = await tx
+    .update(agentActions)
+    .set({
+      status: "sending",
+      sendingAt: now,
+      sendAttemptId: randomUUID(),
+      sendAttempts: sql`${agentActions.sendAttempts} + 1`,
+      error: null,
+    })
+    .where(
+      a.status === "approved" ? and(eq(agentActions.id, a.id), eq(agentActions.status, "approved")) : holdsClaim(a),
+    )
+    .returning();
+  if (!claimed) return null;
+  await deps.queue.send(
+    "execute-action",
+    { orgId, actionId: a.id },
+    { tx, startAfter: new Date(now.getTime() + deps.config.sendReconcileMs) },
+  );
+  return claimed;
+}
+
+/**
+ * Performs an approved action against the help desk exactly once, then records
+ * the result and an audit event (every help-desk write is audited). Afterwards
+ * the ticket is re-ingested so slai sees its own reply stop the clock.
+ *
+ * The write and its record are not atomic, so the action is claimed first
+ * (approved → sending, TR-21g). A retry that finds a fresh claim leaves it to
+ * the claim's reconcile job; one that finds a stale claim looks for the write
+ * on the help desk before writing again.
+ */
+export async function performAction(deps: WorkerDeps, orgId: string, actionId: string): Promise<void> {
+  const now = deps.clock.now();
   const loaded = await deps.orgDb.withOrg(orgId, async (tx) => {
-    const [action] = await tx.select().from(agentActions).where(eq(agentActions.id, actionId));
-    if (action?.status !== "approved") return null;
+    const [action] = await tx.select().from(agentActions).where(eq(agentActions.id, actionId)).for("update");
+    if (!action) return null;
+    const step = decideSendStep(action, now, deps.config.sendReconcileMs);
+    if (step === "done") return null;
+    if (step === "wait") {
+      deps.logger.info({ orgId, actionId, sendingAt: action.sendingAt }, "write in flight; left to reconcile");
+      return null;
+    }
     const [ticket] = await tx.select().from(tickets).where(eq(tickets.id, action.ticketId));
     const conn = ticket ? await loadConnection(tx, ticket.connectionId) : null;
-    return action && ticket && conn ? { action, ticket, conn } : null;
+    if (!ticket || !conn) return null;
+    if (step === "reconcile") return { step, action, ticket, conn };
+    const claimed = await claimSend(tx, deps, orgId, action, now);
+    return claimed ? { step, action: claimed, ticket, conn } : null;
   });
   if (!loaded) return;
-  const { action, ticket, conn } = loaded;
-  const payload = (action.payload ?? {}) as Record<string, unknown>;
+  const { ticket, conn } = loaded;
+  let action = loaded.action;
+  const client = clientFor(deps, conn);
 
+  if (loaded.step === "reconcile") {
+    // A claim outlived its worker. Did the write land before the crash?
+    let history: Awaited<ReturnType<typeof client.getTicketWithHistory>>;
+    try {
+      history = await client.getTicketWithHistory(ticket.externalId);
+    } catch (e) {
+      // The ticket is gone from the help desk: nothing can land there any more.
+      if (!(e instanceof ConnectorError && e.kind === "not_found")) throw e;
+      const error = errorMessage(e);
+      await recordWrite(deps, orgId, action, ticket, conn, { externalRef: null, error, reconciled: true });
+      return;
+    }
+    const knownRefs = await deps.orgDb.withOrg(orgId, async (tx) => {
+      const rows = await tx
+        .select({ ref: agentActions.externalRef })
+        .from(agentActions)
+        .where(
+          and(
+            eq(agentActions.ticketId, ticket.id),
+            ne(agentActions.id, action.id),
+            isNotNull(agentActions.externalRef),
+          ),
+        );
+      return rows.map((r) => r.ref!);
+    });
+    const found = findSentComment(action, history.comments, { knownRefs });
+    if (found) {
+      await recordWrite(deps, orgId, action, ticket, conn, { externalRef: found, error: null, reconciled: true });
+      return;
+    }
+    // Not there after the safe interval: take the claim over and write again.
+    const retaken = await deps.orgDb.withOrg(orgId, (tx) => claimSend(tx, deps, orgId, action, deps.clock.now()));
+    if (!retaken) return;
+    action = retaken;
+  }
+
+  const payload = (action.payload ?? {}) as Record<string, unknown>;
   let externalRef: string | null = null;
   let error: string | null = null;
   try {
-    const client = clientFor(deps, conn);
     switch (action.kind) {
       case "public_reply":
         externalRef = (await client.postPublicReply(ticket.externalId, action.body ?? "")).commentSourceId;
@@ -377,29 +485,54 @@ export async function performAction(deps: WorkerDeps, orgId: string, actionId: s
         break;
     }
   } catch (e) {
-    // Rate limits retry the whole job; the action stays approved.
-    if (e instanceof ConnectorError && e.kind === "rate_limited") throw e;
-    if (e instanceof ConnectorError && e.kind === "auth") await markConnectionError(deps, orgId, conn.id, e);
+    if (e instanceof ConnectorError && e.kind === "rate_limited") {
+      // Nothing was written: release the claim, and the job retries after Retry-After.
+      const held = action;
+      await deps.orgDb.withOrg(orgId, (tx) =>
+        tx.update(agentActions).set({ status: "approved", sendingAt: null }).where(holdsClaim(held)),
+      );
+      throw e;
+    }
+    // Anything but a clear refusal may have landed (a timeout, a 5xx, a crash): keep the claim; reconcile decides.
+    if (!(e instanceof ConnectorError && REFUSED.has(e.kind))) throw e;
+    if (e.kind === "auth") await markConnectionError(deps, orgId, conn.id, e);
     error = errorMessage(e);
   }
+  await recordWrite(deps, orgId, action, ticket, conn, { externalRef, error, reconciled: false });
+}
 
+/** Resolves the claim (sending → sent/failed), audits the write, meters autopilot, and re-ingests the ticket. */
+async function recordWrite(
+  deps: WorkerDeps,
+  orgId: string,
+  action: ActionRow,
+  ticket: TicketRow,
+  conn: ConnectionRow,
+  result: { externalRef: string | null; error: string | null; reconciled: boolean },
+): Promise<void> {
+  const { externalRef, error } = result;
+  const actor = actorFor(action);
   const now = deps.clock.now();
   const thresholds = await deps.orgDb.withOrg(orgId, async (tx) => {
-    await tx
+    const [resolved] = await tx
       .update(agentActions)
       .set(error ? { status: "failed", error } : { status: "sent", externalRef, error: null })
-      .where(eq(agentActions.id, actionId));
+      .where(holdsClaim(action))
+      .returning({ id: agentActions.id });
+    if (!resolved) return []; // another worker resolved this claim
     await audit(tx, {
       orgId,
       actor: { type: actor.type, id: actor.id, name: actor.name ?? null },
       action: error ? "action.failed" : "action.sent",
-      target: { type: "agent_action", id: actionId },
+      target: { type: "agent_action", id: action.id },
       metadata: {
         kind: action.kind,
         ticketId: ticket.id,
         connectionId: conn.id,
         provider: conn.provider,
         externalRef,
+        attempt: action.sendAttempts,
+        ...(result.reconciled && { reconciled: true }),
         ...(error && { error }),
       },
     });
@@ -409,7 +542,7 @@ export async function performAction(deps: WorkerDeps, orgId: string, actionId: s
       await meterAction(tx, orgId, now, "autopilot_reply", { ticketId: ticket.id, agentRunId: action.agentRunId });
       reached = await reachedCapThresholds(tx, orgId, now);
     }
-    await notifyEvent(tx, { orgId, type: "action.created", id: actionId });
+    await notifyEvent(tx, { orgId, type: "action.created", id: action.id });
     await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
     if (!error) {
       await deps.queue.send(
@@ -423,15 +556,10 @@ export async function performAction(deps: WorkerDeps, orgId: string, actionId: s
   await notifyCapThresholds(deps, orgId, thresholds);
 }
 
-/** The `execute-action` job: a human approved the action in the API. */
+/**
+ * The `execute-action` job: a human approved the action in the API, or a
+ * claim's reconcile job came due. Both are safe to run any number of times.
+ */
 export async function executeAction(deps: WorkerDeps, payload: { orgId: string; actionId: string }): Promise<void> {
-  const decided = await deps.orgDb.withOrg(payload.orgId, async (tx) => {
-    const [a] = await tx
-      .select({ decidedBy: agentActions.decidedBy })
-      .from(agentActions)
-      .where(eq(agentActions.id, payload.actionId));
-    return a ?? null;
-  });
-  if (!decided) return;
-  await performAction(deps, payload.orgId, payload.actionId, { type: "user", id: decided.decidedBy });
+  await performAction(deps, payload.orgId, payload.actionId);
 }

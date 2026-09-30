@@ -53,9 +53,9 @@ Each task references the requirements it serves.
 
 - [ ] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
       Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17)
-- [ ] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
-      sync (avoids a burst of drafts and credit spend on connect)
-- [ ] T-49 Make help-desk writes and their action record idempotent across retries (no double send)
+- [x] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
+      sync (avoids a burst of drafts and credit spend on connect) (TR-21f)
+- [x] T-49 Make help-desk writes and their action record idempotent across retries (no double send) (TR-21g)
 ## M5: Web
 - [x] T-50 Design system: tokens (light/dark), components, SlaClock, SlaBar, TicketTimeline,
       CitationQuote, and the `/design` style guide (TR-3)

@@ -263,7 +263,7 @@ export interface AgentRun {
   output: unknown;
 }
 export type ActionKind = "internal_note" | "public_reply" | "set_priority" | "assign";
-export type ActionStatus = "proposed" | "approved" | "sent" | "rejected" | "failed" | "blocked";
+export type ActionStatus = "proposed" | "approved" | "sending" | "sent" | "rejected" | "failed" | "blocked";
 export interface AgentAction {
   id: string;
   ticketId: string;

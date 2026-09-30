@@ -57,6 +57,7 @@ export const AUTONOMY_HELP: Record<Autonomy, string> = {
 export const ACTION_STATUS_LABEL: Record<ActionStatus, string> = {
   proposed: "Awaiting approval",
   approved: "Approved",
+  sending: "Sending",
   sent: "Sent",
   rejected: "Rejected",
   failed: "Failed",
