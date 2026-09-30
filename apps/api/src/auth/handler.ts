@@ -28,8 +28,16 @@ import type { z } from "zod";
 import { type AppDeps, type AppEnv, type AuthContext, auditBase, type Ctx } from "../context.js";
 import { ApiError, badRequest, conflict, notFound, unauthorized } from "../errors.js";
 import { mfaError } from "../middleware/auth.js";
-import { AUTH_BASE, type Auth, CLIENT_IP_HEADER, requestMeta, SESSION_COOKIE } from "./better-auth.js";
+import {
+  AUTH_BASE,
+  type Auth,
+  CLIENT_IP_HEADER,
+  type RequestMeta,
+  requestMeta,
+  SESSION_COOKIE,
+} from "./better-auth.js";
 import { domainsOf, emailDomain } from "./domains.js";
+import { idpAssertsMfa, NO_IDP_AUTHN, samlAuthn } from "./idp-mfa.js";
 import { buildMe, revokeByCookieValue } from "./me.js";
 import { resolveAuth } from "./session.js";
 
@@ -138,7 +146,12 @@ export function authHandler(deps: AppDeps, auth: Auth) {
     audit(db, { ...auditBase(c), ...e });
 
   /** Calls better-auth with our resolved client IP (never a client-sent one). */
-  const forward = (c: Ctx, body?: unknown, raw?: { text: string; type: string }): Promise<Response> => {
+  const forward = (
+    c: Ctx,
+    body?: unknown,
+    raw?: { text: string; type: string },
+    store?: RequestMeta,
+  ): Promise<Response> => {
     const headers = new Headers(c.req.raw.headers);
     headers.delete(CLIENT_IP_HEADER);
     headers.delete("content-length");
@@ -153,7 +166,7 @@ export function authHandler(deps: AppDeps, auth: Auth) {
       payload = JSON.stringify(body);
     }
     const req = new Request(c.req.url, { method: c.req.method, headers, body: payload });
-    const meta = {
+    const meta: RequestMeta = store ?? {
       ip: c.get("ip"),
       userAgent: c.req.header("user-agent")?.slice(0, 500) ?? null,
       requestId: c.get("requestId"),
@@ -558,20 +571,50 @@ export function authHandler(deps: AppDeps, auth: Auth) {
     if (path === "/sso/saml2/sp/metadata") return forward(c);
     // OIDC callback or SAML ACS: better-auth sets the session and redirects to the app.
     const providerId = path.split("/").at(-1) ?? null;
-    const res = path.startsWith("/sso/saml2/")
-      ? await forward(c, undefined, {
-          text: await c.req.text(),
-          type: c.req.header("content-type") ?? "application/x-www-form-urlencoded",
-        })
-      : await forward(c);
+    const saml = path.startsWith("/sso/saml2/");
+    const store: RequestMeta = {
+      ip: c.get("ip"),
+      userAgent: c.req.header("user-agent")?.slice(0, 500) ?? null,
+      requestId: c.get("requestId"),
+    };
+    const samlBody = saml ? await c.req.text() : "";
+    const res = saml
+      ? await forward(
+          c,
+          undefined,
+          { text: samlBody, type: c.req.header("content-type") ?? "application/x-www-form-urlencoded" },
+          store,
+        )
+      : await forward(c, undefined, undefined, store);
     const s = await newSession(res);
     if (s) {
+      // What the IdP says about MFA: OIDC amr/acr (captured in provisionUser), SAML AuthnContextClassRef.
+      const idp = saml ? samlAuthn(samlBody) : (store.idp ?? NO_IDP_AUTHN);
+      await db.update(sessions).set({ idpAmr: idp.amr, idpAcr: idp.acr }).where(eq(sessions.id, s.sessionId));
+      const [policy] = await db
+        .select({ orgId: ssoProviders.orgId, requireIdpMfa: organizations.ssoRequireIdpMfa })
+        .from(ssoProviders)
+        .innerJoin(organizations, eq(organizations.id, ssoProviders.orgId))
+        .where(eq(ssoProviders.providerId, providerId ?? ""));
+      if (policy?.requireIdpMfa && !idpAssertsMfa(idp)) {
+        const headers = await discardSession(c, res);
+        await log(c, {
+          orgId: policy.orgId,
+          actor: { type: "user", id: s.user.id, name: s.user.email },
+          action: "auth.login_failed",
+          target: { type: "user", id: s.user.id },
+          metadata: { reason: "idp_mfa_missing", method: "sso", providerId, amr: idp.amr, acr: idp.acr },
+        });
+        const out = c.redirect(`${appOrigin}/login?sso_error=idp_mfa_required`, 302);
+        for (const v of headers.getSetCookie()) out.headers.append("set-cookie", v);
+        return out;
+      }
       await log(c, {
         orgId: s.orgId,
         actor: { type: "user", id: s.user.id, name: s.user.email },
         action: "auth.login",
         target: { type: "user", id: s.user.id },
-        metadata: { method: "sso", providerId, mfa: s.mfa },
+        metadata: { method: "sso", providerId, mfa: s.mfa, amr: idp.amr, acr: idp.acr },
       });
     } else {
       await log(c, {

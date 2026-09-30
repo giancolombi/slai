@@ -36,6 +36,7 @@ import { twoFactor } from "better-auth/plugins";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { AppDeps } from "../context.js";
 import { domainsOf, emailDomain } from "./domains.js";
+import { type IdpAuthn, oidcAuthn } from "./idp-mfa.js";
 import { sealAdapter } from "./sealing-adapter.js";
 
 export const AUTH_BASE = `${API_BASE}/auth`;
@@ -50,6 +51,8 @@ export interface RequestMeta {
   ip: string | null;
   userAgent: string | null;
   requestId: string;
+  /** Set during an OIDC callback: the verified ID token's `amr`/`acr` (the handler records and enforces them). */
+  idp?: IdpAuthn;
 }
 export const requestMeta = new AsyncLocalStorage<RequestMeta>();
 
@@ -222,7 +225,10 @@ export function createAuth(deps: AuthDeps) {
         defaultOverrideUserInfo: false,
         provisionUserOnEveryLogin: true,
         // JIT: a user signing in through an org's IdP becomes a `member` of that org.
-        provisionUser: async ({ user, provider }) => {
+        provisionUser: async ({ user, provider, token }) => {
+          // OIDC: better-auth verified the ID token (JWKS, iss, aud) before calling us.
+          const store = requestMeta.getStore();
+          if (store && token?.idToken) store.idp = oidcAuthn(token.idToken);
           const orgId = (provider as { organizationId?: string | null }).organizationId;
           if (!orgId) return;
           const [created] = await db
