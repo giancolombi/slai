@@ -25,6 +25,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "oauth2-mock-server": "^9.2.0"
+    "oauth2-mock-server": "^9.2.0",
+    "xml-crypto": "6.3.2"
   }
 }

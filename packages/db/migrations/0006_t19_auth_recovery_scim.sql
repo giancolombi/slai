@@ -44,6 +44,11 @@ CREATE TABLE "scim_tokens" (
 	CONSTRAINT "scim_tokens_token_hash_unique" UNIQUE("token_hash")
 );
 --> statement-breakpoint
+-- better-auth reserves some verification rows under its own non-uuid ids (the sha256
+-- of a SAML assertion id for replay protection): with a uuid column every SAML
+-- sign-in failed with a 500 (found by the T-19a end-to-end test).
+ALTER TABLE "verifications" ALTER COLUMN "id" SET DATA TYPE text;--> statement-breakpoint
+ALTER TABLE "verifications" ALTER COLUMN "id" SET DEFAULT uuidv7()::text;--> statement-breakpoint
 ALTER TABLE "memberships" ADD COLUMN "disabled_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "memberships" ADD COLUMN "scim_managed" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "memberships" ADD COLUMN "scim_external_id" text;--> statement-breakpoint

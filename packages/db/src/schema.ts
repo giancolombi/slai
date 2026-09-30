@@ -200,7 +200,11 @@ export const accounts = pgTable(
 export const verifications = pgTable(
   "verifications",
   {
-    id: id(),
+    /**
+     * Text, not uuid: better-auth reserves some values under its own ids (e.g. the
+     * sha256 of a SAML assertion id for replay protection, T-19a).
+     */
+    id: text("id").primaryKey().default(sql`uuidv7()::text`),
     identifier: text("identifier").notNull(),
     value: text("value").notNull(),
     expiresAt: ts("expires_at").notNull(),
