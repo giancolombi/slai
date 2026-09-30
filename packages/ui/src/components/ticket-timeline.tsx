@@ -22,6 +22,8 @@ export interface TimelineItem {
   author?: string;
   /** true: public reply/comment; false: internal note; undefined: a system event. */
   public?: boolean;
+  /** Who wrote a comment. Requester comments are labelled as the customer's, not as a reply. */
+  authorRole?: "agent" | "requester" | "bot" | "system";
 }
 
 export interface TicketTimelineProps {
@@ -43,6 +45,11 @@ const eventIcons: Record<string, LucideIcon> = {
   sla_breached: OctagonX,
   agent: Bot,
 };
+
+/** Requester comments: explicit role, or a type naming the requester/customer. */
+function isRequester(item: TimelineItem) {
+  return item.authorRole === "requester" || /requester|customer/.test(item.type);
+}
 
 function kindOf(item: TimelineItem): "public" | "internal" | "event" {
   if (item.public === true) return "public";
@@ -67,7 +74,9 @@ export function TicketTimeline({ items, reverse = false, className }: TicketTime
         lastDay = day;
         const Icon =
           kind === "public"
-            ? Globe
+            ? isRequester(item)
+              ? MessageSquare
+              : Globe
             : kind === "internal"
               ? Lock
               : (eventIcons[item.type] ?? (item.type.startsWith("agent") ? Bot : MessageSquare));
@@ -79,7 +88,9 @@ export function TicketTimeline({ items, reverse = false, className }: TicketTime
               : item.type === "sla_warning"
                 ? "text-warning-text border-warning-border bg-warning-subtle"
                 : kind === "public"
-                  ? "text-accent-text border-accent/30 bg-accent-subtle"
+                  ? isRequester(item)
+                    ? "text-ink-muted border-line-strong bg-surface"
+                    : "text-accent-text border-accent/30 bg-accent-subtle"
                   : kind === "internal"
                     ? "text-ink-muted border-dashed border-ink-subtle bg-surface"
                     : "text-ink-subtle border-line bg-surface";
@@ -99,7 +110,12 @@ export function TicketTimeline({ items, reverse = false, className }: TicketTime
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-ink-muted">
                 {item.author && <span className="font-medium text-ink">{item.author}</span>}
-                {kind === "public" && <span className="font-medium text-accent-text">Public reply</span>}
+                {kind === "public" &&
+                  (isRequester(item) ? (
+                    <span className="font-medium text-ink-muted">Customer</span>
+                  ) : (
+                    <span className="font-medium text-accent-text">Public reply</span>
+                  ))}
                 {kind === "internal" && (
                   <span className="inline-flex items-center gap-1 font-medium text-ink-muted">Internal note</span>
                 )}

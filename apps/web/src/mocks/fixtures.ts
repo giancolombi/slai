@@ -874,7 +874,7 @@ function buildTimeline(
   const agent = t.assignee ?? "Priya Raman";
   const items: MockTicket["timeline"] = [
     { at: at(0), type: "created", label: `Ticket created with priority ${t.priority}` },
-    { at: at(0.001), type: "comment", label: t.body, author: t.requester, public: true },
+    { at: at(0.001), type: "requester_comment", label: t.body, author: t.requester, public: true },
   ];
   items.push({
     at: at(0.02),

@@ -3,7 +3,7 @@ import { Select as SelectPrimitive } from "radix-ui";
 import type { ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { useFieldControl } from "./field";
-import { controlBase } from "./input";
+import { controlBase, widthOr } from "./input";
 
 export interface SelectOption {
   value: string;
@@ -48,6 +48,7 @@ export function Select({
         {...control}
         className={cn(
           controlBase,
+          widthOr(className),
           "inline-flex items-center justify-between gap-2 text-left data-[placeholder]:text-ink-subtle",
           size === "sm" ? "h-7 px-2 text-xs" : "h-8.5 px-3 text-sm",
           className,

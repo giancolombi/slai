@@ -2,8 +2,13 @@ import { forwardRef, type InputHTMLAttributes, type ReactNode, type TextareaHTML
 import { cn } from "../lib/cn";
 import { useFieldControl } from "./field";
 
+/** Controls fill their container unless the caller sets a width. */
+export function widthOr(className: string | undefined, fallback = "w-full") {
+  return className && /(^|\s)(w-|min-w-|max-w-|flex-1|size-)/.test(className) ? undefined : fallback;
+}
+
 export const controlBase =
-  "w-full rounded-md border border-line-strong bg-surface text-ink shadow-xs " +
+  "rounded-md border border-line-strong bg-surface text-ink shadow-xs " +
   "transition-[border-color,box-shadow] duration-[var(--duration-fast)] " +
   "hover:border-ink-subtle/60 focus-visible:outline-none focus-visible:border-accent focus-visible:ring-3 focus-visible:ring-accent/20 " +
   "aria-invalid:border-breached aria-invalid:focus-visible:ring-breached/20 " +
@@ -27,6 +32,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       ref={ref}
       className={cn(
         controlBase,
+        leading || trailing ? "w-full" : widthOr(className),
         inputSize === "sm" ? "h-7 px-2 text-xs" : "h-8.5 px-3 text-sm",
         leading ? "pl-8" : undefined,
         trailing ? "pr-9" : undefined,
@@ -38,7 +44,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   );
   if (!leading && !trailing) return input;
   return (
-    <div className={cn("relative flex items-center", className)}>
+    <div className={cn("relative flex items-center", widthOr(className), className)}>
       {leading && (
         <span className="pointer-events-none absolute left-2.5 flex text-ink-subtle [&_svg]:size-4">{leading}</span>
       )}
@@ -56,7 +62,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
   return (
     <textarea
       ref={ref}
-      className={cn(controlBase, "min-h-20 resize-y px-3 py-2 text-sm leading-relaxed", className)}
+      className={cn(controlBase, widthOr(className), "min-h-20 resize-y px-3 py-2 text-sm leading-relaxed", className)}
       {...props}
     />
   );

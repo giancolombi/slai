@@ -77,7 +77,7 @@ export interface MockDb {
 }
 
 const STORAGE_KEY = "slai-mock-db";
-const VERSION = 3;
+const VERSION = 4;
 
 function seedAcme(now: number): OrgData {
   const customers = buildCustomers();
@@ -317,7 +317,7 @@ export function dashboard(now: number): DashboardSummary {
   const byRisk: Record<Risk, number> = { ok: 0, warning: 0, at_risk: 0, breached: 0 };
   for (const s of summaries) byRisk[s.risk]++;
   const dueSoon = summaries
-    .filter((s) => s.next && s.next.state !== "paused" && s.risk !== "ok")
+    .filter((s) => s.next && s.next.state === "running" && (s.next.remainingMs ?? 0) >= 0 && s.risk !== "ok")
     .sort((a, b) => (a.next!.remainingMs ?? 0) - (b.next!.remainingMs ?? 0))
     .slice(0, 8);
   const start = new Date(now);

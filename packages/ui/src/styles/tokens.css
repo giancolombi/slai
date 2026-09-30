@@ -138,7 +138,8 @@
 }
 
 /* ---------- semantic roles: dark (explicit, or following the OS when no theme is set) ---------- */
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+[data-theme="dark"] {
   color-scheme: dark;
   --canvas: var(--ink-950);
   --surface: var(--ink-900);
