@@ -22,7 +22,18 @@ describe("seed", () => {
       customers: await tx.select().from(customerAccounts),
       conns: await tx.select().from(connections),
     }));
-    expect(counts.customers.map((c) => c.name).sort()).toEqual(["Globex Corporation", "Initech"]);
+    expect(counts.customers.map((c) => c.name).sort()).toEqual([
+      "Bluepeak Logistics",
+      "Cobalt Insurance",
+      "Lumen Retail Group",
+      "Meridian Payments",
+      "Northwind Analytics",
+      "Quillon Health",
+    ]);
+    // Customers must match the demo help desk's requester orgs, or demo tickets never reach them.
+    expect(counts.customers.every((c) => c.externalOrgIds.length === 1 && c.domains[0]!.endsWith(".example"))).toBe(
+      true,
+    );
     expect(counts.conns).toHaveLength(1);
     expect(counts.conns[0]!.provider).toBe("demo");
     expect(decryptJson(counts.conns[0]!.credentials, { keyring, aad: `connection:${first.connectionId}` })).toEqual({});
