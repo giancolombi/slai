@@ -116,11 +116,11 @@ export function ConnectorCatalog({ onSelect, className }: ConnectorCatalogProps)
                     {c.oauth?.configured
                       ? `Continue with ${c.displayName}`
                       : c.authKind === "oauth2"
-                        ? "OAuth app credentials"
+                        ? "App credentials"
                         : c.authKind === "basic"
                           ? "Email + API token"
                           : "API token"}
-                    {c.supportsWebhooks ? " · real-time" : " · polling"}
+                    {c.supportsWebhooks ? " · real-time" : " · updates every few minutes"}
                   </span>
                 </span>
                 <ArrowRight
@@ -222,12 +222,12 @@ export function OAuthConnect({
       </Button>
       {oauth.configured ? (
         <p className="text-xs text-ink-muted">
-          You'll approve access in {connector.displayName}, then come back here. Tokens are encrypted and never shown.
+          You'll approve access in {connector.displayName}, then come back here. Your credentials are encrypted and
+          never shown.
         </p>
       ) : (
         <p id={`oauth-off-${connector.provider}`} className="text-xs text-ink-muted">
-          Sign-in with {connector.displayName} isn't set up on this slai deployment yet (an operator adds its OAuth
-          app). Connect with credentials below instead.
+          Signing in with {connector.displayName} isn't available yet. Connect with credentials below instead.
         </p>
       )}
       <div className="flex items-center gap-3 text-2xs font-medium uppercase tracking-wide text-ink-subtle">

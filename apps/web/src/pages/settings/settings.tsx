@@ -33,6 +33,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage } from "../../lib/api";
+import { planName } from "../../lib/billing";
 import { qk, useChannels, useMe, useOrg } from "../../lib/queries";
 import { OffboardingSection } from "./offboarding";
 import { SecurityTab } from "./security";
@@ -96,13 +97,20 @@ function OrganizationTab({ canEdit, isOwner }: { canEdit: boolean; isOwner: bool
           <CardHeader
             title="Organization"
             description={
-              canEdit ? "Visible to everyone in your organization." : "Only admins can change these settings."
+              canEdit ? "Visible to everyone in your organization." : "Ask an admin to change these settings."
             }
           />
           <CardContent className="flex flex-col gap-5">
-            <Field label="Name" error={error ?? undefined} className="max-w-md">
-              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
-            </Field>
+            {canEdit ? (
+              <Field label="Name" error={error ?? undefined} className="max-w-md">
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+            ) : (
+              <div className="text-sm">
+                <p className="text-xs text-ink-muted">Name</p>
+                <p className="mt-0.5 font-medium text-ink">{org.data.name}</p>
+              </div>
+            )}
             <p className="flex items-center gap-2 text-xs text-ink-muted">
               <ShieldCheck className="size-3.5 text-ok-text" aria-hidden />
               Two-factor authentication is required for everyone (an authenticator app or a passkey; SSO users through
@@ -110,11 +118,11 @@ function OrganizationTab({ canEdit, isOwner }: { canEdit: boolean; isOwner: bool
             </p>
             <div className="flex items-center gap-2 text-xs text-ink-muted">
               <span>Plan</span>
-              <Badge tone="accent" size="sm" className="capitalize">
-                {org.data.plan}
+              <Badge tone="accent" size="sm">
+                {planName(org.data.plan)}
               </Badge>
-              <Link to="/usage" className="font-medium text-accent-text hover:underline">
-                Usage & billing
+              <Link to="/billing" className="font-medium text-accent-text hover:underline">
+                Billing
               </Link>
             </div>
           </CardContent>

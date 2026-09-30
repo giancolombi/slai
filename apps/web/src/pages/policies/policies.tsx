@@ -64,10 +64,10 @@ export function PoliciesPage() {
   return (
     <Page
       title="Policies"
-      description="Machine-checkable SLA policies, versioned. Tickets are measured against the active version for their customer, or the default."
+      description="The SLA terms from your contracts, as versioned policies. Each ticket is measured against the active version for its customer, or the default."
       actions={
         <Button asChild variant="primary">
-          <Link to="/contracts">Extract from a contract</Link>
+          <Link to="/contracts">Create from a contract</Link>
         </Button>
       }
     >

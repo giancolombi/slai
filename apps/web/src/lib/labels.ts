@@ -49,7 +49,7 @@ export const AUTONOMY_HELP: Record<Autonomy, string> = {
   observe:
     "Alerts only. slai watches the clock and notifies your team in-app, by email or in Slack. Agents never touch the ticket.",
   assist:
-    "Agents triage and draft a reply in a sandbox. The draft is posted as an internal note and queued here for one-click approval. A human always sends it.",
+    "Agents triage and draft a reply. The draft is posted as an internal note and waits in Approvals for one-click approval. A person always sends it.",
   autopilot:
     "Same as assist, and when a draft passes every guardrail (confidence threshold, no pricing, legal or policy commitments), slai sends it as the public reply.",
 };

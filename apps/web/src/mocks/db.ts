@@ -197,7 +197,7 @@ function seed(): MockDb {
     ],
     orgs: {
       [ACME_ORG_ID]: seedAcme(now),
-      [SANDBOX_ORG_ID]: emptyOrg(SANDBOX_ORG_ID, "Acme Cloud (Sandbox)", sandboxOwner, now),
+      [SANDBOX_ORG_ID]: emptyOrg(SANDBOX_ORG_ID, "Acme Cloud (Staging)", sandboxOwner, now),
     },
   };
 }

@@ -123,7 +123,7 @@ export function buildMe(): Me {
     role: "owner",
     organizations: [
       { id: ACME_ORG_ID, name: "Acme Cloud", role: "owner" },
-      { id: SANDBOX_ORG_ID, name: "Acme Cloud (Sandbox)", role: "admin" },
+      { id: SANDBOX_ORG_ID, name: "Acme Cloud (Staging)", role: "admin" },
     ],
     security: {
       authMethod: "password",
@@ -411,7 +411,7 @@ export function buildConnections(now: number): Connection[] {
       name: "Intercom (self-serve)",
       status: "error",
       lastSyncAt: new Date(now - 3 * HOUR - 12 * MIN).toISOString(),
-      lastError: "401 Unauthorized: the access token was revoked. Reconnect to resume syncing.",
+      lastError: "The help desk rejected slai's access. Reconnect it to resume syncing.",
       mappingIssues: [],
       webhookUrl: `https://hooks.slai.example/v1/webhooks/${CONN_INTERCOM}`,
       ticketCount: 1_137,

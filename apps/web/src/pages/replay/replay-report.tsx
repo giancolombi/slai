@@ -97,7 +97,7 @@ function Report({ replay }: { replay: Replay }) {
         <Card className="p-6">
           <h2 className="text-md font-semibold text-ink">Replaying your history</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            Every ticket is re-evaluated with the deterministic SLA engine against the policy that applied at the time.
+            Every ticket is checked again, exactly, against the policy that applied at the time.
           </p>
           <ReplayProgress replay={replay} className="mt-5" />
         </Card>
@@ -216,7 +216,7 @@ function Report({ replay }: { replay: Replay }) {
             </Card>
 
             <Card>
-              <CardHeader title="By metric" description="Breaches out of cycles measured." />
+              <CardHeader title="By metric" description="Breaches out of SLA targets measured." />
               <CardContent>
                 <ul className="flex flex-col gap-4">
                   {result.byMetric.map((m) => {
@@ -250,11 +250,11 @@ function Report({ replay }: { replay: Replay }) {
             <div className="text-sm text-ink-muted">
               <h2 className="font-semibold text-ink">Methodology</h2>
               <p className="mt-1 max-w-3xl leading-relaxed">
-                Every number here comes from slai's deterministic SLA engine, never a model. Each ticket's event history
-                is replayed against the policy version that applied at the time, on the contract's business calendar
-                (time zone, working hours, holidays) with its pause rules. A breach is elapsed time strictly past the
-                target. Exposure applies each contract's credit clauses, including caps. Warning lead time is measured
-                from the first at-risk alert slai would have raised to the breach.
+                Every number here is calculated exactly from your contracts and each ticket's history, never guessed by
+                AI. Each ticket's history is replayed against the policy version that applied at the time, on the
+                contract's business calendar (time zone, working hours, holidays) with its pause rules. A breach is
+                elapsed time strictly past the target. Exposure applies each contract's credit clauses, including caps.
+                Warning lead time is measured from the first at-risk alert slai would have raised to the breach.
               </p>
             </div>
           </Card>

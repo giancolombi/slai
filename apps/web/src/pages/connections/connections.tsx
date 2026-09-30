@@ -33,6 +33,7 @@ import {
 import { useState } from "react";
 import { Page, QueryState } from "../../components/page";
 import { GuideButton } from "../../help/guide-button";
+import { useAccess } from "../../lib/access";
 import { api, errorMessage } from "../../lib/api";
 import { providerLabel } from "../../lib/labels";
 import { qk, useConnections, useMe } from "../../lib/queries";
@@ -63,6 +64,7 @@ export async function copyText(text: string, what: string) {
 
 function ConnectionCard({ connection, canManage }: { connection: Connection; canManage: boolean }) {
   const queryClient = useQueryClient();
+  const { canWork } = useAccess();
   const [confirm, setConfirm] = useState(false);
   const status = CONNECTION_STATUS[connection.status];
 
@@ -129,28 +131,30 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
             )}
           </dd>
         </div>
-        <div className="col-span-2">
-          <dt className="flex items-center gap-1 text-xs text-ink-muted">
-            <Webhook className="size-3" aria-hidden /> Webhook URL
-          </dt>
-          <dd className="mt-1 flex items-center gap-1">
-            {connection.webhookUrl ? (
-              <>
-                <code className="min-w-0 flex-1 truncate rounded-sm border border-line bg-sunken px-2 py-1 font-mono text-2xs text-ink-muted">
-                  {connection.webhookUrl}
-                </code>
-                <IconButton
-                  size="sm"
-                  label="Copy webhook URL"
-                  icon={<Copy />}
-                  onClick={() => copyText(connection.webhookUrl!, "Webhook URL")}
-                />
-              </>
-            ) : (
-              <span className="text-xs text-ink-muted">Polling only (no webhooks for this help desk)</span>
-            )}
-          </dd>
-        </div>
+        {canManage && (
+          <div className="col-span-2">
+            <dt className="flex items-center gap-1 text-xs text-ink-muted">
+              <Webhook className="size-3" aria-hidden /> Webhook URL
+            </dt>
+            <dd className="mt-1 flex items-center gap-1">
+              {connection.webhookUrl ? (
+                <>
+                  <code className="min-w-0 flex-1 truncate rounded-sm border border-line bg-sunken px-2 py-1 font-mono text-2xs text-ink-muted">
+                    {connection.webhookUrl}
+                  </code>
+                  <IconButton
+                    size="sm"
+                    label="Copy webhook URL"
+                    icon={<Copy />}
+                    onClick={() => copyText(connection.webhookUrl!, "Webhook URL")}
+                  />
+                </>
+              ) : (
+                <span className="text-xs text-ink-muted">Not needed: slai checks this help desk for changes</span>
+              )}
+            </dd>
+          </div>
+        )}
       </dl>
 
       {connection.mappingIssues.length > 0 && (
@@ -165,7 +169,7 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
             {connection.mappingIssues.length === 1
               ? "1 unmapped status or priority"
               : `${connection.mappingIssues.length} unmapped statuses or priorities`}
-            . Map them
+            {canManage ? ". Map them" : ". Ask an admin to map them"}
           </span>
         </Link>
       )}
@@ -180,25 +184,27 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
         </div>
       )}
 
-      <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
-        <Button size="sm" leadingIcon={<PlugZap />} loading={test.isPending} onClick={() => test.mutate()}>
-          Test
-        </Button>
-        <Button size="sm" leadingIcon={<RefreshCw />} loading={sync.isPending} onClick={() => sync.mutate()}>
-          Sync now
-        </Button>
-        {canManage && (
-          <Tooltip content="Remove connection">
-            <IconButton
-              size="sm"
-              label={`Remove ${connection.name}`}
-              icon={<Trash2 />}
-              className="ml-auto hover:text-breached-text"
-              onClick={() => setConfirm(true)}
-            />
-          </Tooltip>
-        )}
-      </div>
+      {(canWork || canManage) && (
+        <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
+          <Button size="sm" leadingIcon={<PlugZap />} loading={test.isPending} onClick={() => test.mutate()}>
+            Test
+          </Button>
+          <Button size="sm" leadingIcon={<RefreshCw />} loading={sync.isPending} onClick={() => sync.mutate()}>
+            Sync now
+          </Button>
+          {canManage && (
+            <Tooltip content="Remove connection">
+              <IconButton
+                size="sm"
+                label={`Remove ${connection.name}`}
+                icon={<Trash2 />}
+                className="ml-auto hover:text-breached-text"
+                onClick={() => setConfirm(true)}
+              />
+            </Tooltip>
+          )}
+        </div>
+      )}
 
       <Dialog
         open={confirm}

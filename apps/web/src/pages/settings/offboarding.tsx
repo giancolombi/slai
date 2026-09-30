@@ -55,7 +55,7 @@ function ExportCard({ exports }: { exports: OrgExport[] }) {
     <Card>
       <CardHeader
         title="Export your data"
-        description="A .tar.gz with every record as JSON and your contract files. Credentials and other secrets are never included. Downloads are available for 7 days."
+        description="One compressed file (.tar.gz) with all your organization's data and contract files. Passwords, keys and other secrets are never included. The download is available for 7 days."
         actions={
           <Button
             size="sm"
@@ -78,7 +78,7 @@ function ExportCard({ exports }: { exports: OrgExport[] }) {
                   {e.requestedBy ? `Requested by ${e.requestedBy}` : "Requested"}
                   {e.sizeBytes !== null && ` · ${formatBytes(e.sizeBytes)}`}
                   {e.status === "succeeded" && ` · available until ${formatDate(e.expiresAt)}`}
-                  {e.status === "failed" && e.error && ` · ${e.error}`}
+                  {e.status === "failed" && " · This export didn't finish. Start a new one."}
                 </p>
               </div>
               <Badge tone={STATUS[e.status].tone} size="sm">

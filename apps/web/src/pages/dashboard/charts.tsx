@@ -105,7 +105,7 @@ export function AttainmentChart({ data, active, setActive, onKeyDown }: ChartPro
     <div ref={ref} className="relative">
       {values.length === 0 && (
         <p className="absolute inset-x-0 top-1/2 z-[1] -translate-y-1/2 text-center text-sm text-ink-muted">
-          No SLA cycles measured in this period yet.
+          No SLA targets measured in this period yet.
         </p>
       )}
       <svg

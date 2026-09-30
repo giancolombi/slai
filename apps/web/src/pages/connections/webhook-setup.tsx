@@ -76,7 +76,7 @@ export function WebhookInstructions({
             hint={
               reveal.configured
                 ? "A secret is saved. Paste a new one to replace it."
-                : "Webhooks are rejected until this is saved."
+                : "Updates from your help desk are ignored until this is saved."
             }
           >
             <Input
@@ -141,7 +141,7 @@ export function WebhookSetup({ connectionId, webhookUrl, canReveal, autoReveal }
             <Webhook className="size-4" aria-hidden /> Real-time webhooks
           </span>
         }
-        description="Point your help desk at slai so ticket changes arrive in seconds. slai also polls as a safety net."
+        description="Point your help desk at slai so ticket changes arrive in seconds. slai also checks for changes every few minutes, in case one is missed."
       />
       <div className="px-5 pb-5">
         {reveal.data ? (

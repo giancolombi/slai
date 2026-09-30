@@ -534,10 +534,10 @@ export const handlers = [
 
   // WebAuthn needs a real authenticator and the real API; mock mode only lists and removes.
   http.get(url("/auth/passkey/generate-register-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
   http.get(url("/auth/passkey/generate-authenticate-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
   http.get(
     url("/auth/passkey/list-user-passkeys"),
@@ -912,10 +912,10 @@ export const handlers = [
     return HttpResponse.json(preview);
   }),
   http.post(url("/auth/invitations/:token/signup"), () =>
-    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+    fail(501, "mock_mode", "Invitations can't be accepted in the demo."),
   ),
   http.post(url("/auth/invitations/:token/accept"), () =>
-    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+    fail(501, "mock_mode", "Invitations can't be accepted in the demo."),
   ),
   http.patch(
     url("/members/:userId"),
@@ -979,7 +979,7 @@ export const handlers = [
     ),
   ),
   http.get(url("/auth/step-up/passkey-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
 
   // ------------------------------------------------ SCIM settings (admins)
@@ -1091,7 +1091,11 @@ export const handlers = [
             missing.map((f) => ({ path: [f.key], message: "Required" })),
           );
         if (Object.values(body.credentials).some((v) => v === "bad" || v === "invalid"))
-          return fail(422, "invalid_credentials", `${info.displayName} rejected these credentials (401 Unauthorized).`);
+          return fail(
+            422,
+            "invalid_credentials",
+            `${info.displayName} rejected these credentials. Check them and try again.`,
+          );
         const o = org();
         const id = crypto.randomUUID();
         const conn: Connection = {
