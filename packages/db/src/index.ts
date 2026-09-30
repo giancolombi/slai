@@ -8,5 +8,6 @@ export * from "./migrate.js";
 export * from "./passwords.js";
 export * as schema from "./schema.js";
 export * from "./schema.js";
+export * from "./seed.js";
 export * from "./storage.js";
 export * from "./testing.js";

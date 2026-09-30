@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { type PolicyInput, parsePolicy } from "@slai/sla-engine";
 import { and, eq, sql } from "drizzle-orm";
 import { connect, type Tx } from "./client.js";
-import { encrypt, encryptJson, type Keyring } from "./crypto.js";
+import { AAD, encrypt, encryptJson, type Keyring } from "./crypto.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import { connections, customerAccounts, memberships, organizations, slaPolicies, users } from "./schema.js";
 
@@ -194,10 +194,10 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring } = {}) {
           orgId,
           provider: "demo",
           name: "Demo Help Desk",
-          credentials: encryptJson({}, { keyring: opts.keyring, aad: `connection:${connectionId}` }),
+          credentials: encryptJson({}, { keyring: opts.keyring, aad: AAD.connectionCredentials(connectionId) }),
           webhookSecret: encrypt(randomBytes(32).toString("base64url"), {
             keyring: opts.keyring,
-            aad: `connection:${connectionId}:webhook`,
+            aad: AAD.connectionWebhookSecret(connectionId),
           }),
           config: { ticketsPerDay: 40 },
           createdBy: userId,
