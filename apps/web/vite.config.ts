@@ -13,7 +13,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: "http://localhost:8787", changeOrigin: false },
+      // API_PROXY_TARGET lets a second checkout run its API on another port.
+      "/api": { target: process.env.API_PROXY_TARGET ?? "http://localhost:8787", changeOrigin: false },
     },
   },
   build: {
