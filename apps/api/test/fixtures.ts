@@ -68,6 +68,8 @@ export async function seedTicket(
     policyId?: string | null;
     customerAccountId?: string | null;
     createdAt?: Date;
+    /** Reference instant for outcome timestamps (default: now). */
+    now?: Date;
     subject?: string;
     risk?: "ok" | "warning" | "at_risk" | "breached";
     outcomes?: {
@@ -123,7 +125,7 @@ export async function seedTicket(
       payload: { status: "open", rawStatus: "open" },
     },
   ]);
-  const now = Date.now();
+  const now = (opts.now ?? new Date()).getTime();
   for (const [i, o] of (opts.outcomes ?? []).entries()) {
     await ctx.owner.db.insert(slaOutcomes).values({
       orgId,

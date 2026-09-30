@@ -14,14 +14,14 @@ Each task references the requirements it serves.
       resolution, dispatch, notification crossing, spend state (PR-10, PR-14, PR-15, PR-23)
 
 ## M1: Data and API
-- [~] T-10 `packages/db`: schema for all tables, migrations, roles, RLS + FORCE, `withOrg`,
+- [x] T-10 `packages/db`: schema for all tables, migrations, roles, RLS + FORCE, `withOrg`,
       append-only audit trigger, AES-256-GCM crypto, job names and payloads, idempotent seed (TR-2, TR-26 to TR-28)
-- [~] T-11 API auth: signup, login, logout, sessions, TOTP MFA, org switch, rate limit (PR-24, TR-23)
-- [~] T-12 API middleware: RBAC, CSRF, security headers, request id, redacted logging, audit (TR-24, TR-29)
-- [~] T-13 API resources: org, members, connectors, connections, webhooks, customers,
+- [x] T-11 API auth: signup, login, logout, sessions, TOTP MFA, org switch, rate limit (PR-24, TR-23)
+- [x] T-12 API middleware: RBAC, CSRF, security headers, request id, redacted logging, audit (TR-24, TR-29)
+- [x] T-13 API resources: org, members, connectors, connections, webhooks, customers,
       contracts (upload), policies (edit, approve, preview), tickets, actions,
       autonomy rules, notification channels, dashboard, replays, usage, audit, SSE (PR-1 to PR-25)
-- [~] T-14 Tests: RLS isolation (DB and API), audit immutability, auth flows, CSRF, RBAC,
+- [x] T-14 Tests: RLS isolation (DB and API), audit immutability, auth flows, CSRF, RBAC,
       upload validation, webhook signature rejection
 
 ## M2: Connectors
