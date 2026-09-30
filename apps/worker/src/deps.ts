@@ -2,7 +2,7 @@ import type { AgentRuntime, TicketContext } from "@slai/agents";
 import type { ConnectorDefinition } from "@slai/connectors";
 import type { Database, Keyring, OrgDatabase, StorageDriver } from "@slai/db";
 import type { Clock } from "./clock.js";
-import { FIRST_SEEN_GRACE_MS } from "./decide.js";
+import { FIRST_SEEN_GRACE_MS, SEND_RECONCILE_AFTER_MS } from "./decide.js";
 import type { Logger } from "./logger.js";
 import type { Mailer } from "./notify.js";
 import type { JobQueue } from "./queue.js";
@@ -20,6 +20,8 @@ export interface WorkerConfig {
   appUrl: string;
   /** A ticket seen for the first time triggers only if its live breach is at most this old (TR-21f). */
   firstSeenGraceMs: number;
+  /** A help-desk write claimed longer ago than this is reconciled (looked for, then retried) (TR-21g). */
+  sendReconcileMs: number;
 }
 
 /** Help-center snippets and assignees for the ticket agents. No knowledge base exists yet, so the default is none. */
@@ -58,4 +60,5 @@ export const DEFAULT_CONFIG: WorkerConfig = {
   backfillDays: 14,
   appUrl: "http://localhost:5173",
   firstSeenGraceMs: FIRST_SEEN_GRACE_MS,
+  sendReconcileMs: SEND_RECONCILE_AFTER_MS,
 };

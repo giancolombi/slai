@@ -6,7 +6,10 @@ import {
   channelsToNotify,
   crossed,
   decideDispatch,
+  decideSendStep,
+  findSentComment,
   matchCustomerAccount,
+  normalizeBody,
   resolveAutonomy,
   resolvePolicyId,
   spendState,
@@ -201,5 +204,59 @@ describe("spendState", () => {
     expect(spendState(999_999, 100)).toBe("ok");
     expect(spendState(1_000_000, 100)).toBe("over_cap");
     expect(spendState(10 ** 12, null)).toBe("ok");
+  });
+});
+
+describe("idempotent writes (T-49)", () => {
+  const now = new Date("2026-09-30T12:00:00Z");
+  const minAgo = (m: number) => new Date(now.getTime() - m * 60_000);
+
+  it("decideSendStep claims approved, waits on a fresh claim, reconciles a stale one", () => {
+    expect(decideSendStep({ status: "approved", sendingAt: null }, now)).toBe("claim");
+    expect(decideSendStep({ status: "sending", sendingAt: minAgo(1) }, now)).toBe("wait");
+    expect(decideSendStep({ status: "sending", sendingAt: minAgo(5) }, now)).toBe("reconcile");
+    expect(decideSendStep({ status: "sending", sendingAt: null }, now)).toBe("reconcile");
+    for (const status of ["sent", "failed", "rejected", "proposed", "blocked"]) {
+      expect(decideSendStep({ status, sendingAt: minAgo(60) }, now)).toBe("done");
+    }
+  });
+
+  it("normalizes whitespace, case and unicode forms", () => {
+    expect(normalizeBody("  Hello,\n\n  World !  ")).toBe("hello, world !");
+  });
+
+  describe("findSentComment", () => {
+    const reply = { kind: "public_reply", body: "Thanks!\n\nWe are on it.", sendingAt: minAgo(10) };
+    const c = (o: Partial<Parameters<typeof findSentComment>[1][number]>) => ({
+      sourceId: "c1",
+      at: minAgo(9),
+      public: true,
+      authorRole: "agent",
+      bodyText: "Thanks! We are on it.",
+      ...o,
+    });
+    it("finds our reply by normalized body after the claim", () => {
+      expect(findSentComment(reply, [c({})])).toBe("c1");
+      expect(findSentComment(reply, [c({ at: minAgo(11) })])).toBe("c1"); // within clock skew
+    });
+    it("ignores other visibility, requester text, older comments and other bodies", () => {
+      expect(findSentComment(reply, [c({ public: false })])).toBeNull();
+      expect(findSentComment(reply, [c({ authorRole: "requester" })])).toBeNull();
+      expect(findSentComment(reply, [c({ at: minAgo(30) })])).toBeNull();
+      expect(findSentComment(reply, [c({ bodyText: "Thanks! We are on it. Also…" })])).toBeNull();
+      expect(findSentComment({ ...reply, kind: "internal_note" }, [c({})])).toBeNull();
+      expect(findSentComment({ ...reply, kind: "set_priority" }, [c({})])).toBeNull();
+    });
+    it("skips comments already recorded for another action", () => {
+      expect(findSentComment(reply, [c({ sourceId: "c1" })], { knownRefs: ["c1"] })).toBeNull();
+      expect(
+        findSentComment(reply, [c({ sourceId: "c1" }), c({ sourceId: "c2", at: minAgo(8) })], { knownRefs: ["c1"] }),
+      ).toBe("c2");
+    });
+    it("matches a help desk's truncated copy of a long body", () => {
+      const long = "x".repeat(300);
+      expect(findSentComment({ ...reply, body: long }, [c({ bodyText: `${"x".repeat(250)}…` })])).toBe("c1");
+      expect(findSentComment({ ...reply, body: long }, [c({ bodyText: `${"x".repeat(50)}…` })])).toBeNull();
+    });
   });
 });

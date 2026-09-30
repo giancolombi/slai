@@ -75,7 +75,7 @@ export async function alreadyHandled(tx: Tx, ticketId: string): Promise<boolean>
       and(
         eq(agentActions.ticketId, ticketId),
         eq(agentActions.kind, "public_reply"),
-        inArray(agentActions.status, ["proposed", "approved", "sent", "blocked"]),
+        inArray(agentActions.status, ["proposed", "approved", "sending", "sent", "blocked"]),
         last ? gt(agentActions.createdAt, last.at) : undefined,
       ),
     )

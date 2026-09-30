@@ -11,7 +11,7 @@ import { assertInOrg } from "../org-refs.js";
 import { decodeCursor, idCursor, page, pageQuery } from "../pagination.js";
 import { body, idParam, query } from "../validate.js";
 
-const ACTION_STATUSES = ["proposed", "approved", "sent", "rejected", "failed", "blocked"] as const;
+const ACTION_STATUSES = ["proposed", "approved", "sending", "sent", "rejected", "failed", "blocked"] as const;
 
 const toRule = (r: typeof autonomyRules.$inferSelect): AutonomyRule => ({
   id: r.id,

@@ -222,3 +222,78 @@ export function spendState(spentMicros: number, capCents: number | null): SpendS
   if (capCents === null) return "ok";
   return spentMicros >= capCents * 10_000 ? "over_cap" : "ok";
 }
+
+// ---------- idempotent help-desk writes (TR-21g) ----------
+
+/** A `sending` claim younger than this may still be in flight; older ones are reconciled. */
+export const SEND_RECONCILE_AFTER_MS = 5 * 60_000;
+/** Help-desk clocks may lag ours: a comment this much before the claim still counts as ours. */
+export const SEND_MATCH_SKEW_MS = 2 * 60_000;
+
+export type SendStep =
+  /** approved: claim it (→ sending) and write. */
+  | "claim"
+  /** sending, recently: another worker may be mid-write; leave it to the reconcile job. */
+  | "wait"
+  /** sending, long enough ago that the write either landed or never will: look before resending. */
+  | "reconcile"
+  /** anything else (sent, failed, rejected, …): nothing to do. */
+  | "done";
+
+export function decideSendStep(
+  action: { status: string; sendingAt: Date | null },
+  now: Date,
+  reconcileAfterMs = SEND_RECONCILE_AFTER_MS,
+): SendStep {
+  if (action.status === "approved") return "claim";
+  if (action.status !== "sending") return "done";
+  if (action.sendingAt && now.getTime() - action.sendingAt.getTime() < reconcileAfterMs) return "wait";
+  return "reconcile";
+}
+
+/** Comparable text: help desks re-wrap, re-encode and truncate what we post. */
+export function normalizeBody(s: string): string {
+  return s.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function sameBody(ours: string, theirs: string): boolean {
+  const a = normalizeBody(ours);
+  const b = normalizeBody(theirs);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  // Connectors truncate long bodies with an ellipsis; a long enough prefix is still ours.
+  const trimmed = theirs.trimEnd();
+  if (trimmed.endsWith("…")) {
+    const prefix = normalizeBody(trimmed.slice(0, -1));
+    return prefix.length >= 200 && a.startsWith(prefix);
+  }
+  return false;
+}
+
+/**
+ * Finds the comment a lost write left on the help desk: same visibility, not
+ * from the requester, created no earlier than the claim (minus clock skew),
+ * with the same normalized body, and not already recorded for another action.
+ * Returns its source id, or null when the write never landed.
+ */
+export function findSentComment(
+  action: { kind: string; body: string | null; sendingAt: Date | null },
+  comments: { sourceId: string; at: Date; public: boolean; authorRole: string; bodyText: string }[],
+  opts: { skewMs?: number; knownRefs?: Iterable<string> } = {},
+): string | null {
+  if (action.kind !== "public_reply" && action.kind !== "internal_note") return null;
+  const wantPublic = action.kind === "public_reply";
+  const since = (action.sendingAt?.getTime() ?? 0) - (opts.skewMs ?? SEND_MATCH_SKEW_MS);
+  const known = new Set(opts.knownRefs ?? []);
+  const match = comments
+    .filter(
+      (c) =>
+        c.public === wantPublic &&
+        c.authorRole !== "requester" &&
+        c.at.getTime() >= since &&
+        !known.has(c.sourceId) &&
+        sameBody(action.body ?? "", c.bodyText),
+    )
+    .sort((x, y) => x.at.getTime() - y.at.getTime())[0];
+  return match?.sourceId ?? null;
+}

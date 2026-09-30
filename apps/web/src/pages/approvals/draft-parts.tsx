@@ -7,6 +7,7 @@ import { ACTION_STATUS_LABEL } from "../../lib/labels";
 const STATUS_TONE: Record<ActionStatus, BadgeTone> = {
   proposed: "accent",
   approved: "ok",
+  sending: "ok",
   sent: "ok",
   rejected: "neutral",
   failed: "breached",
