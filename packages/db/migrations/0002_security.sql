@@ -1,5 +1,5 @@
 -- Security: database roles, least-privilege grants, forced row-level security,
--- and append-only tables. See docs/SOC2.md.
+-- and append-only tables.
 --
 -- Roles are cluster-wide and created only if missing, so a password set in a
 -- real environment (ALTER ROLE ... PASSWORD) is never overwritten. The

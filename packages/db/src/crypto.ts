@@ -90,6 +90,14 @@ export function keyIdOf(ciphertext: string): string | null {
   return parts.length === 5 && parts[0] === "v1" ? (parts[1] ?? null) : null;
 }
 
+/** AAD contexts. Writers (API) and readers (worker) must use the same ones. */
+export const AAD = {
+  connectionCredentials: (connectionId: string) => `connection:${connectionId}`,
+  connectionWebhookSecret: (connectionId: string) => `connection:${connectionId}:webhook`,
+  userMfaSecret: (userId: string) => `user:${userId}:mfa`,
+  notificationTarget: (channelId: string) => `notification_channel:${channelId}`,
+} as const;
+
 export const encryptJson = (value: unknown, opts?: { aad?: string; keyring?: Keyring }) =>
   encrypt(JSON.stringify(value), opts);
 export const decryptJson = <T = unknown>(ciphertext: string, opts?: { aad?: string; keyring?: Keyring }): T =>
