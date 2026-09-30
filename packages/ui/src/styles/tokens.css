@@ -1,0 +1,240 @@
+/*
+ * slai design tokens.
+ *
+ * Three layers:
+ *   1. Primitive scales (--ink-*, --dial-*) — never used directly by components.
+ *   2. Semantic roles (--canvas, --surface, --text-*, --accent-*, --risk-*, ...) — what components use. Swapped per theme.
+ *   3. Tailwind @theme (index.css) maps roles to utilities (bg-surface, text-ink-muted, ...).
+ *
+ * Contrast (WCAG 2.2): every *-text role is >= 4.5:1 on canvas, surface and its own
+ * *-subtle background in both themes; every *-solid role is >= 3:1 on surface.
+ * Risk is never communicated by color alone: RiskBadge pairs each with an icon + label.
+ *
+ * Fonts (Instrument Sans, JetBrains Mono, Newsreader) load from Google Fonts in the host page <head>.
+ */
+
+:root {
+  /* ---------- primitives: ink (cool graphite neutral) ---------- */
+  --ink-0: #ffffff;
+  --ink-25: #fbfbfc;
+  --ink-50: #f6f7f9;
+  --ink-100: #eef0f3;
+  --ink-150: #e5e8ec;
+  --ink-200: #d8dce2;
+  --ink-300: #bcc2cb;
+  --ink-400: #8a91a0;
+  --ink-500: #6b7280;
+  --ink-600: #5d6472;
+  --ink-700: #3d424d;
+  --ink-800: #272a31;
+  --ink-850: #1e2127;
+  --ink-900: #16181d;
+  --ink-950: #0e1014;
+
+  /* ---------- primitives: dial (the brand accent, an ultramarine) ---------- */
+  --dial-50: #eceeff;
+  --dial-100: #dfe2ff;
+  --dial-200: #c5caff;
+  --dial-300: #a5a8ff;
+  --dial-400: #7b7ff5;
+  --dial-500: #5a5de6;
+  --dial-600: #4a4ad8;
+  --dial-700: #4343cf;
+  --dial-800: #34339f;
+  --dial-900: #1f2146;
+
+  /* ---------- type ---------- */
+  --typeface-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --typeface-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* Contract quotations only: the language of the document, set apart from the UI. */
+  --typeface-serif: "Newsreader", ui-serif, Georgia, serif;
+
+  /* ---------- spacing (4px grid) ---------- */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---------- radius ---------- */
+  --corner-xs: 3px;
+  --corner-sm: 5px;
+  --corner-md: 7px;
+  --corner-lg: 10px;
+  --corner-xl: 14px;
+  --corner-full: 9999px;
+
+  /* ---------- motion ---------- */
+  --easing-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --easing-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-instant: 80ms;
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+
+  /* ---------- z ---------- */
+  --z-sticky: 10;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+
+  /* ---------- semantic roles: light ---------- */
+  color-scheme: light;
+  --canvas: var(--ink-50);
+  --surface: var(--ink-0);
+  --raised: var(--ink-0);
+  --sunken: var(--ink-100);
+  --hover-tint: rgb(22 24 29 / 0.045);
+  --active-tint: rgb(22 24 29 / 0.08);
+  --line: var(--ink-150);
+  --line-strong: var(--ink-200);
+  --text: var(--ink-900);
+  --text-muted: var(--ink-600);
+  --text-subtle: var(--ink-400);
+  --text-inverse: var(--ink-0);
+
+  --accent: var(--dial-600);
+  --accent-hover: var(--dial-700);
+  --accent-subtle: var(--dial-50);
+  --accent-text: var(--dial-700);
+  --on-accent: #ffffff;
+  --focus: var(--dial-500);
+
+  /* risk: text / subtle background / border / solid mark */
+  --risk-ok-text: #0d6a42;
+  --risk-ok-subtle: #e6f5ed;
+  --risk-ok-border: #b3e0c8;
+  --risk-ok-solid: #1a9a5f;
+  --risk-warning-text: #855600;
+  --risk-warning-subtle: #fcf2da;
+  --risk-warning-border: #efd592;
+  --risk-warning-solid: #b67c00;
+  --risk-at_risk-text: #a13d06;
+  --risk-at_risk-subtle: #fdeadc;
+  --risk-at_risk-border: #f5c3a0;
+  --risk-at_risk-solid: #e0621a;
+  --risk-breached-text: #b21f2d;
+  --risk-breached-subtle: #fce9ea;
+  --risk-breached-border: #f2b8bd;
+  --risk-breached-solid: #d62f3c;
+  /* Text on a solid breached fill (danger buttons). */
+  --on-breached: #ffffff;
+
+  /* elevation: tight, layered, low-contrast */
+  --elev-xs: 0 1px 0 rgb(22 24 29 / 0.04);
+  --elev-sm: 0 1px 2px rgb(22 24 29 / 0.06), 0 0 0 1px rgb(22 24 29 / 0.04);
+  --elev-md: 0 4px 12px -2px rgb(22 24 29 / 0.08), 0 1px 3px rgb(22 24 29 / 0.06), 0 0 0 1px rgb(22 24 29 / 0.05);
+  --elev-lg:
+    0 16px 40px -8px rgb(22 24 29 / 0.18), 0 4px 10px -4px rgb(22 24 29 / 0.08), 0 0 0 1px rgb(22 24 29 / 0.06);
+  --elev-focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+  --overlay: rgb(14 16 20 / 0.42);
+}
+
+/* ---------- semantic roles: dark (explicit, or following the OS when no theme is set) ---------- */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: var(--ink-950);
+  --surface: var(--ink-900);
+  --raised: var(--ink-850);
+  --sunken: #0b0c0f;
+  --hover-tint: rgb(255 255 255 / 0.045);
+  --active-tint: rgb(255 255 255 / 0.08);
+  --line: #262a31;
+  --line-strong: #333842;
+  --text: #eceef2;
+  --text-muted: #9aa1ae;
+  --text-subtle: #6d7482;
+  --text-inverse: var(--ink-950);
+  --accent: var(--dial-400);
+  --accent-hover: var(--dial-300);
+  --accent-subtle: var(--dial-900);
+  --accent-text: var(--dial-300);
+  --on-accent: var(--ink-950);
+  --focus: var(--dial-400);
+  --risk-ok-text: #5dd39a;
+  --risk-ok-subtle: #10291e;
+  --risk-ok-border: #1f4a35;
+  --risk-ok-solid: #2fae72;
+  --risk-warning-text: #f0c04a;
+  --risk-warning-subtle: #2b2310;
+  --risk-warning-border: #4d3d14;
+  --risk-warning-solid: #d9a021;
+  --risk-at_risk-text: #ff9c5e;
+  --risk-at_risk-subtle: #321c0f;
+  --risk-at_risk-border: #5a311a;
+  --risk-at_risk-solid: #ee7730;
+  --risk-breached-text: #ff7f87;
+  --risk-breached-subtle: #351417;
+  --risk-breached-border: #5f2328;
+  --risk-breached-solid: #ec4a55;
+  --on-breached: var(--ink-950);
+  --elev-xs: 0 1px 0 rgb(0 0 0 / 0.3);
+  --elev-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --elev-md: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+  --elev-lg: 0 20px 48px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.08);
+  --overlay: rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: var(--ink-950);
+    --surface: var(--ink-900);
+    --raised: var(--ink-850);
+    --sunken: #0b0c0f;
+    --hover-tint: rgb(255 255 255 / 0.045);
+    --active-tint: rgb(255 255 255 / 0.08);
+    --line: #262a31;
+    --line-strong: #333842;
+    --text: #eceef2;
+    --text-muted: #9aa1ae;
+    --text-subtle: #6d7482;
+    --text-inverse: var(--ink-950);
+    --accent: var(--dial-400);
+    --accent-hover: var(--dial-300);
+    --accent-subtle: var(--dial-900);
+    --accent-text: var(--dial-300);
+    --on-accent: var(--ink-950);
+    --focus: var(--dial-400);
+    --risk-ok-text: #5dd39a;
+    --risk-ok-subtle: #10291e;
+    --risk-ok-border: #1f4a35;
+    --risk-ok-solid: #2fae72;
+    --risk-warning-text: #f0c04a;
+    --risk-warning-subtle: #2b2310;
+    --risk-warning-border: #4d3d14;
+    --risk-warning-solid: #d9a021;
+    --risk-at_risk-text: #ff9c5e;
+    --risk-at_risk-subtle: #321c0f;
+    --risk-at_risk-border: #5a311a;
+    --risk-at_risk-solid: #ee7730;
+    --risk-breached-text: #ff7f87;
+    --risk-breached-subtle: #351417;
+    --risk-breached-border: #5f2328;
+    --risk-breached-solid: #ec4a55;
+    --on-breached: var(--ink-950);
+    --elev-xs: 0 1px 0 rgb(0 0 0 / 0.3);
+    --elev-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.05);
+    --elev-md: 0 6px 16px -4px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.06);
+    --elev-lg: 0 20px 48px -8px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.08);
+    --overlay: rgb(0 0 0 / 0.6);
+  }
+}
+
+/* Motion collapses to instant for people who ask for less of it. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-base: 0ms;
+    --duration-slow: 0ms;
+  }
+}

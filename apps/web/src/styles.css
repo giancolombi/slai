@@ -1,0 +1,4 @@
+@import "@slai/ui/styles.css";
+
+/* Scan the app's own sources for class names (the design system scans itself). */
+@source "./";
