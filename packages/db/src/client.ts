@@ -57,9 +57,6 @@ export function createOrgDb(url: string, opts: { max?: number; applicationName?:
  * The unscoped system database. Connect it with the `slai_worker` role
  * (DATABASE_SYSTEM_URL). Use it ONLY for:
  *
- * - auth lookups in apps/api: users, sessions, memberships (login, session
- *   resolution, the org switcher, signup's user+org+membership creation) and
- *   pre-auth audit events (failed logins, which have no org);
  * - webhook routing in apps/api: resolving a connection id to its org;
  * - worker sweeps in apps/worker: selecting due `tickets.next_check_at` and
  *   connections due for sync, across orgs, then handing each id to a job that
@@ -70,4 +67,15 @@ export function createOrgDb(url: string, opts: { max?: number; applicationName?:
  */
 export function createSystemDb(url: string, opts: { max?: number; applicationName?: string } = {}): Database {
   return connect(url, { max: opts.max ?? 5, applicationName: opts.applicationName ?? "slai-system" });
+}
+
+/**
+ * The auth database. Connect it with the `slai_auth` role (DATABASE_AUTH_URL).
+ * better-auth's adapter and apps/api's session middleware use it. It is the
+ * only role that can read password hashes, TOTP secrets, sessions, passkeys and
+ * SSO configs, and outside the identity tables it can only insert organizations
+ * and memberships (signup, SSO JIT provisioning) and audit events.
+ */
+export function createAuthDb(url: string, opts: { max?: number; applicationName?: string } = {}): Database {
+  return connect(url, { max: opts.max ?? 5, applicationName: opts.applicationName ?? "slai-auth" });
 }

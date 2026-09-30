@@ -21,6 +21,11 @@ async function boot() {
       queryClient.clear();
       void router.navigate({ to: "/login", search: { redirect: href } });
     },
+    onMfaGate: (to) => {
+      if (router.state.location.pathname.startsWith("/mfa")) return;
+      void queryClient.invalidateQueries({ queryKey: ["me"] });
+      void router.navigate({ to });
+    },
   });
   const router = createAppRouter(queryClient);
 
