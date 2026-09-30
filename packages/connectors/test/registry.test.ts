@@ -22,6 +22,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
     refreshToken: "1000.r.t",
   },
   front: { apiToken: "t" },
+  help_scout: { clientId: "id", clientSecret: "s" },
   demo: {},
 };
 
@@ -35,6 +36,7 @@ describe("registry", () => {
       "demo",
       "freshdesk",
       "front",
+      "help_scout",
       "hubspot",
       "intercom",
       "jira_service_management",

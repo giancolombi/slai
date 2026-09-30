@@ -1,0 +1,186 @@
+{
+  "_embedded": {
+    "threads": [
+      {
+        "id": 90010,
+        "type": "message",
+        "status": "active",
+        "state": "draft",
+        "body": "<p>Draft in progress</p>",
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 802,
+          "type": "user",
+          "first": "Tess",
+          "last": "Moreno",
+          "email": "tess.moreno@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 802,
+          "type": "user",
+          "first": "Tess",
+          "last": "Moreno",
+          "email": "tess.moreno@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T14:20:00Z"
+      },
+      {
+        "id": 90009,
+        "type": "lineitem",
+        "status": "active",
+        "state": "published",
+        "action": {
+          "type": "assigned",
+          "text": "Owen Hart assigned to Tess Moreno",
+          "associatedEntities": {}
+        },
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 802,
+          "type": "user",
+          "first": "Tess",
+          "last": "Moreno",
+          "email": "tess.moreno@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T14:05:00Z"
+      },
+      {
+        "id": 90008,
+        "type": "customer",
+        "status": "active",
+        "state": "published",
+        "body": "<p>Still timing out, sorry.</p>",
+        "source": {
+          "type": "email",
+          "via": "customer"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "assignedTo": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T14:00:00Z"
+      },
+      {
+        "id": 90007,
+        "type": "message",
+        "status": "closed",
+        "state": "published",
+        "body": "<p>We raised the export limit; please try again.</p>",
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T12:30:00Z"
+      },
+      {
+        "id": 90006,
+        "type": "customer",
+        "status": "active",
+        "state": "published",
+        "body": "<p>About 14,000.</p>",
+        "source": {
+          "type": "email",
+          "via": "customer"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "assignedTo": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T11:40:00Z"
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://api.helpscout.net/v2/conversations/7001/threads?page=1"
+    }
+  },
+  "page": {
+    "size": 5,
+    "totalElements": 10,
+    "totalPages": 2,
+    "number": 1
+  }
+}
