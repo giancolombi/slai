@@ -1,4 +1,4 @@
-import { agentActions, audit, autonomyRules, customerAccounts, type Tx, tickets, users } from "@slai/db";
+import { agentActions, audit, autonomyRules, customerAccounts, notifyEvent, type Tx, tickets, users } from "@slai/db";
 import { type AutonomyRule, approveActionBody, autonomyRuleBody, rejectActionBody } from "@slai/shared";
 import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { Hono } from "hono";
@@ -94,6 +94,9 @@ export function actionRoutes(deps: AppDeps) {
       });
       // The worker performs (and audits) the help-desk write.
       if (decision === "approved") await deps.jobs.send(tx, "execute-action", { orgId: a.orgId, actionId: id });
+      // Other open sessions (a teammate's approvals inbox) drop it at once.
+      await notifyEvent(tx, { orgId: a.orgId, type: "action.updated", id });
+      await notifyEvent(tx, { orgId: a.orgId, type: "ticket.updated", id: row.a.ticketId });
       return toAgentAction(updated!, row, a.user.name);
     });
   };

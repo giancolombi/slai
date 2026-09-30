@@ -5,6 +5,7 @@ import {
   connections,
   customerAccounts,
   fromStoredEvaluation,
+  notifyEvent,
   type StoredEvaluation,
   slaOutcomes,
   slaPolicies,
@@ -204,6 +205,7 @@ export function ticketRoutes(deps: AppDeps) {
         metadata: { kind: kind.data, ticketId: id },
       });
       await deps.jobs.send(tx, "run-agent", { orgId: a.orgId, runId: r!.id });
+      await notifyEvent(tx, { orgId: a.orgId, type: "ticket.updated", id });
       return r!;
     });
     return c.json(toAgentRun(run), 202);

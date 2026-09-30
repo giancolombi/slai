@@ -1,5 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
-import { audit, contractStorageKey, contracts, customerAccounts, slaPolicies, type Tx, users } from "@slai/db";
+import {
+  audit,
+  contractStorageKey,
+  contracts,
+  customerAccounts,
+  notifyEvent,
+  slaPolicies,
+  type Tx,
+  users,
+} from "@slai/db";
 import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -116,6 +125,7 @@ export function contractRoutes(deps: AppDeps) {
           metadata: { filename, sha256, mediaType, sizeBytes: bytes.byteLength },
         });
         await deps.jobs.send(tx, "extract-contract", { orgId: a.orgId, contractId: id });
+        await notifyEvent(tx, { orgId: a.orgId, type: "contract.updated", id });
         return r!;
       });
       return c.json(toContract(row, a.user.name, []), 201);
@@ -152,6 +162,7 @@ export function contractRoutes(deps: AppDeps) {
         .set({ status: "uploaded", error: null })
         .where(and(eq(contracts.id, id)));
       await deps.jobs.send(tx, "extract-contract", { orgId: a.orgId, contractId: id });
+      await notifyEvent(tx, { orgId: a.orgId, type: "contract.updated", id });
     });
     return c.json({ queued: true }, 202);
   });

@@ -203,4 +203,53 @@ describe("server-sent events", () => {
     expect(text).toContain('event: ticket.updated\ndata: {"id":"my-ticket"}');
     expect(text).not.toContain("other-org-ticket");
   });
+
+  /** An open `/events` stream for a signed-in client, read as text. */
+  async function openStream(cookie: string) {
+    const res = await ctx.app.request("/api/v1/events", { headers: { cookie } });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    const s = { text: "" };
+    const readUntil = async (needle: string, ms = 5000) => {
+      const deadline = Date.now() + ms;
+      while (!s.text.includes(needle) && Date.now() < deadline) {
+        const next = await Promise.race([
+          reader.read(),
+          new Promise<null>((r) => setTimeout(() => r(null), Math.max(0, deadline - Date.now()))),
+        ]);
+        if (!next || next.done) break;
+        s.text += decoder.decode(next.value);
+      }
+      return s.text.includes(needle);
+    };
+    return { s, readUntil, close: () => reader.cancel() };
+  }
+
+  it("delivers a real change (an approval) to its own org's open stream only", async () => {
+    const other = await signup(ctx, "Other");
+    const mine = await openStream(owner.client.cookie!);
+    const theirs = await openStream(other.client.cookie!);
+    expect(await mine.readUntil("event: ready")).toBe(true);
+    expect(await theirs.readUntil("event: ready")).toBe(true);
+    await new Promise((r) => setTimeout(r, 200));
+
+    const [a] = await ctx.owner.db
+      .insert(agentActions)
+      .values({ orgId: owner.orgId, ticketId, kind: "public_reply", body: "Stream me", confidence: 0.9 })
+      .returning();
+    expect((await owner.client.post(`/actions/${a!.id}/approve`, {})).status).toBe(200);
+    // A NOTIFY addressed to the other org goes to its stream, not ours.
+    await notifyEvent(ctx.owner.db, { orgId: other.orgId, type: "replay.progress", id: "their-replay" });
+
+    expect(await mine.readUntil(`event: action.updated\ndata: {"id":"${a!.id}"}`)).toBe(true);
+    expect(await mine.readUntil(`event: ticket.updated\ndata: {"id":"${ticketId}"}`)).toBe(true);
+    expect(await theirs.readUntil("their-replay")).toBe(true);
+    // Give any stray delivery a moment to arrive before asserting its absence.
+    await theirs.readUntil(a!.id, 300);
+    await mine.readUntil("their-replay", 300);
+    await Promise.all([mine.close(), theirs.close()]);
+    expect(theirs.s.text).not.toContain(a!.id);
+    expect(theirs.s.text).not.toContain(ticketId);
+    expect(mine.s.text).not.toContain("their-replay");
+  });
 });

@@ -1,4 +1,4 @@
-import { audit, connections, replays } from "@slai/db";
+import { audit, connections, notifyEvent, replays } from "@slai/db";
 import { createReplayBody } from "@slai/shared";
 import { desc, eq, lt } from "drizzle-orm";
 import { Hono } from "hono";
@@ -43,6 +43,7 @@ export function replayRoutes(deps: AppDeps) {
         metadata: { connectionId: input.connectionId, days: input.days },
       });
       await deps.jobs.send(tx, "run-replay", { orgId: a.orgId, replayId: r!.id });
+      await notifyEvent(tx, { orgId: a.orgId, type: "replay.progress", id: r!.id });
       return r!;
     });
     return c.json(toReplay(row), 202);
