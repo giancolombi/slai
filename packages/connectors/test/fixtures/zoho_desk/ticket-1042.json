@@ -1,0 +1,35 @@
+{
+  "id": "481520000001234001",
+  "ticketNumber": "1042",
+  "subject": "Webhook deliveries to our endpoint are timing out",
+  "status": "Open",
+  "statusType": "Open",
+  "priority": "High",
+  "channel": "Email",
+  "email": "liam.okafor@bluepeak.example",
+  "phone": null,
+  "contactId": "481520000000572348",
+  "assigneeId": "481520000000195001",
+  "departmentId": "481520000000006907",
+  "teamId": null,
+  "category": null,
+  "dueDate": "2026-09-29T09:00:00.000Z",
+  "createdTime": "2026-09-28T09:00:00.000Z",
+  "modifiedTime": "2026-09-28T15:00:00.000Z",
+  "webUrl": "https://desk.zoho.com/support/northwind/ShowHomePage.do#Cases/dv/481520000001234001",
+  "contact": {
+    "id": "481520000000572348",
+    "firstName": "Liam",
+    "lastName": "Okafor",
+    "email": "liam.okafor@bluepeak.example",
+    "type": null,
+    "account": { "id": "481520000000480011", "accountName": "Bluepeak Logistics", "website": "bluepeak.example" }
+  },
+  "assignee": {
+    "id": "481520000000195001",
+    "firstName": "Priya",
+    "lastName": "Raman",
+    "email": "priya.raman@northwind.example",
+    "photoURL": null
+  }
+}

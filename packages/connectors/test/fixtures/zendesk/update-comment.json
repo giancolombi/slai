@@ -1,0 +1,15 @@
+{
+  "ticket": {
+    "id": 1001,
+    "status": "open",
+    "created_at": "2026-09-28T09:00:00Z",
+    "updated_at": "2026-09-29T10:00:00Z"
+  },
+  "audit": {
+    "id": 70009,
+    "ticket_id": 1001,
+    "created_at": "2026-09-29T10:00:00Z",
+    "author_id": 222,
+    "events": [{ "id": 80020, "type": "Comment", "body": "Drafted by slai", "public": false, "author_id": 222 }]
+  }
+}

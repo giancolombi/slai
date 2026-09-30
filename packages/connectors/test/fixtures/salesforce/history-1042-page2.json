@@ -1,0 +1,66 @@
+{
+  "totalSize": 11,
+  "done": true,
+  "records": [
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst07AAA"
+      },
+      "Id": "017Hs00000Hst07AAA",
+      "Field": "Status",
+      "DataType": "DynamicEnum",
+      "OldValue": "Working",
+      "NewValue": "Waiting on Customer",
+      "CreatedDate": "2026-09-28T10:30:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst08AAA"
+      },
+      "Id": "017Hs00000Hst08AAA",
+      "Field": "Status",
+      "DataType": "DynamicEnum",
+      "OldValue": "Waiting on Customer",
+      "NewValue": "Working",
+      "CreatedDate": "2026-09-28T13:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst09AAA"
+      },
+      "Id": "017Hs00000Hst09AAA",
+      "Field": "Priority",
+      "DataType": "DynamicEnum",
+      "OldValue": "Medium",
+      "NewValue": "High",
+      "CreatedDate": "2026-09-28T14:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst10AAA"
+      },
+      "Id": "017Hs00000Hst10AAA",
+      "Field": "Status",
+      "DataType": "DynamicEnum",
+      "OldValue": "Working",
+      "NewValue": "Closed",
+      "CreatedDate": "2026-09-28T14:15:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "CaseHistory",
+        "url": "/services/data/v66.0/sobjects/CaseHistory/017Hs00000Hst11AAA"
+      },
+      "Id": "017Hs00000Hst11AAA",
+      "Field": "Status",
+      "DataType": "DynamicEnum",
+      "OldValue": "Closed",
+      "NewValue": "Working",
+      "CreatedDate": "2026-09-28T15:00:00.000+0000"
+    }
+  ]
+}

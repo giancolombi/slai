@@ -1,0 +1,24 @@
+{
+  "total": 3,
+  "results": [
+    {
+      "id": "5001",
+      "properties": {
+        "content": "Our nightly CSV export times out for the full workspace.",
+        "createdate": "2026-09-28T09:00:00.000Z",
+        "hs_lastmodifieddate": "2026-09-29T08:10:00.000Z",
+        "hs_object_id": "5001",
+        "hs_pipeline": "0",
+        "hs_pipeline_stage": "3",
+        "hs_ticket_priority": "URGENT",
+        "hubspot_owner_id": "777",
+        "source_type": "EMAIL",
+        "subject": "CSV export times out"
+      },
+      "createdAt": "2026-09-28T09:00:00.000Z",
+      "updatedAt": "2026-09-29T08:10:00.000Z",
+      "archived": false
+    }
+  ],
+  "paging": { "next": { "after": "1", "link": "?after=1" } }
+}

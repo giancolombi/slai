@@ -1,0 +1,193 @@
+{
+  "_embedded": {
+    "threads": [
+      {
+        "id": 90005,
+        "type": "message",
+        "status": "pending",
+        "state": "published",
+        "body": "<p>Hi Priya,<br>could you tell us roughly how many invoices March has?</p>",
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T09:40:00Z"
+      },
+      {
+        "id": 90004,
+        "type": "lineitem",
+        "status": "active",
+        "state": "published",
+        "action": {
+          "type": "assigned",
+          "text": "Owen Hart assigned to Owen Hart",
+          "associatedEntities": {}
+        },
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdAt": "2026-09-28T09:15:00Z"
+      },
+      {
+        "id": 90003,
+        "type": "note",
+        "status": "active",
+        "state": "published",
+        "body": "<p>Looks like the export job hits the 60s gateway limit. Checking with platform.</p>",
+        "source": {
+          "type": "email",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "assignedTo": {
+          "id": 0,
+          "type": "user",
+          "first": "",
+          "last": "",
+          "email": ""
+        },
+        "createdAt": "2026-09-28T09:10:00Z"
+      },
+      {
+        "id": 90002,
+        "type": "message",
+        "status": "active",
+        "state": "published",
+        "action": {
+          "type": "automatic-workflow",
+          "text": "Workflow Auto-acknowledge ran",
+          "associatedEntities": {
+            "workflow": 61022
+          }
+        },
+        "body": "<p>Thanks for reaching out! We&rsquo;ve received your message and will reply shortly.</p>",
+        "source": {
+          "type": "workflow",
+          "via": "user"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 1,
+          "type": "user",
+          "first": "Help",
+          "last": "Scout",
+          "email": "workflows@helpscout.example"
+        },
+        "assignedTo": {
+          "id": 0,
+          "type": "user",
+          "first": "",
+          "last": "",
+          "email": ""
+        },
+        "createdAt": "2026-09-28T09:02:00Z"
+      },
+      {
+        "id": 90001,
+        "type": "customer",
+        "status": "active",
+        "state": "published",
+        "body": "<p>Exporting March invoices to CSV spins for a minute and then fails with a timeout.</p>",
+        "source": {
+          "type": "email",
+          "via": "customer"
+        },
+        "customer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdBy": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "assignedTo": {
+          "id": 0,
+          "type": "user",
+          "first": "",
+          "last": "",
+          "email": ""
+        },
+        "createdAt": "2026-09-28T09:00:00Z"
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://api.helpscout.net/v2/conversations/7001/threads?page=2"
+    }
+  },
+  "page": {
+    "size": 5,
+    "totalElements": 10,
+    "totalPages": 2,
+    "number": 2
+  }
+}

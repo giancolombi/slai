@@ -1,0 +1,88 @@
+{
+  "totalSize": 4,
+  "done": true,
+  "records": [
+    {
+      "attributes": {
+        "type": "Case",
+        "url": "/services/data/v66.0/sobjects/Case/500Hs00001XyZ3AAAA"
+      },
+      "Id": "500Hs00001XyZ3AAAA",
+      "CaseNumber": "00001044",
+      "Subject": "SSO login loop for EU tenant",
+      "Description": null,
+      "Status": "Escalated to Engineering",
+      "Priority": "P2",
+      "IsClosed": false,
+      "Origin": "Phone",
+      "OwnerId": "005Hs00000Agnt1AAA",
+      "Owner": {
+        "attributes": {
+          "type": "Name",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman"
+      },
+      "ContactId": "003Hs00000Cont3AAA",
+      "ContactEmail": "lena.brandt@ostwerk.example",
+      "Contact": {
+        "attributes": {
+          "type": "Contact",
+          "url": "/services/data/v66.0/sobjects/Contact/003Hs00000Cont3AAA"
+        },
+        "Name": "Lena Brandt"
+      },
+      "AccountId": "001Hs00000Acct3AAA",
+      "Account": {
+        "attributes": {
+          "type": "Account",
+          "url": "/services/data/v66.0/sobjects/Account/001Hs00000Acct3AAA"
+        },
+        "Name": "Ostwerk GmbH"
+      },
+      "CreatedDate": "2026-09-28T16:05:00.000+0000",
+      "SystemModstamp": "2026-09-28T16:40:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "Case",
+        "url": "/services/data/v66.0/sobjects/Case/500Hs00001XyZ4AAAA"
+      },
+      "Id": "500Hs00001XyZ4AAAA",
+      "CaseNumber": "00001045",
+      "Subject": "Duplicate of 00001042",
+      "Description": null,
+      "Status": "Resolved - Duplicate",
+      "Priority": "Medium",
+      "IsClosed": true,
+      "Origin": "Email",
+      "OwnerId": "005Hs00000Agnt1AAA",
+      "Owner": {
+        "attributes": {
+          "type": "Name",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman"
+      },
+      "ContactId": "003Hs00000Cont1AAA",
+      "ContactEmail": "tomas.lindqvist@harborline.example",
+      "Contact": {
+        "attributes": {
+          "type": "Contact",
+          "url": "/services/data/v66.0/sobjects/Contact/003Hs00000Cont1AAA"
+        },
+        "Name": "Tomas Lindqvist"
+      },
+      "AccountId": "001Hs00000Acct1AAA",
+      "Account": {
+        "attributes": {
+          "type": "Account",
+          "url": "/services/data/v66.0/sobjects/Account/001Hs00000Acct1AAA"
+        },
+        "Name": "Harborline Freight"
+      },
+      "CreatedDate": "2026-09-28T16:10:00.000+0000",
+      "SystemModstamp": "2026-09-28T16:45:00.000+0000"
+    }
+  ]
+}

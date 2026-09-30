@@ -1,0 +1,62 @@
+{
+  "type": "conversation.list",
+  "conversations": [
+    {
+      "type": "conversation",
+      "id": "555",
+      "title": "Webhook deliveries delayed by 30+ minutes",
+      "created_at": 1790586000,
+      "updated_at": 1790668800,
+      "state": "open",
+      "open": true,
+      "priority": "high",
+      "admin_assignee_id": 991,
+      "team_assignee_id": null,
+      "tags": { "type": "tag.list", "tags": [{ "type": "tag", "id": "123", "name": "api" }] },
+      "source": {
+        "type": "conversation",
+        "id": "403918330",
+        "delivered_as": "customer_initiated",
+        "subject": "",
+        "body": "<p>Webhooks for order.updated are arriving late.</p>",
+        "author": {
+          "type": "user",
+          "id": "6329bd9ffe4e2e91dac76188",
+          "name": "Liam Okafor",
+          "email": "liam@bluepeak.example"
+        }
+      },
+      "ticket": null
+    },
+    {
+      "type": "conversation",
+      "id": "556",
+      "title": null,
+      "created_at": 1790586900,
+      "updated_at": 1790587800,
+      "state": "snoozed",
+      "open": true,
+      "priority": "none",
+      "admin_assignee_id": null,
+      "team_assignee_id": null,
+      "tags": { "type": "tag.list", "tags": [] },
+      "source": {
+        "type": "email",
+        "id": "403918331",
+        "delivered_as": "customer_initiated",
+        "subject": "Invoice question",
+        "body": "<p>Our invoice shows the wrong seat count.</p>",
+        "author": { "type": "lead", "id": "lead-1", "name": null, "email": "ap@harborfinch.example" }
+      },
+      "ticket": null
+    }
+  ],
+  "total_count": 3,
+  "pages": {
+    "type": "pages",
+    "page": 1,
+    "per_page": 150,
+    "total_pages": 2,
+    "next": { "per_page": 150, "starting_after": "WzE3OTA1ODc4MDAwMDAsNTU2LDJd" }
+  }
+}

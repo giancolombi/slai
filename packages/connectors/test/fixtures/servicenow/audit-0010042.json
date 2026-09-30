@@ -1,0 +1,103 @@
+{
+  "result": [
+    {
+      "sys_id": "a0010001c611228701d22104cc950001",
+      "fieldname": "state",
+      "oldvalue": "",
+      "newvalue": "1",
+      "sys_created_on": "2026-09-28 09:00:00",
+      "sys_created_by": "liam.okafor",
+      "record_checkpoint": "1"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950002",
+      "fieldname": "priority",
+      "oldvalue": "",
+      "newvalue": "3",
+      "sys_created_on": "2026-09-28 09:00:00",
+      "sys_created_by": "liam.okafor",
+      "record_checkpoint": "1"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950003",
+      "fieldname": "assigned_to",
+      "oldvalue": "",
+      "newvalue": "46d44a23a9fe19810012d100cca80666",
+      "sys_created_on": "2026-09-28 09:20:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "2"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950004",
+      "fieldname": "state",
+      "oldvalue": "1",
+      "newvalue": "2",
+      "sys_created_on": "2026-09-28 09:20:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "2"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950005",
+      "fieldname": "state",
+      "oldvalue": "2",
+      "newvalue": "3",
+      "sys_created_on": "2026-09-28 10:31:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "5"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950006",
+      "fieldname": "hold_reason",
+      "oldvalue": "",
+      "newvalue": "1",
+      "sys_created_on": "2026-09-28 10:31:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "5"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950007",
+      "fieldname": "state",
+      "oldvalue": "3",
+      "newvalue": "2",
+      "sys_created_on": "2026-09-28 13:00:30",
+      "sys_created_by": "system",
+      "record_checkpoint": "7"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950008",
+      "fieldname": "hold_reason",
+      "oldvalue": "1",
+      "newvalue": "",
+      "sys_created_on": "2026-09-28 13:00:30",
+      "sys_created_by": "system",
+      "record_checkpoint": "7"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950009",
+      "fieldname": "priority",
+      "oldvalue": "3",
+      "newvalue": "2",
+      "sys_created_on": "2026-09-28 14:00:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "8"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950010",
+      "fieldname": "state",
+      "oldvalue": "2",
+      "newvalue": "6",
+      "sys_created_on": "2026-09-28 16:00:00",
+      "sys_created_by": "dana.reyes",
+      "record_checkpoint": "10"
+    },
+    {
+      "sys_id": "a0010001c611228701d22104cc950011",
+      "fieldname": "state",
+      "oldvalue": "6",
+      "newvalue": "2",
+      "sys_created_on": "2026-09-28 17:00:10",
+      "sys_created_by": "system",
+      "record_checkpoint": "12"
+    }
+  ]
+}

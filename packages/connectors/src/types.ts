@@ -1,7 +1,7 @@
 /**
  * The connector contract. Every help desk adapter implements `ConnectorDefinition`
  * and maps its platform's data into canonical tickets and events (see
- * docs/research/CONNECTORS.md §4). The SLA engine consumes only canonical events.
+ * specs/technical.md TR-11 to TR-14). The SLA engine consumes only canonical events.
  *
  * Connectors are pure HTTP adapters: they receive an injected `fetch`, perform
  * no persistence, and never read environment variables. The worker owns
@@ -86,6 +86,17 @@ export interface CanonicalTicket {
   channel: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Raw values the connection's FieldMapping did not recognise. The ticket
+   * still maps to a safe default (status → open, priority → null); the UI
+   * should prompt the customer to map these. Absent or empty when all mapped.
+   */
+  mappingIssues?: MappingIssue[];
+}
+
+export interface MappingIssue {
+  field: "status" | "priority";
+  raw: string;
 }
 
 /** A ticket with its full history, as needed for SLA evaluation and agents. */

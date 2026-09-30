@@ -1,0 +1,76 @@
+{
+  "data": [
+    {
+      "id": "481520000001240005",
+      "channel": "EMAIL",
+      "status": "SUCCESS",
+      "direction": "in",
+      "visibility": "public",
+      "isDescriptionThread": false,
+      "createdTime": "2026-09-28T14:00:00.000Z",
+      "summary": "The endpoint is https://hooks.bluepeak.example/zoho and it answers in about 2 seconds.",
+      "contentType": "text/html",
+      "fromEmailAddress": "liam.okafor@bluepeak.example",
+      "to": "support@northwind.example",
+      "author": {
+        "id": "481520000000572348",
+        "name": "Liam Okafor",
+        "email": "liam.okafor@bluepeak.example",
+        "type": "END_USER"
+      }
+    },
+    {
+      "id": "481520000001238003",
+      "channel": "EMAIL",
+      "status": "SUCCESS",
+      "direction": "out",
+      "visibility": "public",
+      "isDescriptionThread": false,
+      "createdTime": "2026-09-28T10:30:00.000Z",
+      "summary": "Hi Liam, can you confirm the webhook endpoint URL and whether it responds within 10 seconds?",
+      "contentType": "text/html",
+      "fromEmailAddress": "\"Northwind Support\"<support@northwind.example>",
+      "to": "liam.okafor@bluepeak.example",
+      "author": {
+        "id": "481520000000195001",
+        "name": "Priya Raman",
+        "email": "priya.raman@northwind.example",
+        "type": "AGENT"
+      }
+    },
+    {
+      "id": "481520000001234011",
+      "channel": "EMAIL",
+      "status": "SUCCESS",
+      "direction": "out",
+      "visibility": "public",
+      "isDescriptionThread": false,
+      "createdTime": "2026-09-28T09:01:00.000Z",
+      "summary": "We have received your request (#1042). Our team will get back to you shortly.",
+      "contentType": "text/html",
+      "fromEmailAddress": "\"Northwind Support\"<support@northwind.example>",
+      "to": "liam.okafor@bluepeak.example",
+      "author": { "id": "481520000000000101", "name": "Desk System", "email": null, "type": "SYSTEM" }
+    },
+    {
+      "id": "481520000001234007",
+      "channel": "EMAIL",
+      "status": "SUCCESS",
+      "direction": "in",
+      "visibility": "public",
+      "isDescriptionThread": true,
+      "createdTime": "2026-09-28T09:00:00.000Z",
+      "summary": "Since this morning every webhook delivery to our endpoint times out.",
+      "content": "<div>Since this morning every webhook delivery to our endpoint <b>times out</b>.</div>",
+      "contentType": "text/html",
+      "fromEmailAddress": "liam.okafor@bluepeak.example",
+      "to": "support@northwind.example",
+      "author": {
+        "id": "481520000000572348",
+        "name": "Liam Okafor",
+        "email": "liam.okafor@bluepeak.example",
+        "type": "END_USER"
+      }
+    }
+  ]
+}

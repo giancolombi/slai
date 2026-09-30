@@ -1,0 +1,188 @@
+[
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/40",
+    "repository_url": "https://api.github.com/repos/acme-corp/helpdesk",
+    "labels_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/40/labels{/name}",
+    "comments_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/40/comments",
+    "events_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/40/events",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/40",
+    "id": 3300000040,
+    "node_id": "I_kwDO40",
+    "number": 40,
+    "title": "Export to CSV drops the timezone",
+    "user": {
+      "login": "omar-reyes",
+      "id": 7101004,
+      "node_id": "U_7101004",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101004?v=4",
+      "url": "https://api.github.com/users/omar-reyes",
+      "html_url": "https://github.com/omar-reyes",
+      "type": "User",
+      "site_admin": false
+    },
+    "labels": [
+      {
+        "id": 808,
+        "node_id": "LA_808",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/question",
+        "name": "question",
+        "color": "d876e3",
+        "default": false,
+        "description": null
+      }
+    ],
+    "state": "closed",
+    "locked": false,
+    "assignees": [],
+    "milestone": null,
+    "comments": 3,
+    "created_at": "2026-09-27T16:00:00Z",
+    "updated_at": "2026-09-28T08:30:00Z",
+    "closed_at": "2026-09-28T08:30:00Z",
+    "author_association": "NONE",
+    "active_lock_reason": null,
+    "body": "CSV exports show naive timestamps.",
+    "state_reason": "not_planned",
+    "reactions": {
+      "total_count": 0
+    },
+    "timeline_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/40/timeline"
+  },
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/43",
+    "repository_url": "https://api.github.com/repos/acme-corp/helpdesk",
+    "labels_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/43/labels{/name}",
+    "comments_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/43/comments",
+    "events_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/43/events",
+    "html_url": "https://github.com/acme-corp/helpdesk/pull/43",
+    "id": 3300000043,
+    "node_id": "I_kwDO43",
+    "number": 43,
+    "title": "Fix retry backoff for webhook sender",
+    "user": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "labels": [
+      {
+        "id": 801,
+        "node_id": "LA_801",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/bug",
+        "name": "bug",
+        "color": "d73a4a",
+        "default": true,
+        "description": null
+      }
+    ],
+    "state": "open",
+    "locked": false,
+    "assignees": [
+      {
+        "login": "dana-whitfield",
+        "id": 7101002,
+        "node_id": "U_7101002",
+        "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+        "url": "https://api.github.com/users/dana-whitfield",
+        "html_url": "https://github.com/dana-whitfield",
+        "type": "User",
+        "site_admin": false
+      }
+    ],
+    "milestone": null,
+    "comments": 3,
+    "created_at": "2026-09-28T10:00:00Z",
+    "updated_at": "2026-09-28T12:10:00Z",
+    "closed_at": null,
+    "author_association": "MEMBER",
+    "active_lock_reason": null,
+    "body": "Closes #42",
+    "state_reason": null,
+    "reactions": {
+      "total_count": 0
+    },
+    "timeline_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/43/timeline",
+    "pull_request": {
+      "url": "https://api.github.com/repos/acme-corp/helpdesk/pulls/43",
+      "html_url": "https://github.com/acme-corp/helpdesk/pull/43",
+      "diff_url": "https://github.com/acme-corp/helpdesk/pull/43.diff",
+      "patch_url": "https://github.com/acme-corp/helpdesk/pull/43.patch",
+      "merged_at": null
+    },
+    "draft": false
+  },
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42",
+    "repository_url": "https://api.github.com/repos/acme-corp/helpdesk",
+    "labels_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42/labels{/name}",
+    "comments_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42/comments",
+    "events_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42/events",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/42",
+    "id": 3300000042,
+    "node_id": "I_kwDO42",
+    "number": 42,
+    "title": "Webhook deliveries fail with 502 since the 2026.9 upgrade",
+    "user": {
+      "login": "maya-chen",
+      "id": 7101001,
+      "node_id": "U_7101001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101001?v=4",
+      "url": "https://api.github.com/users/maya-chen",
+      "html_url": "https://github.com/maya-chen",
+      "type": "User",
+      "site_admin": false
+    },
+    "labels": [
+      {
+        "id": 801,
+        "node_id": "LA_801",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/bug",
+        "name": "bug",
+        "color": "d73a4a",
+        "default": true,
+        "description": null
+      },
+      {
+        "id": 803,
+        "node_id": "LA_803",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/priority%3A%20urgent",
+        "name": "priority: urgent",
+        "color": "b60205",
+        "default": false,
+        "description": null
+      }
+    ],
+    "state": "open",
+    "locked": false,
+    "assignees": [
+      {
+        "login": "lee-okafor",
+        "id": 7101003,
+        "node_id": "U_7101003",
+        "avatar_url": "https://avatars.githubusercontent.com/u/7101003?v=4",
+        "url": "https://api.github.com/users/lee-okafor",
+        "html_url": "https://github.com/lee-okafor",
+        "type": "User",
+        "site_admin": false
+      }
+    ],
+    "milestone": null,
+    "comments": 3,
+    "created_at": "2026-09-28T09:00:00Z",
+    "updated_at": "2026-09-28T14:31:00Z",
+    "closed_at": null,
+    "author_association": "NONE",
+    "active_lock_reason": null,
+    "body": "Since this morning our order.updated webhooks fail with a 502.\n\nDelivery IDs attached below.",
+    "state_reason": "reopened",
+    "reactions": {
+      "total_count": 0
+    },
+    "timeline_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42/timeline"
+  }
+]

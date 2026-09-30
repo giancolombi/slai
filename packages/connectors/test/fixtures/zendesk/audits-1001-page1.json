@@ -1,0 +1,125 @@
+{
+  "audits": [
+    {
+      "id": 70001,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T09:00:00Z",
+      "author_id": 111,
+      "metadata": { "system": { "client": "Mozilla/5.0", "ip_address": "203.0.113.4" }, "custom": {} },
+      "via": { "channel": "email", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80001,
+          "type": "Comment",
+          "author_id": 111,
+          "body": "Since this morning about a dozen of our users get an audience mismatch error.",
+          "html_body": "<div class=\"zd-comment\"><p>Since this morning about a dozen of our users get an <b>audience mismatch</b> error.</p></div>",
+          "plain_body": "Since this morning about a dozen of our users get an audience mismatch error.",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70001
+        },
+        { "id": 80002, "type": "Create", "value": "new", "field_name": "status" },
+        { "id": 80003, "type": "Create", "value": "high", "field_name": "priority" },
+        { "id": 80004, "type": "Create", "value": ["enterprise", "sso"], "field_name": "tags" },
+        {
+          "id": 80005,
+          "type": "Create",
+          "value": "SSO login failing with SAML assertion error",
+          "field_name": "subject"
+        }
+      ]
+    },
+    {
+      "id": 70002,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T09:01:00Z",
+      "author_id": -1,
+      "metadata": { "system": {}, "custom": {} },
+      "via": {
+        "channel": "rule",
+        "source": { "from": { "id": 55, "title": "Auto-acknowledge", "deleted": false }, "to": {}, "rel": "trigger" }
+      },
+      "events": [
+        {
+          "id": 80006,
+          "type": "Comment",
+          "author_id": -1,
+          "body": "Thanks for contacting support! We received your request.",
+          "html_body": "<p>Thanks for contacting support! We received your request.</p>",
+          "plain_body": "Thanks for contacting support! We received your request.",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70002
+        },
+        {
+          "id": 80007,
+          "type": "Notification",
+          "subject": "Request received",
+          "body": "...",
+          "recipients": [111],
+          "via": { "channel": "rule" }
+        }
+      ]
+    },
+    {
+      "id": 70003,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T09:20:00Z",
+      "author_id": 222,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "web", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80008,
+          "type": "Comment",
+          "author_id": 222,
+          "body": "Checked auth logs: audience mismatch started after cert rotation.",
+          "html_body": "<p>Checked auth logs: audience mismatch started after cert rotation.</p>",
+          "plain_body": "Checked auth logs: audience mismatch started after cert rotation.",
+          "public": false,
+          "attachments": [],
+          "audit_id": 70003
+        },
+        { "id": 80009, "type": "Change", "value": "222", "field_name": "assignee_id", "previous_value": null }
+      ]
+    },
+    {
+      "id": 70004,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T09:40:00Z",
+      "author_id": 222,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "web", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80010,
+          "type": "Comment",
+          "author_id": 222,
+          "body": "Hi Maya, could you send us a SAML trace for one affected user?",
+          "html_body": "<p>Hi Maya, could you send us a SAML trace for one affected user?</p>",
+          "plain_body": "Hi Maya, could you send us a SAML trace for one affected user?",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70004
+        },
+        { "id": 80011, "type": "Change", "value": "pending", "field_name": "status", "previous_value": "new" }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": 111,
+      "name": "Maya Chen",
+      "email": "maya.chen@northwind.example",
+      "role": "end-user",
+      "organization_id": 901
+    },
+    { "id": 222, "name": "Dana Whitfield", "email": "dana@acme.com", "role": "agent", "organization_id": null }
+  ],
+  "meta": { "has_more": true, "after_cursor": "xyz1", "before_cursor": null },
+  "links": {
+    "prev": null,
+    "next": "https://acme.zendesk.com/api/v2/tickets/1001/audits.json?page%5Bafter%5D=xyz1&page%5Bsize%5D=100&include=users"
+  }
+}

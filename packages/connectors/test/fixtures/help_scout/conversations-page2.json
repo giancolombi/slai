@@ -1,0 +1,78 @@
+{
+  "_embedded": {
+    "conversations": [
+      {
+        "id": 7003,
+        "number": 1044,
+        "threads": 9,
+        "type": "email",
+        "folderId": 4410,
+        "status": "pending",
+        "state": "published",
+        "subject": "SAML login loops back to the start page",
+        "preview": "SAML login loops back to the start page",
+        "mailboxId": 3100,
+        "assignee": {
+          "id": 801,
+          "type": "user",
+          "first": "Owen",
+          "last": "Hart",
+          "email": "owen.hart@acmesupport.example"
+        },
+        "createdBy": {
+          "id": 5503,
+          "type": "customer",
+          "email": "ines@corvidworks.example"
+        },
+        "createdAt": "2026-09-28T10:00:00Z",
+        "userUpdatedAt": "2026-09-28T12:00:00Z",
+        "customerWaitingSince": {
+          "time": "2026-09-28T12:00:00Z",
+          "friendly": "1 hour ago"
+        },
+        "source": {
+          "type": "web",
+          "via": "customer"
+        },
+        "tags": [
+          {
+            "id": 9100,
+            "color": "#929499",
+            "tag": "priority-p2"
+          },
+          {
+            "id": 9101,
+            "color": "#929499",
+            "tag": "sso"
+          }
+        ],
+        "primaryCustomer": {
+          "id": 5503,
+          "type": "customer",
+          "first": "Ines",
+          "last": "Achterberg",
+          "email": "ines@corvidworks.example"
+        },
+        "_links": {
+          "self": {
+            "href": "https://api.helpscout.net/v2/conversations/7003"
+          },
+          "web": {
+            "href": "https://secure.helpscout.net/conversation/7003/1044"
+          }
+        }
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://api.helpscout.net/v2/conversations?page=2"
+    }
+  },
+  "page": {
+    "size": 2,
+    "totalElements": 3,
+    "totalPages": 2,
+    "number": 2
+  }
+}

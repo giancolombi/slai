@@ -1,0 +1,19 @@
+{
+  "type": "admin",
+  "id": "991",
+  "email": "dana@acme.com",
+  "name": "Dana Whitfield",
+  "email_verified": true,
+  "app": {
+    "type": "app",
+    "id_code": "abc123de",
+    "name": "Acme Support",
+    "created_at": 1700000000,
+    "secure": false,
+    "identity_verification": false,
+    "timezone": "America/New_York",
+    "region": "US"
+  },
+  "avatar": { "type": "avatar", "image_url": null },
+  "has_inbox_seat": true
+}

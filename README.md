@@ -29,9 +29,9 @@ pnpm dev               # web :5173, api :8787, worker
 With `MODEL_PROVIDER=mock` and `AGENT_RUNTIME=local`, everything runs without API keys,
 and the `demo` connector simulates a help desk.
 
-## Docs
+## Specs
 
-- [Architecture](docs/ARCHITECTURE.md) and [ADRs](docs/adr)
-- [SLA semantics](docs/SLA_SEMANTICS.md): exactly how clocks are measured
-- [Connector research](docs/research/CONNECTORS.md), [pricing research](docs/research/PRICING.md)
+- [Product spec](specs/product.md): problem, users, requirements, pricing
+- [Technical spec](specs/technical.md): architecture, SLA semantics, security
+- [Tasks](specs/tasks.md): the implementation plan and its status
 - [AGENTS.md](AGENTS.md): invariants and conventions for contributors (human or AI)

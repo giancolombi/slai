@@ -1,0 +1,272 @@
+[
+  {
+    "id": 9004,
+    "node_id": "E_9004",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9004",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "unlabeled",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T11:05:00Z",
+    "performed_via_github_app": null,
+    "label": {
+      "name": "status: waiting-on-customer",
+      "color": "fbca04"
+    }
+  },
+  {
+    "event": "cross-referenced",
+    "created_at": "2026-09-28T11:30:00Z",
+    "updated_at": "2026-09-28T11:30:00Z",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "source": {
+      "type": "issue",
+      "issue": {
+        "number": 43,
+        "pull_request": {
+          "url": "https://api.github.com/repos/acme-corp/helpdesk/pulls/43"
+        }
+      }
+    }
+  },
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/comments/5004",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/42#issuecomment-5004",
+    "issue_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42",
+    "id": 5004,
+    "node_id": "IC_5004",
+    "user": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "created_at": "2026-09-28T12:00:00Z",
+    "updated_at": "2026-09-28T12:00:00Z",
+    "author_association": "MEMBER",
+    "body": "Found it: a proxy timeout. The fix is deployed, please retry.",
+    "reactions": {
+      "total_count": 0
+    },
+    "performed_via_github_app": null,
+    "event": "commented",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    }
+  },
+  {
+    "id": 9005,
+    "node_id": "E_9005",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9005",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "closed",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T12:30:00Z",
+    "performed_via_github_app": null,
+    "state_reason": "completed"
+  },
+  {
+    "id": 9006,
+    "node_id": "E_9006",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9006",
+    "actor": {
+      "login": "maya-chen",
+      "id": 7101001,
+      "node_id": "U_7101001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101001?v=4",
+      "url": "https://api.github.com/users/maya-chen",
+      "html_url": "https://github.com/maya-chen",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "reopened",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T14:00:00Z",
+    "performed_via_github_app": null,
+    "state_reason": "reopened"
+  },
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/comments/5005",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/42#issuecomment-5005",
+    "issue_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/42",
+    "id": 5005,
+    "node_id": "IC_5005",
+    "user": {
+      "login": "maya-chen",
+      "id": 7101001,
+      "node_id": "U_7101001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101001?v=4",
+      "url": "https://api.github.com/users/maya-chen",
+      "html_url": "https://github.com/maya-chen",
+      "type": "User",
+      "site_admin": false
+    },
+    "created_at": "2026-09-28T14:01:00Z",
+    "updated_at": "2026-09-28T14:01:00Z",
+    "author_association": "NONE",
+    "body": "Still failing for EU deliveries, sorry.",
+    "reactions": {
+      "total_count": 0
+    },
+    "performed_via_github_app": null,
+    "event": "commented",
+    "actor": {
+      "login": "maya-chen",
+      "id": 7101001,
+      "node_id": "U_7101001",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101001?v=4",
+      "url": "https://api.github.com/users/maya-chen",
+      "html_url": "https://github.com/maya-chen",
+      "type": "User",
+      "site_admin": false
+    }
+  },
+  {
+    "id": 9007,
+    "node_id": "E_9007",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9007",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "labeled",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T14:20:00Z",
+    "performed_via_github_app": null,
+    "label": {
+      "name": "priority: urgent",
+      "color": "b60205"
+    }
+  },
+  {
+    "id": 9008,
+    "node_id": "E_9008",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9008",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "unlabeled",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T14:20:30Z",
+    "performed_via_github_app": null,
+    "label": {
+      "name": "priority: high",
+      "color": "ff9f1c"
+    }
+  },
+  {
+    "id": 9009,
+    "node_id": "E_9009",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9009",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "unassigned",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T14:30:00Z",
+    "performed_via_github_app": null,
+    "assignee": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    }
+  },
+  {
+    "id": 9011,
+    "node_id": "E_9011",
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/events/9011",
+    "actor": {
+      "login": "dana-whitfield",
+      "id": 7101002,
+      "node_id": "U_7101002",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+      "url": "https://api.github.com/users/dana-whitfield",
+      "html_url": "https://github.com/dana-whitfield",
+      "type": "User",
+      "site_admin": false
+    },
+    "event": "assigned",
+    "commit_id": null,
+    "commit_url": null,
+    "created_at": "2026-09-28T14:31:00Z",
+    "performed_via_github_app": null,
+    "assignee": {
+      "login": "lee-okafor",
+      "id": 7101003,
+      "node_id": "U_7101003",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101003?v=4",
+      "url": "https://api.github.com/users/lee-okafor",
+      "html_url": "https://github.com/lee-okafor",
+      "type": "User",
+      "site_admin": false
+    }
+  }
+]

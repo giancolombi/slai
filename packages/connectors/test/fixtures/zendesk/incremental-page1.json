@@ -1,0 +1,48 @@
+{
+  "tickets": [
+    {
+      "id": 1001,
+      "via": { "channel": "email" },
+      "created_at": "2026-09-28T09:00:00Z",
+      "updated_at": "2026-09-29T08:10:00Z",
+      "subject": "SSO login failing with SAML assertion error",
+      "priority": "urgent",
+      "status": "open",
+      "requester_id": 111,
+      "assignee_id": 222,
+      "organization_id": 901,
+      "group_id": 3001,
+      "tags": ["enterprise", "sso"]
+    },
+    {
+      "id": 1002,
+      "via": { "channel": "web" },
+      "created_at": "2026-09-28T10:00:00Z",
+      "updated_at": "2026-09-29T08:20:00Z",
+      "subject": "Deleted spam",
+      "priority": null,
+      "status": "deleted",
+      "requester_id": 111,
+      "assignee_id": null,
+      "organization_id": null,
+      "group_id": null,
+      "tags": []
+    }
+  ],
+  "users": [
+    {
+      "id": 111,
+      "name": "Maya Chen",
+      "email": "maya.chen@northwind.example",
+      "role": "end-user",
+      "organization_id": 901
+    },
+    { "id": 222, "name": "Dana Whitfield", "email": "dana@acme.com", "role": "agent", "organization_id": null }
+  ],
+  "organizations": [{ "id": 901, "name": "Northwind Analytics" }],
+  "after_url": "https://acme.zendesk.com/api/v2/incremental/tickets/cursor.json?cursor=MTU3NjYxMzUzOS4wfHw0Njd8",
+  "after_cursor": "MTU3NjYxMzUzOS4wfHw0Njd8",
+  "before_url": null,
+  "before_cursor": null,
+  "end_of_stream": false
+}

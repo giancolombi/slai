@@ -1,0 +1,83 @@
+{
+  "id": "5001",
+  "properties": {
+    "content": "Our nightly CSV export times out for the full workspace.",
+    "createdate": "2026-09-28T09:00:00.000Z",
+    "hs_lastmodifieddate": "2026-09-29T08:10:00.000Z",
+    "hs_object_id": "5001",
+    "hs_pipeline": "0",
+    "hs_pipeline_stage": "3",
+    "hs_ticket_priority": "URGENT",
+    "hubspot_owner_id": "777",
+    "source_type": "EMAIL",
+    "subject": "CSV export times out"
+  },
+  "propertiesWithHistory": {
+    "hs_pipeline_stage": [
+      {
+        "value": "3",
+        "timestamp": "2026-09-29T08:00:00.000Z",
+        "sourceType": "CRM_UI",
+        "sourceId": "userId:777",
+        "updatedByUserId": 777
+      },
+      {
+        "value": "4",
+        "timestamp": "2026-09-28T12:00:00.000Z",
+        "sourceType": "CRM_UI",
+        "sourceId": "userId:777",
+        "updatedByUserId": 777
+      },
+      {
+        "value": "3",
+        "timestamp": "2026-09-28T11:00:00.000Z",
+        "sourceType": "AUTOMATION_PLATFORM",
+        "sourceId": "enrollmentId:1"
+      },
+      {
+        "value": "2",
+        "timestamp": "2026-09-28T09:30:00.000Z",
+        "sourceType": "CRM_UI",
+        "sourceId": "userId:777",
+        "updatedByUserId": 777
+      },
+      { "value": "1", "timestamp": "2026-09-28T09:00:00.000Z", "sourceType": "EMAIL", "sourceId": "" }
+    ],
+    "hs_ticket_priority": [
+      {
+        "value": "URGENT",
+        "timestamp": "2026-09-29T08:10:00.000Z",
+        "sourceType": "CRM_UI",
+        "sourceId": "userId:777",
+        "updatedByUserId": 777
+      },
+      { "value": "HIGH", "timestamp": "2026-09-28T09:00:00.000Z", "sourceType": "EMAIL", "sourceId": "" }
+    ],
+    "hubspot_owner_id": [
+      {
+        "value": "777",
+        "timestamp": "2026-09-28T09:20:00.000Z",
+        "sourceType": "CRM_UI",
+        "sourceId": "userId:777",
+        "updatedByUserId": 777
+      },
+      { "value": "", "timestamp": "2026-09-28T09:00:00.000Z", "sourceType": "EMAIL", "sourceId": "" }
+    ]
+  },
+  "createdAt": "2026-09-28T09:00:00.000Z",
+  "updatedAt": "2026-09-29T08:10:00.000Z",
+  "archived": false,
+  "associations": {
+    "emails": {
+      "results": [
+        { "id": "9001", "type": "ticket_to_email" },
+        { "id": "9002", "type": "ticket_to_email" },
+        { "id": "9003", "type": "ticket_to_email" },
+        { "id": "9004", "type": "ticket_to_email" }
+      ]
+    },
+    "notes": { "results": [{ "id": "9501", "type": "ticket_to_note" }] },
+    "contacts": { "results": [{ "id": "301", "type": "ticket_to_contact" }] },
+    "companies": { "results": [{ "id": "401", "type": "ticket_to_company" }] }
+  }
+}

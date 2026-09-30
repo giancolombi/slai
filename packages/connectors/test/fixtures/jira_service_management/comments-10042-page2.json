@@ -1,0 +1,48 @@
+{
+  "startAt": 3,
+  "maxResults": 3,
+  "total": 6,
+  "comments": [
+    {
+      "id": "30004",
+      "author": { "accountId": "qm:cust-1", "displayName": "Maya Chen", "active": true, "accountType": "customer" },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Attached is the trace." }] }]
+      },
+      "created": "2026-09-28T11:00:00.000+0000",
+      "updated": "2026-09-28T11:00:00.000+0000",
+      "jsdPublic": true
+    },
+    {
+      "id": "30005",
+      "author": {
+        "accountId": "5b10a2844c20165700ede21g",
+        "displayName": "Dana Whitfield",
+        "active": true,
+        "accountType": "atlassian"
+      },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "Fixed, logins work again." }] }]
+      },
+      "created": "2026-09-28T12:00:00.000+0000",
+      "updated": "2026-09-28T12:00:00.000+0000",
+      "jsdPublic": true
+    },
+    {
+      "id": "30006",
+      "author": { "accountId": "qm:cust-1", "displayName": "Maya Chen", "active": true, "accountType": "customer" },
+      "body": {
+        "type": "doc",
+        "version": 1,
+        "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "It is happening again." }] }]
+      },
+      "created": "2026-09-29T08:00:00.000+0000",
+      "updated": "2026-09-29T08:00:00.000+0000",
+      "jsdPublic": true
+    }
+  ]
+}

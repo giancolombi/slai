@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "481520000001231001",
+      "ticketNumber": "1040",
+      "subject": "SSO login loops back to the sign-in page",
+      "status": "Awaiting Vendor",
+      "statusType": "On Hold",
+      "priority": "Urgent",
+      "channel": "Phone",
+      "email": "tomas.berg@quillworks.example",
+      "contactId": "481520000000563004",
+      "assigneeId": "481520000000195001",
+      "departmentId": "481520000000006907",
+      "createdTime": "2026-09-26T08:20:00.000Z",
+      "modifiedTime": "2026-09-28T08:05:00.000Z",
+      "webUrl": "https://desk.zoho.com/support/northwind/ShowHomePage.do#Cases/dv/481520000001231001",
+      "contact": {
+        "id": "481520000000563004",
+        "firstName": "Tomas",
+        "lastName": "Berg",
+        "email": "tomas.berg@quillworks.example"
+      },
+      "assignee": { "id": "481520000000195001", "firstName": "Priya", "lastName": "Raman" }
+    },
+    {
+      "id": "481520000001220001",
+      "ticketNumber": "1031",
+      "subject": "Export to CSV drops the last column",
+      "status": "Closed",
+      "statusType": "Closed",
+      "priority": "Medium",
+      "channel": "Email",
+      "email": "ines.duarte@palmcove.example",
+      "contactId": "481520000000559001",
+      "assigneeId": null,
+      "departmentId": "481520000000006907",
+      "createdTime": "2026-09-20T10:00:00.000Z",
+      "modifiedTime": "2026-09-27T17:30:00.000Z",
+      "webUrl": "https://desk.zoho.com/support/northwind/ShowHomePage.do#Cases/dv/481520000001220001"
+    }
+  ]
+}

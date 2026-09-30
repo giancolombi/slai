@@ -1,0 +1,101 @@
+{
+  "data": [
+    {
+      "eventName": "TicketUpdated",
+      "eventTime": "2026-09-28T15:00:00.000Z",
+      "actor": { "id": "481520000000195001", "name": "Priya Raman", "type": "Agent" },
+      "source": "Web",
+      "eventInfo": [
+        {
+          "propertyName": "Priority",
+          "propertyValue": { "previousValue": "Medium", "updatedValue": "High", "type": "Text" },
+          "propertyType": "ValueTransition",
+          "systemProperty": true
+        }
+      ]
+    },
+    {
+      "eventName": "ThreadAdded",
+      "eventTime": "2026-09-28T14:00:00.000Z",
+      "actor": { "id": "481520000000572348", "name": "Liam Okafor", "type": "Contact" },
+      "source": "Email",
+      "eventInfo": [
+        { "propertyName": "Channel", "propertyValue": "Mail" },
+        { "propertyName": "Direction", "propertyValue": "Incoming" }
+      ]
+    },
+    {
+      "eventName": "TicketUpdated",
+      "eventTime": "2026-09-28T14:00:00.000Z",
+      "actor": { "id": "481520000000000101", "name": "Desk System", "type": "System" },
+      "source": "System",
+      "eventInfo": [
+        {
+          "propertyName": "Status",
+          "propertyValue": { "previousValue": "Waiting on Customer", "updatedValue": "Open", "type": "Text" },
+          "propertyType": "ValueTransition",
+          "systemProperty": true
+        }
+      ]
+    },
+    {
+      "eventName": "TicketUpdated",
+      "eventTime": "2026-09-28T10:30:00.000Z",
+      "actor": { "id": "481520000000195001", "name": "Priya Raman", "type": "Agent" },
+      "source": "Web",
+      "eventInfo": [
+        {
+          "propertyName": "Status",
+          "propertyValue": { "previousValue": "Open", "updatedValue": "Waiting on Customer", "type": "Text" },
+          "propertyType": "ValueTransition",
+          "systemProperty": true
+        }
+      ]
+    },
+    {
+      "eventName": "CommentAdded",
+      "eventTime": "2026-09-28T10:00:00.000Z",
+      "actor": { "id": "481520000000195001", "name": "Priya Raman", "type": "Agent" },
+      "source": "Web",
+      "eventInfo": [
+        { "propertyName": "CommentType", "propertyValue": "Private" },
+        { "propertyName": "Content", "propertyValue": "<div>Checked the delivery logs.</div>" }
+      ]
+    },
+    {
+      "eventName": "TicketUpdated",
+      "eventTime": "2026-09-28T09:30:00.000Z",
+      "actor": { "id": "481520000000195001", "name": "Priya Raman", "type": "Agent" },
+      "source": "Web",
+      "eventInfo": [
+        {
+          "propertyName": "Case Owner",
+          "propertyValue": {
+            "previousValue": null,
+            "updatedValue": { "id": "481520000000195001", "name": "Priya Raman", "type": "Agent" },
+            "type": "Entity"
+          },
+          "propertyType": "ValueTransition",
+          "systemProperty": true
+        },
+        {
+          "propertyName": "Status",
+          "propertyValue": { "previousValue": "Open", "updatedValue": "Open", "type": "Text" },
+          "propertyType": "ValueTransition",
+          "systemProperty": true
+        }
+      ]
+    },
+    {
+      "eventName": "TicketCreated",
+      "eventTime": "2026-09-28T09:00:00.000Z",
+      "actor": { "id": "481520000000572348", "name": "Liam Okafor", "type": "Contact" },
+      "source": "Email",
+      "eventInfo": [
+        { "propertyName": "Subject", "propertyValue": "Webhook deliveries to our endpoint are timing out" },
+        { "propertyName": "Status", "propertyValue": "Open" },
+        { "propertyName": "Priority", "propertyValue": "Medium" }
+      ]
+    }
+  ]
+}

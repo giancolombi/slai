@@ -1,0 +1,57 @@
+{
+  "data": [
+    {
+      "id": "481520000001234001",
+      "ticketNumber": "1042",
+      "subject": "Webhook deliveries to our endpoint are timing out",
+      "status": "Open",
+      "statusType": "Open",
+      "priority": "High",
+      "channel": "Email",
+      "email": "liam.okafor@bluepeak.example",
+      "contactId": "481520000000572348",
+      "assigneeId": "481520000000195001",
+      "departmentId": "481520000000006907",
+      "createdTime": "2026-09-28T09:00:00.000Z",
+      "modifiedTime": "2026-09-28T15:00:00.000Z",
+      "webUrl": "https://desk.zoho.com/support/northwind/ShowHomePage.do#Cases/dv/481520000001234001",
+      "contact": {
+        "id": "481520000000572348",
+        "firstName": "Liam",
+        "lastName": "Okafor",
+        "email": "liam.okafor@bluepeak.example",
+        "account": { "id": "481520000000480011", "accountName": "Bluepeak Logistics" }
+      },
+      "assignee": {
+        "id": "481520000000195001",
+        "firstName": "Priya",
+        "lastName": "Raman",
+        "email": "priya.raman@northwind.example"
+      }
+    },
+    {
+      "id": "481520000001229001",
+      "ticketNumber": "1039",
+      "subject": "Invoice PDF shows the wrong VAT number",
+      "status": "Closed",
+      "statusType": "Closed",
+      "priority": "Low",
+      "channel": "Web",
+      "email": "mara.lind@fjordhaven.example",
+      "contactId": "481520000000561002",
+      "assigneeId": null,
+      "departmentId": "481520000000006907",
+      "createdTime": "2026-09-25T13:12:00.000Z",
+      "modifiedTime": "2026-09-28T11:45:00.000Z",
+      "webUrl": "https://desk.zoho.com/support/northwind/ShowHomePage.do#Cases/dv/481520000001229001",
+      "contact": {
+        "id": "481520000000561002",
+        "firstName": "Mara",
+        "lastName": "Lind",
+        "email": "mara.lind@fjordhaven.example",
+        "account": null
+      },
+      "assignee": null
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "audits": [
+    {
+      "id": 70005,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T11:00:00Z",
+      "author_id": 111,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "email", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80012,
+          "type": "Comment",
+          "author_id": 111,
+          "body": "Attached is the SAML trace.",
+          "html_body": "<p>Attached is the SAML trace.</p>",
+          "plain_body": "Attached is the SAML trace.",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70005
+        },
+        { "id": 80013, "type": "Change", "value": "open", "field_name": "status", "previous_value": "pending" }
+      ]
+    },
+    {
+      "id": 70006,
+      "ticket_id": 1001,
+      "created_at": "2026-09-28T12:00:00Z",
+      "author_id": 222,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "web", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80014,
+          "type": "Comment",
+          "author_id": 222,
+          "body": "We restored the previous audience value. Logins should work now.",
+          "html_body": "<p>We restored the previous audience value. Logins should work now.</p>",
+          "plain_body": "We restored the previous audience value. Logins should work now.",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70006
+        },
+        { "id": 80015, "type": "Change", "value": "solved", "field_name": "status", "previous_value": "open" }
+      ]
+    },
+    {
+      "id": 70007,
+      "ticket_id": 1001,
+      "created_at": "2026-09-29T08:00:00Z",
+      "author_id": 111,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "email", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        {
+          "id": 80016,
+          "type": "Comment",
+          "author_id": 111,
+          "body": "It is happening again since this morning.",
+          "html_body": "<p>It is happening again since this morning.</p>",
+          "plain_body": "It is happening again since this morning.",
+          "public": true,
+          "attachments": [],
+          "audit_id": 70007
+        },
+        { "id": 80017, "type": "Change", "value": "open", "field_name": "status", "previous_value": "solved" }
+      ]
+    },
+    {
+      "id": 70008,
+      "ticket_id": 1001,
+      "created_at": "2026-09-29T08:10:00Z",
+      "author_id": 222,
+      "metadata": { "system": {}, "custom": {} },
+      "via": { "channel": "web", "source": { "from": {}, "to": {}, "rel": null } },
+      "events": [
+        { "id": 80018, "type": "Change", "value": "urgent", "field_name": "priority", "previous_value": "high" },
+        {
+          "id": 80019,
+          "type": "Change",
+          "value": ["enterprise", "sso", "reopened"],
+          "field_name": "tags",
+          "previous_value": ["enterprise", "sso"]
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": 111,
+      "name": "Maya Chen",
+      "email": "maya.chen@northwind.example",
+      "role": "end-user",
+      "organization_id": 901
+    },
+    { "id": 222, "name": "Dana Whitfield", "email": "dana@acme.com", "role": "agent", "organization_id": null }
+  ],
+  "meta": { "has_more": false, "after_cursor": "xyz2", "before_cursor": "xyz1" },
+  "links": { "prev": null, "next": null }
+}

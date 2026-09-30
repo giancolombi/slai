@@ -1,0 +1,18 @@
+{
+  "status": "COMPLETE",
+  "results": [
+    {
+      "id": "9501",
+      "properties": {
+        "hs_note_body": "<p>Export worker hits the 10-min timeout above 5M rows.</p>",
+        "hs_timestamp": "2026-09-28T09:20:00.000Z",
+        "hubspot_owner_id": "777"
+      },
+      "createdAt": "2026-09-28T09:20:00.000Z",
+      "updatedAt": "2026-09-28T09:20:00.000Z",
+      "archived": false
+    }
+  ],
+  "startedAt": "2026-09-29T10:00:00.000Z",
+  "completedAt": "2026-09-29T10:00:00.100Z"
+}

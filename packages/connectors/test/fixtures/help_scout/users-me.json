@@ -1,0 +1,14 @@
+{
+  "id": 801,
+  "firstName": "Owen",
+  "lastName": "Hart",
+  "email": "owen.hart@acmesupport.example",
+  "role": "owner",
+  "timezone": "Europe/London",
+  "photoUrl": "https://cdn.acmesupport.example/users/801.jpg",
+  "createdAt": "2024-02-01T10:00:00Z",
+  "updatedAt": "2026-09-01T10:00:00Z",
+  "type": "user",
+  "companyId": 44120,
+  "jobTitle": "Support Lead"
+}
