@@ -1,6 +1,7 @@
 /**
  * Demo data: org "Acme Cloud", owner demo@slai.dev (pre-enrolled in TOTP with a
- * fixed, dev-only secret), a `demo` help-desk connection, customer accounts, an
+ * fixed, dev-only secret), a `demo` help-desk connection and its help-center
+ * knowledge source, customer accounts, an
  * active default Enterprise policy and an active Premium policy. Idempotent:
  * rerunning updates rows in place.
  */
@@ -16,6 +17,7 @@ import {
   autonomyRules,
   connections,
   customerAccounts,
+  knowledgeSources,
   memberships,
   notificationChannels,
   organizations,
@@ -252,6 +254,23 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
         });
       }
 
+      // The demo help desk's help center; the worker syncs its articles on its first sweep (T-47).
+      const [kb] = await tx
+        .select({ id: knowledgeSources.id })
+        .from(knowledgeSources)
+        .where(and(eq(knowledgeSources.connectionId, connectionId), eq(knowledgeSources.kind, "helpdesk_articles")));
+      const knowledgeSourceId = kb?.id ?? crypto.randomUUID();
+      if (!kb) {
+        await tx.insert(knowledgeSources).values({
+          id: knowledgeSourceId,
+          orgId,
+          connectionId,
+          kind: "helpdesk_articles",
+          name: "Acme Cloud Help Center",
+          createdBy: userId,
+        });
+      }
+
       // Customers match the demo help desk's requester orgs (packages/connectors demo content).
       const customers = [
         {
@@ -358,7 +377,13 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
           .insert(notificationChannels)
           .values({ orgId, kind: "email", target: "support-leads@acme-cloud.example", minRisk: "at_risk" });
       }
-      return { orgId, userId, connectionId, policyIds: { enterprise: enterpriseId, premium: premiumId } };
+      return {
+        orgId,
+        userId,
+        connectionId,
+        knowledgeSourceId,
+        policyIds: { enterprise: enterpriseId, premium: premiumId },
+      };
     });
   } finally {
     await close();

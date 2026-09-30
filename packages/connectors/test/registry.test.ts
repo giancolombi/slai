@@ -55,6 +55,23 @@ describe("registry", () => {
     expect(getConnector("nope")).toBeNull();
   });
 
+  it("marks the connectors that sync knowledge articles, and they implement the call", () => {
+    const withKnowledge = listConnectors()
+      .filter((c) => c.supportsKnowledge)
+      .map((c) => c.provider);
+    expect(withKnowledge).toEqual(expect.arrayContaining(["zendesk", "intercom", "freshdesk"]));
+    for (const def of listConnectors()) {
+      if (!def.supportsKnowledge) continue;
+      const client = def.create({
+        credentials: def.credentialsSchema.parse(SAMPLE_CREDENTIALS[def.provider]),
+        config: { seed: "t" },
+        mapping: def.defaultMapping,
+        fetch: noFetch,
+      });
+      expect(typeof client.listKnowledgeArticles, def.provider).toBe("function");
+    }
+  });
+
   for (const def of listConnectors()) {
     it(`${def.provider}: definition is consistent`, async () => {
       const creds = def.credentialsSchema.parse(SAMPLE_CREDENTIALS[def.provider]);

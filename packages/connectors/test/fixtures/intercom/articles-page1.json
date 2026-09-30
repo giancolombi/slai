@@ -1,0 +1,45 @@
+{
+  "type": "list",
+  "pages": {
+    "type": "pages",
+    "page": 1,
+    "per_page": 50,
+    "total_pages": 2,
+    "next": "https://api.intercom.io/articles?page=2&per_page=50"
+  },
+  "total_count": 3,
+  "data": [
+    {
+      "id": "6871119",
+      "type": "article",
+      "workspace_id": "abc123",
+      "parent_id": 145,
+      "parent_type": "collection",
+      "title": "Retry webhook deliveries",
+      "description": "What to do when webhooks are delayed",
+      "body": "<p class=\"no-margin\">Webhooks are retried for <b>24 hours</b>.</p><p>Respond within 10&nbsp;seconds.</p>",
+      "author_id": 991,
+      "state": "published",
+      "created_at": 1756700000,
+      "updated_at": 1758000000,
+      "url": "https://intercom.help/acme/en/articles/6871119-retry-webhook-deliveries",
+      "default_locale": "en"
+    },
+    {
+      "id": "6871120",
+      "type": "article",
+      "workspace_id": "abc123",
+      "parent_id": 145,
+      "parent_type": "collection",
+      "title": "Draft: new billing page",
+      "description": "",
+      "body": "<p>WIP</p>",
+      "author_id": 991,
+      "state": "draft",
+      "created_at": 1758000000,
+      "updated_at": 1758000000,
+      "url": null,
+      "default_locale": "en"
+    }
+  ]
+}

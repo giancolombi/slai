@@ -276,6 +276,37 @@
     after a run's send is finished by the reconcile job, not lost or repeated.
   - Known limit: no connector takes an idempotency key or hidden marker yet, so
     matching is by body within the window.
+- **TR-21h** Knowledge sources (T-47). Drafts may only state facts from the
+  thread or the knowledge they are given, so the worker gives them the org's
+  help-center articles and saved replies:
+  - `knowledge_sources` (kind `helpdesk_articles`, `saved_replies` or `manual`;
+    status, last sync, last error) and `knowledge_articles` (title, url, plain
+    body, locale, `enabled`, and a generated `tsvector`, title weighted above
+    body, with a GIN index). Both are org-scoped with forced RLS; `slai_worker`
+    sees only the scheduling columns of sources.
+  - Connectors with `supportsKnowledge` implement
+    `listKnowledgeArticles(cursor)`: Zendesk Help Center, Intercom articles,
+    Freshdesk solutions and the demo help center. Published articles only, as
+    bounded plain text.
+  - `sync-knowledge` pages through a source and upserts by external id,
+    keeping each article's `enabled` flag, then deletes articles the help desk
+    no longer returns. It runs when a connection with a help center is created
+    (the API adds the source), on request, and daily from the sweep (sources
+    never synced or synced over 24h ago). Rate limits retry; other failures set
+    the source to `error`.
+  - Retrieval: the subject plus the customer's last public message become an
+    any-term `to_tsquery` (letters and digits only, at most 40 terms). The top
+    4 enabled articles and saved replies by `ts_rank` are passed as
+    `TicketContext.knowledge`, each body cut to 2,500 characters.
+  - The draft's `usedKnowledge` indexes are resolved to `{id, title, url}` and
+    stored as `usedArticles` on the run output and the reply's payload; the API
+    returns them as `AgentAction.usedKnowledge`.
+  - The guardrail is unchanged: a URL in the draft must appear in the thread
+    or the knowledge. The mock provider quotes and links the most relevant item
+    (two shared content words, one in the title), at confidence 0.9; with
+    nothing relevant it stays unsure.
+  - Not yet: help-desk saved replies/macros (`saved_replies` sources report an
+    error), Zammad (its knowledge-base API is undocumented), translations.
 
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,

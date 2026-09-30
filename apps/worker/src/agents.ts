@@ -41,8 +41,25 @@ type ActionInsert = typeof agentActions.$inferInsert;
 export const THREAD_LIMIT = 20;
 export const MESSAGE_CHARS = 4000;
 
+/** An article a draft relied on, as recorded on the run output and the reply action (T-47). */
+export interface UsedArticle {
+  id: string | null;
+  title: string;
+  url: string | null;
+}
+
 /** Bounded, oldest-first thread plus the SLA state the engine computed. */
 export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: TicketRow): Promise<TicketContext> {
+  return (await buildContextWithRefs(tx, deps, orgId, t)).ctx;
+}
+
+/** The context, plus the article id behind each knowledge item (to record what a draft used). */
+export async function buildContextWithRefs(
+  tx: Tx,
+  deps: WorkerDeps,
+  orgId: string,
+  t: TicketRow,
+): Promise<{ ctx: TicketContext; knowledgeIds: (string | null)[] }> {
   const recent = await tx
     .select()
     .from(ticketComments)
@@ -56,8 +73,14 @@ export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: T
         .where(eq(customerAccounts.id, t.customerAccountId))
     : [];
   const ev = t.evaluation ? fromStoredEvaluation(t.evaluation as StoredEvaluation) : null;
-  const res = await deps.resources(orgId, { id: t.id, connectionId: t.connectionId, subject: t.subject });
-  return {
+  const lastAsk = recent.find((c) => c.authorRole === "requester" && c.public)?.body ?? null;
+  const res = await deps.resources(orgId, {
+    id: t.id,
+    connectionId: t.connectionId,
+    subject: t.subject,
+    lastRequesterMessage: lastAsk ? lastAsk.slice(0, MESSAGE_CHARS) : null,
+  });
+  const ctx: TicketContext = {
     ticketKey: t.displayKey,
     subject: t.subject,
     priority: t.priority,
@@ -85,6 +108,18 @@ export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: T
     knowledge: res.knowledge,
     assignees: res.assignees,
   };
+  return { ctx, knowledgeIds: res.knowledge.map((_, i) => res.knowledgeIds?.[i] ?? null) };
+}
+
+/** Resolves a draft's `usedKnowledge` indexes to the articles behind them. */
+export function usedArticles(
+  ctx: TicketContext,
+  knowledgeIds: (string | null)[],
+  draft: DraftReplyResult,
+): UsedArticle[] {
+  return [...new Set(draft.usedKnowledge)]
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < ctx.knowledge.length)
+    .map((i) => ({ id: knowledgeIds[i] ?? null, title: ctx.knowledge[i]!.title, url: ctx.knowledge[i]!.url }));
 }
 
 /** Records a finished run (usage summed over its model calls) and meters it. Returns cap thresholds newly reached. */
@@ -181,7 +216,7 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
     // "triage" only reaches here for a triage run, which never drafts or sends.
     const level: Autonomy = decided.level === "triage" ? "assist" : decided.level;
     await tx.update(agentRuns).set({ status: "running", startedAt: now }).where(eq(agentRuns.id, runId));
-    const ctx = await buildContext(tx, deps, orgId, ticket);
+    const { ctx, knowledgeIds } = await buildContextWithRefs(tx, deps, orgId, ticket);
     let triageRunId: string | null = null;
     if (run.kind === "draft_reply") {
       const [tr] = await tx
@@ -198,10 +233,10 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
         .returning({ id: agentRuns.id });
       triageRunId = tr!.id;
     }
-    return { run, ticket, rule, level, ctx, triageRunId };
+    return { run, ticket, rule, level, ctx, knowledgeIds, triageRunId };
   });
   if (!prep) return;
-  const { run, ticket, rule, level, ctx } = prep;
+  const { run, ticket, rule, level, ctx, knowledgeIds } = prep;
   if (run.kind !== "triage" && run.kind !== "draft_reply") {
     await failRun(deps, orgId, runId, `unsupported run kind ${run.kind}`);
     return;
@@ -225,7 +260,10 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
     }
 
     // ---- draft ----
-    const dr = await deps.agents.draftReply(ctx, triage);
+    const drafted = await deps.agents.draftReply(ctx, triage);
+    // The run output records which articles the draft relied on (T-47).
+    const used = drafted.ok ? usedArticles(ctx, knowledgeIds, drafted.output) : [];
+    const dr = drafted.ok ? { ...drafted, output: { ...drafted.output, usedArticles: used } } : drafted;
     const conn = await deps.orgDb.withOrg(orgId, (tx) => loadConnection(tx, ticket.connectionId));
     const canNote = conn ? connectorFor(deps, conn).write.internalNote : false;
     const toSend: string[] = [];
@@ -242,7 +280,13 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
         kind: "public_reply",
         body: draft.body,
         confidence: draft.confidence,
-        payload: { flags: draft.flags, usedKnowledge: draft.usedKnowledge, triage: triage ?? null, level },
+        payload: {
+          flags: draft.flags,
+          usedKnowledge: draft.usedKnowledge,
+          usedArticles: used,
+          triage: triage ?? null,
+          level,
+        },
         createdAt: now,
       };
       let blockedReason: string | null = null;

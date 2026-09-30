@@ -5,6 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import type { WorkerDeps } from "./deps.js";
+import { scheduleKnowledgeSyncs } from "./knowledge.js";
 
 /**
  * Claims tickets whose `next_check_at` has passed and enqueues their
@@ -90,11 +91,12 @@ export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Prom
       try {
         const claimed = await sweepDueTickets(deps);
         const syncs = await scheduleSyncs(deps);
+        const knowledge = await scheduleKnowledgeSyncs(deps);
         if (Date.now() - lastBilling >= billingEvery) {
           lastBilling = Date.now();
           await scheduleBilling(deps);
         }
-        if (claimed || syncs) deps.logger.debug({ claimed, syncs }, "sweep");
+        if (claimed || syncs || knowledge) deps.logger.debug({ claimed, syncs, knowledge }, "sweep");
       } catch (e) {
         deps.logger.error({ err: e instanceof Error ? e.message : String(e) }, "sweep failed");
       } finally {

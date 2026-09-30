@@ -244,3 +244,60 @@ describe("zendesk connector", () => {
     expect(f.unused()).toEqual([]);
   });
 });
+
+describe("zendesk help center articles (knowledge)", () => {
+  it("declares knowledge support", () => {
+    expect(zendesk.supportsKnowledge).toBe(true);
+  });
+
+  it("pages through published articles as plain text, skipping drafts", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/help_center/articles.json?page[size]=100`,
+        headers: { authorization: AUTH },
+        fixture: "zendesk/articles-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/help_center/articles.json?page[size]=100&page[after]=xyzA1`,
+        headers: { authorization: AUTH },
+        fixture: "zendesk/articles-page2.json",
+      },
+    ]);
+    const p1 = await c.listKnowledgeArticles!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "360001",
+        title: "Fix a SAML audience mismatch",
+        url: "https://acme.zendesk.com/hc/en-us/articles/360001-Fix-SAML-audience-mismatch",
+        bodyText:
+          "Symptoms\n\nUsers see Invalid SAML assertion: audience mismatch.\n\n• Open your IdP settings\n• Set the audience URI to https://app.acme.example/saml\n\nFish & chips",
+        locale: "en-us",
+        updatedAt: new Date("2026-09-01T12:30:00Z"),
+      },
+    ]);
+    expect(p1.nextCursor).not.toBeNull();
+    const p2 = await c.listKnowledgeArticles!(p1.nextCursor);
+    expect(p2.items.map((a) => [a.sourceId, a.locale, a.bodyText])).toEqual([
+      ["360003", "de", "Bis zu 600 Anfragen pro Minute."],
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("surfaces a rate limit with the server's Retry-After", async () => {
+    const { c } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/help_center/articles.json?page[size]=100`,
+        status: 429,
+        responseHeaders: { "retry-after": "42" },
+        json: { error: "TooManyRequests" },
+      },
+    ]);
+    const err = await rejection(c.listKnowledgeArticles!(null));
+    expect(err.kind).toBe("rate_limited");
+    expect(err.retryAfterMs).toBe(42_000);
+  });
+});

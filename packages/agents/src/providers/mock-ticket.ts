@@ -75,20 +75,60 @@ export function mockTriage(ctx: TicketContext): TriageResult {
   };
 }
 
+/** Words too common to say whether an article is about the ticket. */
+const STOP = new Set(
+  "about after again also been before being between both cannot could does doing down during each every from have having here into just like more most much only other over same should some still such than that their them then there these they this those through under until very want were what when where which while will with would your yours".split(
+    " ",
+  ),
+);
+
 function words(s: string): Set<string> {
-  return new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+  return new Set((s.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter((w) => !STOP.has(w)));
+}
+
+/**
+ * The knowledge item the reply should rely on: the one sharing the most
+ * content words with the subject and the customer's latest message. It must
+ * share at least two, one of them in its title; otherwise nothing is relevant.
+ */
+export function relevantKnowledge(ctx: TicketContext): number {
+  const lastAsk = ctx.thread.filter((m) => m.authorRole === "requester").at(-1)?.body ?? "";
+  const query = words(`${ctx.subject} ${lastAsk}`);
+  let best = -1;
+  let bestScore = 0;
+  ctx.knowledge.forEach((k, i) => {
+    const title = words(k.title);
+    const all = words(`${k.title} ${k.body}`);
+    let overlap = 0;
+    let inTitle = 0;
+    for (const w of query) {
+      if (all.has(w)) overlap++;
+      if (title.has(w)) inTitle++;
+    }
+    const score = overlap + inTitle;
+    if (overlap >= 2 && inTitle >= 1 && score > bestScore) {
+      best = i;
+      bestScore = score;
+    }
+  });
+  return best;
+}
+
+/** The article's opening, up to two sentences and ~400 characters, to quote in the reply. */
+function opening(body: string): string {
+  const sentences = body
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/(?<=[.!?])\s/);
+  let out = sentences[0] ?? "";
+  if (sentences[1] && out.length + sentences[1].length < 400) out += ` ${sentences[1]}`;
+  return out.length > 400 ? `${out.slice(0, 399).trimEnd()}…` : out;
 }
 
 export function mockDraft(ctx: TicketContext, triage: TriageResult | null): DraftReplyResult {
   const t = triage ?? mockTriage(ctx);
   const firstName = ctx.thread.find((m) => m.authorRole === "requester")?.authorName?.split(/\s+/)[0] ?? null;
-  const subjectWords = words(`${ctx.subject} ${ctx.thread.at(-1)?.body ?? ""}`);
-  const kIndex = ctx.knowledge.findIndex((k) => {
-    const kw = words(`${k.title} ${k.body}`);
-    let overlap = 0;
-    for (const w of subjectWords) if (kw.has(w)) overlap++;
-    return overlap >= 2;
-  });
+  const kIndex = relevantKnowledge(ctx);
   const k = kIndex >= 0 ? ctx.knowledge[kIndex]! : null;
   const lines = [
     `Hi ${firstName ?? "there"},`,
@@ -96,10 +136,10 @@ export function mockDraft(ctx: TicketContext, triage: TriageResult | null): Draf
     `Thank you for contacting us about "${ctx.subject}" (ticket ${ctx.ticketKey}).`,
   ];
   if (k) {
-    const firstSentence = k.body.split(/(?<=[.!?])\s/)[0]!.trim();
     lines.push(
       "",
-      `Here is what should help: ${firstSentence}${k.url ? ` More detail is in "${k.title}": ${k.url}` : ""}`,
+      `Here is what should help, from our guide "${k.title}": ${opening(k.body)}`,
+      ...(k.url ? ["", `The full steps are here: ${k.url}`] : []),
     );
     lines.push("", "If that doesn't resolve it, reply here with what you see and we'll dig in further.");
   } else {

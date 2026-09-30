@@ -5,12 +5,14 @@ import type {
   AgentRun,
   Contract,
   CustomerAccount,
+  KnowledgeRef,
   Metric,
   MetricView,
   Policy,
   Replay,
   TicketSummary,
 } from "@slai/shared";
+import { z } from "zod";
 
 type Row<T extends { $inferSelect: unknown }> = T["$inferSelect"];
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -94,7 +96,24 @@ export function toAgentAction(
     createdAt: a.createdAt.toISOString(),
     decidedBy: a.decidedBy,
     decidedAt: iso(a.decidedAt),
+    usedKnowledge: usedKnowledge(a.payload),
   };
+}
+
+const knowledgeRef = z.object({
+  id: z.string().nullable().catch(null),
+  title: z.string(),
+  url: z.string().nullable().catch(null),
+});
+
+/** The articles a draft relied on, as the worker recorded them on the action (T-47); [] when absent or malformed. */
+export function usedKnowledge(payload: unknown): KnowledgeRef[] {
+  const raw = (payload as { usedArticles?: unknown } | null)?.usedArticles;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r) => {
+    const p = knowledgeRef.safeParse(r);
+    return p.success ? [p.data] : [];
+  });
 }
 
 export function toReplay(r: Row<typeof schema.replays>): Replay {

@@ -87,6 +87,14 @@ export const autonomyEnum = pgEnum("autonomy", ["observe", "assist", "autopilot"
 export const alertRiskEnum = pgEnum("alert_risk", ["warning", "at_risk", "breached"]);
 export const channelKindEnum = pgEnum("channel_kind", ["email", "slack_webhook"]);
 export const actorTypeEnum = pgEnum("actor_type", ["user", "system", "agent"]);
+export const knowledgeSourceKindEnum = pgEnum("knowledge_source_kind", [
+  "helpdesk_articles",
+  "saved_replies",
+  "manual",
+]);
+export const knowledgeSourceStatusEnum = pgEnum("knowledge_source_status", ["idle", "syncing", "error"]);
+
+const tsvector = customType<{ data: string }>({ dataType: () => "tsvector" });
 export const billingStatusEnum = pgEnum("billing_status", ["trialing", "active", "past_due", "canceled"]);
 
 // ---------- identity ----------
@@ -654,6 +662,68 @@ export const usageLedger = pgTable(
   (t) => [index().on(t.orgId, t.createdAt)],
 );
 
+// ---------- knowledge (T-47) ----------
+
+/**
+ * Where draft agents get their facts: a help desk's articles (synced by the
+ * `sync-knowledge` job), its saved replies, or saved replies written in slai
+ * (`manual`, no connection).
+ */
+export const knowledgeSources = pgTable(
+  "knowledge_sources",
+  {
+    id: id(),
+    orgId: orgId(),
+    connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "cascade" }),
+    kind: knowledgeSourceKindEnum("kind").notNull(),
+    name: text("name").notNull(),
+    status: knowledgeSourceStatusEnum("status").notNull().default("idle"),
+    lastSyncAt: ts("last_sync_at"),
+    lastError: text("last_error"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index().on(t.orgId),
+    uniqueIndex("knowledge_sources_one_per_connection_kind")
+      .on(t.connectionId, t.kind)
+      .where(sql`connection_id is not null`),
+  ],
+);
+
+/** One article or saved reply. `search` is a generated tsvector (title weighted above body) for retrieval. */
+export const knowledgeArticles = pgTable(
+  "knowledge_articles",
+  {
+    id: id(),
+    orgId: orgId(),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => knowledgeSources.id, { onDelete: "cascade" }),
+    /** The help desk's id; null for manual saved replies. */
+    externalId: text("external_id"),
+    title: text("title").notNull(),
+    url: text("url"),
+    bodyText: text("body_text").notNull(),
+    locale: text("locale"),
+    updatedAtSource: ts("updated_at_source"),
+    enabled: boolean("enabled").notNull().default(true),
+    search: tsvector("search")
+      .notNull()
+      .generatedAlwaysAs(
+        sql`setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') || setweight(to_tsvector('english'::regconfig, coalesce(body_text, '')), 'B')`,
+      ),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique().on(t.sourceId, t.externalId),
+    index("knowledge_articles_search_idx").using("gin", t.search),
+    index().on(t.orgId, t.sourceId),
+  ],
+);
+
 // ---------- billing (T-65) ----------
 
 /**
@@ -733,6 +803,8 @@ export const ORG_SCOPED_TABLES = [
   "notification_channels",
   "replays",
   "usage_ledger",
+  "knowledge_sources",
+  "knowledge_articles",
   "billing_periods",
   "credit_grants",
   "billing_events",

@@ -23,6 +23,8 @@ export const JOB_PAYLOADS = {
   "evaluate-ticket": z.object({ orgId: uuid, ticketId: uuid }),
   /** Fetch one ticket's history from the help desk and ingest it (from sync and webhooks). */
   "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
+  /** Page through one knowledge source's articles and upsert them (T-47). */
+  "sync-knowledge": z.object({ orgId: uuid, sourceId: uuid }),
   /** Refresh the org's billing period snapshot, close the previous one, send billing notices (T-65). */
   "billing-snapshot": z.object({ orgId: uuid }),
 } as const;
@@ -40,6 +42,7 @@ export const QUEUE = {
   runReplay: "run-replay",
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
+  syncKnowledge: "sync-knowledge",
   billingSnapshot: "billing-snapshot",
 } as const satisfies Record<string, JobName>;
 

@@ -8,6 +8,7 @@ import { type AppDeps, type AppEnv, auditBase, auth } from "../context.js";
 import { ApiError, badRequest, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { body, idParam } from "../validate.js";
+import { addKnowledgeSource } from "./knowledge.js";
 
 type ConnectionRow = typeof connections.$inferSelect;
 
@@ -53,6 +54,7 @@ export function connectionRoutes(deps: AppDeps) {
       supportsWebhooks: d.supportsWebhooks,
       write: d.write,
       docsUrl: d.docsUrl,
+      supportsKnowledge: d.supportsKnowledge ?? false,
     }));
     return c.json(items);
   });
@@ -106,6 +108,7 @@ export function connectionRoutes(deps: AppDeps) {
         metadata: { provider: def.provider, name: input.name },
       });
       await deps.jobs.send(tx, "sync-connection", { orgId: a.orgId, connectionId: id, full: true });
+      if (def.supportsKnowledge) await addKnowledgeSource(tx, c, deps, { connectionId: id, name: input.name });
       return r!;
     });
     return c.json(toDto(row, 0), 201);

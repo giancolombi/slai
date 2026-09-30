@@ -176,6 +176,22 @@ export interface ConnectorClient {
     sourceId: string,
     patch: { priority?: Priority; assigneeSourceId?: string; addTags?: string[] },
   ): Promise<void>;
+  /**
+   * Published help-center articles, paginated (T-47). Present only when the
+   * definition sets `supportsKnowledge`. Bodies are bounded plain text.
+   */
+  listKnowledgeArticles?(cursor: string | null): Promise<Page<KnowledgeArticle>>;
+}
+
+/** A help-center article or saved reply, as plain text, for draft agents to rely on. */
+export interface KnowledgeArticle {
+  sourceId: string;
+  title: string;
+  /** Public URL a customer can open; null when the help desk has no public page for it. */
+  url: string | null;
+  bodyText: string;
+  locale: string | null;
+  updatedAt: Date;
 }
 
 export interface ConnectorDefinition<Credentials = unknown> {
@@ -190,5 +206,7 @@ export interface ConnectorDefinition<Credentials = unknown> {
   write: WriteCapabilities;
   defaultMapping: FieldMapping;
   docsUrl: string;
+  /** The client implements `listKnowledgeArticles` (T-47). Absent means false. */
+  supportsKnowledge?: boolean;
   create(ctx: ConnectorContext<Credentials>): ConnectorClient;
 }
