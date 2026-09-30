@@ -35,7 +35,7 @@ Each task references the requirements it serves.
 - [ ] T-18 SCIM provisioning and deprovisioning; group-to-role mapping from the IdP
 - [ ] T-19 Check the IdP's `amr`/`acr` claims for MFA; admin reset of a member's second factor;
       recovery flow for users who lose every factor (today an admin must help out of band)
-- [ ] T-1a SAML end-to-end test against a local IdP, and a SAML POST-binding check with SameSite=Lax cookies
+- [ ] T-19a SAML end-to-end test against a local IdP, and a SAML POST-binding check with SameSite=Lax cookies
 
 ## M2: Connectors
 - [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
