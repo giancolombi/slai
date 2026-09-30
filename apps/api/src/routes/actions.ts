@@ -1,4 +1,4 @@
-import { agentActions, audit, autonomyRules, customerAccounts, type Tx, tickets } from "@slai/db";
+import { agentActions, audit, autonomyRules, customerAccounts, notifyEvent, type Tx, tickets, users } from "@slai/db";
 import { type AutonomyRule, approveActionBody, autonomyRuleBody, rejectActionBody } from "@slai/shared";
 import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { Hono } from "hono";
@@ -32,9 +32,10 @@ export function actionRoutes(deps: AppDeps) {
 
   const selectActions = (tx: Tx) =>
     tx
-      .select({ a: agentActions, displayKey: tickets.displayKey, subject: tickets.subject })
+      .select({ a: agentActions, displayKey: tickets.displayKey, subject: tickets.subject, decider: users.name })
       .from(agentActions)
-      .innerJoin(tickets, eq(tickets.id, agentActions.ticketId));
+      .innerJoin(tickets, eq(tickets.id, agentActions.ticketId))
+      .leftJoin(users, eq(users.id, agentActions.decidedBy));
 
   app.get("/actions", async (c) => {
     const q = query(c, pageQuery.extend({ status: z.enum(ACTION_STATUSES).optional() }));
@@ -51,7 +52,7 @@ export function actionRoutes(deps: AppDeps) {
       page(
         rows,
         q.limit,
-        (r) => toAgentAction(r.a, r),
+        (r) => toAgentAction(r.a, r, r.decider),
         (r) => ({ id: r.a.id }),
       ),
     );
@@ -93,7 +94,10 @@ export function actionRoutes(deps: AppDeps) {
       });
       // The worker performs (and audits) the help-desk write.
       if (decision === "approved") await deps.jobs.send(tx, "execute-action", { orgId: a.orgId, actionId: id });
-      return toAgentAction(updated!, row);
+      // Other open sessions (a teammate's approvals inbox) drop it at once.
+      await notifyEvent(tx, { orgId: a.orgId, type: "action.updated", id });
+      await notifyEvent(tx, { orgId: a.orgId, type: "ticket.updated", id: row.a.ticketId });
+      return toAgentAction(updated!, row, a.user.name);
     });
   };
 

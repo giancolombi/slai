@@ -2,8 +2,13 @@ import type {
   AgentAction,
   AutonomyRule,
   Connection,
+  ConnectionMapping,
   Contract,
+  ContractText,
   CustomerAccount,
+  FieldMappingTable,
+  KnowledgeArticle,
+  KnowledgeSource,
   List,
   Member,
   NotificationChannel,
@@ -19,30 +24,45 @@ import {
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
+  CREDIT_PACKS,
   createConnectionBody,
+  createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   discoverBody,
   inviteBody,
+  knowledgeArticleQuery,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
+  PLANS,
+  type PlanId,
   policyPreviewBody,
   rejectActionBody,
+  savedReplyBody,
   signupBody,
   switchOrgBody,
+  TRIAL,
+  updateKnowledgeArticleBody,
+  updateMappingBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
+  updateSavedReplyBody,
   upsertCustomerBody,
   verifyBackupCodeBody,
   verifyTotpBody,
 } from "@slai/shared";
 import { delay, HttpResponse, http } from "msw";
 import type { z } from "zod";
+import { matchesArticle } from "../lib/knowledge";
 import {
   audit,
+  billing,
   dashboard,
   emptyOrg,
   getDb,
@@ -54,10 +74,33 @@ import {
   toSummary,
   usage,
 } from "./db";
-import { buildCustomers, buildTickets, CONNECTORS, replayResult } from "./fixtures";
+import {
+  buildCustomers,
+  buildInvoices,
+  buildTickets,
+  CONNECTORS,
+  knowledgeRefsFor,
+  type MockKnowledgeSource,
+  replayResult,
+} from "./fixtures";
 import { kestrelAmbiguities, kestrelCitations, kestrelDraftDefinition } from "./policies";
 
 const url = (path: string) => `${API_BASE}${path}`;
+
+/** Mapping mock (T-25): one shared default, per-connection overrides in memory. */
+const MOCK_DEFAULT_MAPPING: FieldMappingTable = {
+  status: { new: "new", open: "open", pending: "pending", hold: "on_hold", solved: "solved", closed: "closed" },
+  priority: { urgent: "urgent", high: "high", normal: "normal", low: "low" },
+};
+const MOCK_OVERRIDES = new Map<string, FieldMappingTable>();
+function mockMapping(c: Connection): ConnectionMapping {
+  return {
+    defaults: MOCK_DEFAULT_MAPPING,
+    overrides: MOCK_OVERRIDES.get(c.id) ?? { status: {}, priority: {} },
+    unmapped: c.mappingIssues,
+    observed: { status: ["open", "pending", "solved", "Waiting on engineering"], priority: ["high", "normal"] },
+  };
+}
 
 function fail(status: number, code: string, message: string, details?: unknown) {
   return HttpResponse.json({ error: { code, message, details } }, { status });
@@ -115,6 +158,7 @@ function ssoProviderFor(email: string) {
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
 const actor = () => getDb().me.user.name;
+const actorId = () => getDb().me.user.id;
 
 /** Wraps a handler with session + CSRF checks, the persisted save, and latency. */
 function guarded<Args extends { request: Request; params: Record<string, string | readonly string[] | undefined> }>(
@@ -138,6 +182,21 @@ function guarded<Args extends { request: Request; params: Record<string, string 
 
 // ---------------------------------------------------------------- lazy state transitions
 
+function sourceView(s: MockKnowledgeSource): KnowledgeSource {
+  const mine = org().knowledgeArticles.filter((a) => a.sourceId === s.id);
+  return { ...s, articleCount: mine.length, enabledCount: mine.filter((a) => a.enabled).length };
+}
+
+/** A requested knowledge sync finishes a few seconds later (the worker's `sync-knowledge` job in the real API). */
+function advanceKnowledge(now: number) {
+  for (const s of org().knowledgeSources) {
+    if (s.status !== "syncing") continue;
+    s.status = "idle";
+    s.lastSyncAt = new Date(now).toISOString();
+    s.lastError = null;
+  }
+}
+
 function advanceContracts(now: number) {
   const o = org();
   for (const c of o.contracts) {
@@ -160,6 +219,7 @@ function advanceContracts(now: number) {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: policyId, name },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(readyAt).toISOString(),
     });
@@ -196,6 +256,29 @@ function advanceReplays(now: number) {
   }
 }
 
+/** Plausible contract text for the demo: each cited quote sits on its cited page among boilerplate clauses. */
+function mockContractText(c: Contract): ContractText {
+  const citations = c.extraction?.citations ?? [];
+  const boiler = [
+    "This Schedule forms part of the Agreement between the parties and is subject to its terms.",
+    "Capitalised terms not defined here have the meaning given in the Master Services Agreement.",
+    "The Supplier shall provide the Support Services with reasonable skill, care and diligence.",
+    "Nothing in this Schedule limits either party's rights under clause 14 (Liability).",
+  ];
+  const paged = citations.some((x) => x.page !== null);
+  const last = Math.max(1, ...citations.map((x) => x.page ?? 1));
+  const pages: ContractText["pages"] = [];
+  for (let n = 1; n <= (paged ? last : 1); n++) {
+    const quotes = citations.filter((x) => (paged ? x.page === n : true)).map((x) => x.quote);
+    const clauses = [...new Set(quotes)].flatMap((q, i) => [`${n}.${i + 1} ${q}`, boiler[(n + i) % boiler.length]!]);
+    pages.push({
+      page: paged ? n : null,
+      text: [`${c.filename}`, "", boiler[n % boiler.length]!, "", ...clauses.map((x) => `${x}\n`)].join("\n"),
+    });
+  }
+  return { contractId: c.id, filename: c.filename, pages, truncated: false };
+}
+
 function customerView(c: ReturnType<typeof org>["customers"][number], now: number): CustomerAccount {
   const o = org();
   const mine = o.tickets.filter((t) => t.customerId === c.id && t.status !== "solved" && t.status !== "closed");
@@ -209,6 +292,31 @@ function customerView(c: ReturnType<typeof org>["customers"][number], now: numbe
 }
 
 // ---------------------------------------------------------------- handlers
+
+/** Sets the org's plan everywhere the app reads it (settings, the session). */
+function setPlan(plan: PlanId) {
+  const o = org();
+  o.billing.plan = plan;
+  o.settings.plan = plan;
+  getDb().me.organization.plan = plan;
+}
+
+/**
+ * The mock stands in for Stripe: checkout "completes" at once and the
+ * redirect stays in the app (the real API returns a Stripe-hosted URL).
+ */
+function subscribe(plan: PlanId) {
+  const o = org();
+  setPlan(plan);
+  Object.assign(o.billing, {
+    status: "active",
+    trialEndsAt: null,
+    pastDueSince: null,
+    hasCustomer: true,
+    hasSubscription: true,
+  });
+  if (o.billing.invoices.length === 0) o.billing.invoices = buildInvoices(Date.now(), PLANS[plan].priceCents ?? 0);
+}
 
 export const handlers = [
   // ------------------------------------------------ auth (mirrors the API's step results and MFA gate)
@@ -424,7 +532,7 @@ export const handlers = [
         id: orgId,
         name: body.organizationName,
         slug: body.organizationName.toLowerCase().replace(/\W+/g, "-"),
-        plan: "replay",
+        plan: TRIAL.plan,
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
@@ -760,6 +868,53 @@ export const handlers = [
     }),
   ),
 
+  http.get(
+    url("/connections/:id/mapping"),
+    guarded(({ params }) => {
+      const c = org().connections.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Connection not found.");
+      return HttpResponse.json(mockMapping(c));
+    }),
+  ),
+  http.put(
+    url("/connections/:id/mapping"),
+    guarded(
+      async ({ request, params }) => {
+        const c = org().connections.find((x) => x.id === params.id);
+        if (!c) return fail(404, "not_found", "Connection not found.");
+        const body = await parse(request, updateMappingBody);
+        if (body instanceof Response) return body;
+        MOCK_OVERRIDES.set(c.id, body);
+        const m = { status: { ...MOCK_DEFAULT_MAPPING.status, ...body.status }, priority: { ...body.priority } };
+        c.mappingIssues = c.mappingIssues.filter((i) => !(i.raw in m[i.field]));
+        audit(actor(), "connection.mapping_updated", { type: "connection", id: c.id });
+        return HttpResponse.json(mockMapping(c));
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/connections/:id/webhook-secret/reveal"),
+    guarded(
+      ({ params }) => {
+        const c = org().connections.find((x) => x.id === params.id);
+        if (!c?.webhookUrl) return fail(404, "not_found", "Connection not found.");
+        audit(actor(), "connection.webhook_secret_revealed", { type: "connection", id: c.id });
+        return HttpResponse.json({
+          webhookUrl: c.webhookUrl,
+          secretSource: "slai",
+          secret: `whsec_mock_${c.id.slice(0, 8)}`,
+          configured: true,
+          steps: [
+            "In your help desk, create a webhook that POSTs JSON to {url}.",
+            "Add the header X-Slai-Webhook-Secret: {secret}, then trigger it on ticket create and update.",
+          ],
+        });
+      },
+      { admin: true },
+    ),
+  ),
+
   // ------------------------------------------------ customers
   http.get(
     url("/customers"),
@@ -816,6 +971,14 @@ export const handlers = [
       return c ? HttpResponse.json(c) : fail(404, "not_found", "Contract not found.");
     }),
   ),
+  http.get(
+    url("/contracts/:id/text"),
+    guarded(({ params }) => {
+      const c = org().contracts.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Contract not found.");
+      return HttpResponse.json(mockContractText(c));
+    }),
+  ),
   http.get(url("/contracts/:id/file"), async ({ params }) => {
     const c = org().contracts.find((x) => x.id === params.id);
     if (!c) return fail(404, "not_found", "Contract not found.");
@@ -841,7 +1004,8 @@ export const handlers = [
         customerAccountId,
         status: "extracting",
         uploadedAt: new Date().toISOString(),
-        uploadedBy: actor(),
+        uploadedBy: actorId(),
+        uploadedByName: actor(),
         error: null,
         extraction: null,
       };
@@ -890,6 +1054,7 @@ export const handlers = [
         isDefault: body.isDefault,
         definition: body.definition,
         approvedBy: null,
+        approvedByName: null,
         approvedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -930,7 +1095,8 @@ export const handlers = [
         for (const x of o.policies)
           if (x.status === "active" && x.name === p.name && x.id !== p.id) x.status = "superseded";
         p.status = "active";
-        p.approvedBy = actor();
+        p.approvedBy = actorId();
+        p.approvedByName = actor();
         p.approvedAt = new Date().toISOString();
         const contract = o.contracts.find((c) => c.id === p.contractId);
         if (contract?.extraction?.policyIds.every((id) => o.policies.find((x) => x.id === id)?.status === "active")) {
@@ -1049,10 +1215,14 @@ export const handlers = [
           status: "proposed",
           body: `Hi ${first},\n\nThanks for your patience while we looked into this. Our engineers have identified the cause and a fix is rolling out now. I'll confirm here as soon as it's complete, and within the next hour either way.\n\n${t.assigneeName ?? "The support team"}`,
           payload: {},
+          usedKnowledge: knowledgeRefsFor(t.subject).filter((r) =>
+            o.knowledgeArticles.some((a) => a.id === r.id && a.enabled),
+          ),
           confidence: 0.87,
           blockedReason: null,
           createdAt: new Date(now).toISOString(),
           decidedBy: null,
+          decidedByName: null,
           decidedAt: null,
         });
       }
@@ -1088,7 +1258,8 @@ export const handlers = [
       const edited = body.body !== undefined && body.body !== a.body;
       if (body.body !== undefined) a.body = body.body;
       a.status = "sent";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       const t = o.tickets.find((x) => x.id === a.ticketId);
       if (t) {
@@ -1132,11 +1303,178 @@ export const handlers = [
       if (a.status !== "proposed" && a.status !== "blocked")
         return fail(409, "already_decided", "This draft was already decided.");
       a.status = "rejected";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       audit(actor(), "action.rejected", { type: "agent_action", id: a.id }, { reason: body.reason ?? null });
       return HttpResponse.json(a);
     }),
+  ),
+
+  // ------------------------------------------------ knowledge (T-47)
+  http.get(
+    url("/knowledge-sources"),
+    guarded(() => {
+      advanceKnowledge(Date.now());
+      return HttpResponse.json(list(org().knowledgeSources.map(sourceView)));
+    }),
+  ),
+  http.post(
+    url("/knowledge-sources"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, createKnowledgeSourceBody);
+        if (body instanceof Response) return body;
+        const o = org();
+        if (body.kind === "manual") {
+          if (body.connectionId) return fail(400, "invalid_request", "Saved replies don't belong to a connection.");
+          if (o.knowledgeSources.some((s) => s.kind === "manual"))
+            return fail(409, "conflict", "Your organization already has a saved-replies source.");
+        } else {
+          const conn = o.connections.find((c) => c.id === body.connectionId);
+          if (!conn) return fail(400, "invalid_request", "Choose a connected help desk.");
+          if (!CONNECTORS.find((c) => c.provider === conn.provider)?.supportsKnowledge)
+            return fail(400, "invalid_request", "This help desk has no help center slai can sync.");
+          if (o.knowledgeSources.some((s) => s.connectionId === conn.id && s.kind === body.kind))
+            return fail(409, "conflict", "This help desk is already a knowledge source.");
+        }
+        const src: MockKnowledgeSource = {
+          id: crypto.randomUUID(),
+          connectionId: body.connectionId,
+          kind: body.kind,
+          name: body.name,
+          status: body.kind === "manual" ? "idle" : "syncing",
+          lastSyncAt: null,
+          lastError: null,
+          createdAt: new Date().toISOString(),
+        };
+        o.knowledgeSources.push(src);
+        audit(actor(), "knowledge_source.created", { type: "knowledge_source", id: src.id }, { kind: src.kind });
+        return HttpResponse.json(sourceView(src), { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/knowledge-sources/:id/sync"),
+    guarded(
+      ({ params }) => {
+        const src = org().knowledgeSources.find((s) => s.id === params.id);
+        if (!src) return fail(404, "not_found", "Knowledge source not found.");
+        if (src.kind === "manual") return fail(400, "invalid_request", "Saved replies are not synced.");
+        src.status = "syncing";
+        src.lastError = null;
+        audit(actor(), "knowledge_source.sync_requested", { type: "knowledge_source", id: src.id });
+        return HttpResponse.json({ queued: true }, { status: 202 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.get(
+    url("/knowledge-articles"),
+    guarded(({ request }) => {
+      const r = knowledgeArticleQuery.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+      if (!r.success) return fail(400, "invalid_query", "Query parameters are invalid.", r.error.issues);
+      const { q, sourceId, cursor, limit } = r.data;
+      const all = org()
+        .knowledgeArticles.filter((a) => (!sourceId || a.sourceId === sourceId) && matchesArticle(a, q))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      const offset = Number(cursor ?? 0) || 0;
+      const page = all.slice(offset, offset + limit);
+      return HttpResponse.json(list(page, offset + limit < all.length ? String(offset + limit) : null));
+    }),
+  ),
+  http.patch(
+    url("/knowledge-articles/:id"),
+    guarded(
+      async ({ request, params }) => {
+        const body = await parse(request, updateKnowledgeArticleBody);
+        if (body instanceof Response) return body;
+        const a = org().knowledgeArticles.find((x) => x.id === params.id);
+        if (!a) return fail(404, "not_found", "Article not found.");
+        a.enabled = body.enabled;
+        audit(
+          actor(),
+          body.enabled ? "knowledge_article.enabled" : "knowledge_article.disabled",
+          { type: "knowledge_article", id: a.id },
+          { title: a.title },
+        );
+        return HttpResponse.json(a);
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/saved-replies"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, savedReplyBody);
+        if (body instanceof Response) return body;
+        const o = org();
+        let src = o.knowledgeSources.find((s) => s.kind === "manual");
+        if (!src) {
+          src = {
+            id: crypto.randomUUID(),
+            connectionId: null,
+            kind: "manual",
+            name: "Saved replies",
+            status: "idle",
+            lastSyncAt: null,
+            lastError: null,
+            createdAt: new Date().toISOString(),
+          };
+          o.knowledgeSources.push(src);
+        }
+        const a: KnowledgeArticle = {
+          id: crypto.randomUUID(),
+          sourceId: src.id,
+          sourceKind: "manual",
+          sourceName: src.name,
+          externalId: null,
+          title: body.title,
+          url: body.url,
+          bodyText: body.bodyText,
+          locale: null,
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        };
+        o.knowledgeArticles.push(a);
+        audit(actor(), "saved_reply.created", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return HttpResponse.json(a, { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.patch(
+    url("/saved-replies/:id"),
+    guarded(
+      async ({ request, params }) => {
+        const body = await parse(request, updateSavedReplyBody);
+        if (body instanceof Response) return body;
+        const a = org().knowledgeArticles.find((x) => x.id === params.id && x.sourceKind === "manual");
+        if (!a) return fail(404, "not_found", "Saved reply not found.");
+        Object.assign(a, Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)), {
+          updatedAt: new Date().toISOString(),
+        });
+        audit(actor(), "saved_reply.updated", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return HttpResponse.json(a);
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/saved-replies/:id"),
+    guarded(
+      ({ params }) => {
+        const o = org();
+        const a = o.knowledgeArticles.find((x) => x.id === params.id && x.sourceKind === "manual");
+        if (!a) return fail(404, "not_found", "Saved reply not found.");
+        o.knowledgeArticles = o.knowledgeArticles.filter((x) => x.id !== a.id);
+        audit(actor(), "saved_reply.deleted", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
   ),
 
   // ------------------------------------------------ autonomy & notifications
@@ -1280,6 +1618,79 @@ export const handlers = [
   http.get(
     url("/usage"),
     guarded(() => HttpResponse.json(usage(Date.now()))),
+  ),
+
+  // ------------------------------------------------ billing (T-65)
+  http.get(
+    url("/billing"),
+    guarded(() => HttpResponse.json(billing(Date.now()))),
+  ),
+  http.post(
+    url("/billing/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, billingCheckoutBody);
+        if (body instanceof Response) return body;
+        subscribe(body.plan);
+        audit(actor(), "billing.checkout_completed", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json({ url: "/billing?checkout=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/credit-packs/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, creditPackCheckoutBody);
+        if (body instanceof Response) return body;
+        const pack = CREDIT_PACKS.find((p) => p.id === body.pack);
+        if (!pack) return fail(400, "validation_failed", "Unknown credit pack.");
+        const o = org();
+        o.billing.purchasedCredits += pack.credits;
+        o.billing.hasCustomer = true;
+        audit(actor(), "billing.credits_purchased", { type: "organization", id: o.settings.id }, body);
+        return HttpResponse.json({ url: "/billing?credits=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/portal"),
+    guarded(
+      () => {
+        if (!org().billing.hasCustomer) return fail(409, "no_customer", "Choose a plan first.");
+        return HttpResponse.json({ url: "/billing?portal=return" });
+      },
+      { admin: true },
+    ),
+  ),
+  // The mock accepts this in any mode so the demo can show every billing state.
+  http.post(
+    url("/billing/manual"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, manualBillingBody);
+        if (body instanceof Response) return body;
+        const b = org().billing;
+        if (body.plan) setPlan(body.plan);
+        if (body.status) {
+          b.status = body.status;
+          b.pastDueSince = body.status === "past_due" ? (b.pastDueSince ?? new Date().toISOString()) : null;
+          if (body.status !== "trialing") {
+            b.hasCustomer = true;
+            b.hasSubscription = body.status !== "canceled";
+            if (b.invoices.length === 0) b.invoices = buildInvoices(Date.now(), PLANS[b.plan].priceCents ?? 0);
+          }
+        }
+        if (body.trialEndsAt !== undefined) b.trialEndsAt = body.trialEndsAt;
+        if (body.pastDueSince !== undefined) b.pastDueSince = body.pastDueSince;
+        if (body.grantCredits) b.purchasedCredits += body.grantCredits;
+        audit(actor(), "billing.manual_update", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json(billing(Date.now()));
+      },
+      { admin: true },
+    ),
   ),
   http.get(
     url("/audit-events"),

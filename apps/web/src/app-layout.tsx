@@ -24,6 +24,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import {
+  BookOpen,
   Bot,
   Building2,
   Cable,
@@ -44,7 +45,10 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef } from "react";
+import { BillingBanner } from "./components/billing-banner";
+import { LiveIndicator } from "./components/live-indicator";
 import { api, errorMessage } from "./lib/api";
+import { useLiveUpdates } from "./lib/live";
 import { useActions, useContracts, useMe } from "./lib/queries";
 
 export const MOCK_MODE = import.meta.env.VITE_MOCK_API === "1";
@@ -90,11 +94,12 @@ function Nav() {
       </SidebarSection>
       <SidebarSection title="Automate">
         {item("/autonomy", <Bot />, "Autonomy")}
+        {item("/knowledge", <BookOpen />, "Knowledge")}
         {item("/connections", <Cable />, "Connections")}
       </SidebarSection>
       <SidebarSection title="Insights">
         {item("/replay", <History />, "Breach Replay")}
-        {item("/usage", <Receipt />, "Usage & billing")}
+        {item("/billing", <Receipt />, "Billing")}
         {item("/audit", <ShieldCheck />, "Audit log")}
       </SidebarSection>
       <SidebarSection title="Organization">
@@ -229,6 +234,9 @@ function OrgMenu() {
 
 export function AppLayout() {
   const nav = <Nav />;
+  const { data: me } = useMe();
+  // The mock API has no event stream; it keeps polling instead.
+  useLiveUpdates(me?.organization.id, !MOCK_MODE);
   return (
     <AppShell
       sidebar={nav}
@@ -247,6 +255,7 @@ export function AppLayout() {
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            <LiveIndicator />
             <TicketSearch />
             <ThemeToggle />
             <UserMenu />
@@ -254,6 +263,7 @@ export function AppLayout() {
         </TopBar>
       }
     >
+      <BillingBanner />
       <Outlet />
     </AppShell>
   );

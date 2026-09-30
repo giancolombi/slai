@@ -9,13 +9,36 @@ export interface UsageMeterProps {
   valueText: string;
   /** Fraction at which the bar turns to warning. Default 0.8. */
   warnAt?: number;
+  /** Where the tick mark sits, as a fraction of `max` (e.g. the spend cap). Defaults to `warnAt`. */
+  markAt?: number | null;
+  /** What the tick mark means, shown on hover. */
+  markLabel?: string;
+  /** Fraction at which the bar turns to breached. Default 1. */
+  breachAt?: number;
   className?: string;
 }
 
-/** A quota meter (not an SLA): accent fill, warning past `warnAt`, breached at 100%. */
-export function UsageMeter({ label, value, max, valueText, warnAt = 0.8, className }: UsageMeterProps) {
+/** A quota meter (not an SLA): accent fill, warning past `warnAt`, breached past `breachAt`. */
+export function UsageMeter({
+  label,
+  value,
+  max,
+  valueText,
+  warnAt = 0.8,
+  markAt,
+  markLabel,
+  breachAt = 1,
+  className,
+}: UsageMeterProps) {
   const fraction = max ? value / max : 0;
-  const tone = !max ? "bg-accent" : fraction >= 1 ? "bg-breached" : fraction >= warnAt ? "bg-warning" : "bg-accent";
+  const tone = !max
+    ? "bg-accent"
+    : fraction >= breachAt
+      ? "bg-breached"
+      : fraction >= warnAt
+        ? "bg-warning"
+        : "bg-accent";
+  const mark = markAt === undefined ? warnAt : markAt;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a native <meter> can't be styled consistently across browsers
     <div
@@ -31,11 +54,12 @@ export function UsageMeter({ label, value, max, valueText, warnAt = 0.8, classNa
         className={cn("h-full rounded-full transition-[width] duration-[var(--duration-slow)] ease-out", tone)}
         style={{ width: max ? `${Math.min(fraction, 1) * 100}%` : "0%" }}
       />
-      {max ? (
+      {max && mark !== null && mark > 0 && mark < 1 ? (
         <span
           aria-hidden
-          className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-surface"
-          style={{ left: `${warnAt * 100}%` }}
+          title={markLabel}
+          className={cn("absolute inset-y-0 w-0.5 -translate-x-1/2", markAt === undefined ? "bg-surface" : "bg-ink/70")}
+          style={{ left: `${mark * 100}%` }}
         />
       ) : null}
     </div>

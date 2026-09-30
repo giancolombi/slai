@@ -29,6 +29,7 @@ import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "
 import { header, hmac, safeEqual } from "../lib/hmac.js";
 import { HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
+import { oauthFetch, oauthTokenFields, readTokens } from "../lib/oauth.js";
 import { decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
@@ -43,7 +44,8 @@ import {
   type FieldMapping,
 } from "../types.js";
 
-const credentialsSchema = z.object({ accessToken: z.string().min(1) });
+/** A private-app token, or an OAuth access token (with its refresh token) from the connect flow. */
+const credentialsSchema = z.object({ accessToken: z.string().min(1), ...oauthTokenFields });
 export type HubspotCredentials = z.infer<typeof credentialsSchema>;
 
 const defaultMapping: FieldMapping = {
@@ -68,6 +70,7 @@ const HISTORY_PROPERTIES = ["hs_pipeline_stage", "hs_ticket_priority", "hubspot_
 /** Search is capped at 10,000 results per query; re-anchor `since` before hitting it. */
 const SEARCH_REANCHOR_AT = 9900;
 const WEBHOOK_MAX_AGE_MS = 5 * 60_000;
+const TOKEN_URL = "https://api.hubapi.com/oauth/v1/token";
 const NOTE_TO_TICKET = 228;
 
 const id = z.union([z.string(), z.number()]).transform(String);
@@ -130,6 +133,21 @@ export const hubspot: ConnectorDefinition<HubspotCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "In your HubSpot developer account, open the app → Webhooks and set the target URL to {url}.",
+      "Subscribe to ticket.creation, ticket.propertyChange (hs_pipeline_stage, hs_ticket_priority, hubspot_owner_id) and ticket.associationChange.",
+      "Copy the app's client secret (Auth tab) and paste it below: HubSpot signs webhooks with it (signature v3).",
+    ],
+  },
+  oauth: {
+    authorizeUrl: "https://app.hubspot.com/oauth/authorize",
+    tokenUrl: TOKEN_URL,
+    scopes: ["oauth", "tickets", "crm.objects.contacts.read", "crm.objects.companies.read", "sales-email-read"],
+    pkce: false,
+    toCredentials: ({ token, clientId, clientSecret, now }) => ({ ...readTokens(token, now), clientId, clientSecret }),
+  },
   write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl: "https://developers.hubspot.com/docs/api-reference/crm-tickets-v3/guide",
@@ -137,9 +155,8 @@ export const hubspot: ConnectorDefinition<HubspotCredentials> = {
     const creds = credentialsSchema.parse(ctx.credentials);
     const http = new HttpClient({
       baseUrl: "https://api.hubapi.com",
-      fetch: ctx.fetch,
+      fetch: oauthFetch(ctx, creds, TOKEN_URL),
       signal: ctx.signal,
-      headers: { Authorization: `Bearer ${creds.accessToken}` },
     });
     const portalId =
       typeof ctx.config?.portalId === "string" || typeof ctx.config?.portalId === "number"

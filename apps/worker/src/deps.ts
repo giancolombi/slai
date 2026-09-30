@@ -1,6 +1,7 @@
 import type { AgentRuntime, TicketContext } from "@slai/agents";
 import type { ConnectorDefinition } from "@slai/connectors";
 import type { Database, Keyring, OrgDatabase, StorageDriver } from "@slai/db";
+import type { UsageReporter } from "./billing.js";
 import type { Clock } from "./clock.js";
 import { FIRST_SEEN_GRACE_MS, SEND_RECONCILE_AFTER_MS } from "./decide.js";
 import type { Logger } from "./logger.js";
@@ -22,13 +23,24 @@ export interface WorkerConfig {
   firstSeenGraceMs: number;
   /** A help-desk write claimed longer ago than this is reconciled (looked for, then retried) (TR-21g). */
   sendReconcileMs: number;
+  /** A help-desk knowledge source is re-synced when its last sync is older than this (T-47). */
+  knowledgeSyncIntervalMs: number;
+  /** Stripe Billing Meter event names for overage (T-65). */
+  meters?: { trackedTickets: string; credits: string };
+  /** How often each org's billing snapshot is refreshed (T-65). */
+  billingIntervalMs?: number;
 }
 
-/** Help-center snippets and assignees for the ticket agents. No knowledge base exists yet, so the default is none. */
+export interface TicketResources extends Pick<TicketContext, "knowledge" | "assignees"> {
+  /** The `knowledge_articles` id of each knowledge item, in the same order (T-47). */
+  knowledgeIds?: (string | null)[];
+}
+
+/** Help-center snippets and assignees for the ticket agents (production: `knowledgeResources`, T-47). */
 export type ResourceLoader = (
   orgId: string,
-  ticket: { id: string; connectionId: string; subject: string },
-) => Promise<Pick<TicketContext, "knowledge" | "assignees">>;
+  ticket: { id: string; connectionId: string; subject: string; lastRequesterMessage?: string | null },
+) => Promise<TicketResources>;
 
 export interface WorkerDeps {
   /** slai_app (RLS): all org data through withOrg. */
@@ -48,6 +60,8 @@ export interface WorkerDeps {
   logger: Logger;
   resources: ResourceLoader;
   config: WorkerConfig;
+  /** Stripe usage reporting; absent or null in manual billing mode (no Stripe keys) (T-65). */
+  usageReporter?: UsageReporter | null;
 }
 
 export const noResources: ResourceLoader = async () => ({ knowledge: [], assignees: [] });
@@ -61,4 +75,5 @@ export const DEFAULT_CONFIG: WorkerConfig = {
   appUrl: "http://localhost:5173",
   firstSeenGraceMs: FIRST_SEEN_GRACE_MS,
   sendReconcileMs: SEND_RECONCILE_AFTER_MS,
+  knowledgeSyncIntervalMs: 86_400_000,
 };

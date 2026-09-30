@@ -18,6 +18,15 @@
  * reuses them for forms). Responses are plain TypeScript types.
  */
 import { z } from "zod";
+import {
+  type AgentCeiling,
+  BILLING_STATUSES,
+  type BillingState,
+  type BillingStatus,
+  CHECKOUT_PLANS,
+  PLAN_IDS,
+  type PlanId,
+} from "./plans.js";
 
 // ---------- enums ----------
 
@@ -172,6 +181,13 @@ export interface MfaResetResult {
   sessionsRevoked: number;
 }
 export const inviteBody = z.object({ email: z.email(), role: z.enum(ROLES) });
+/** `POST /members/invite` → 201 Invitation. The token is never returned; it goes only to the invitee. */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: string;
+}
 export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -303,6 +319,15 @@ export interface ConnectorInfo {
   supportsWebhooks: boolean;
   write: { internalNote: boolean; publicReply: boolean; assign: boolean; priority: boolean; tags: boolean };
   docsUrl: string;
+  /** Present when the provider supports "Continue with <Provider>" (T-57). */
+  oauth?: {
+    /** False when this deployment has no OAuth app for the provider (OAUTH_<PROVIDER>_CLIENT_ID/SECRET). */
+    configured: boolean;
+    /** Values asked for before the redirect, e.g. the Zendesk subdomain. */
+    params: { key: string; label: string; placeholder?: string; help?: string; options?: string[] }[];
+  };
+  /** The connector can sync help-center articles into a knowledge source (T-47). */
+  supportsKnowledge?: boolean;
 }
 export interface Connection {
   id: string;
@@ -324,6 +349,63 @@ export const createConnectionBody = z.object({
   credentials: z.record(z.string(), z.string()),
   config: z.record(z.string(), z.unknown()).default({}),
 });
+
+// ---------- status/priority mapping (PR-8, T-25) ----------
+
+export const TICKET_STATUSES = [
+  "new",
+  "open",
+  "pending",
+  "on_hold",
+  "solved",
+  "closed",
+] as const satisfies readonly TicketStatus[];
+export const PRIORITIES = ["urgent", "high", "normal", "low"] as const satisfies readonly Priority[];
+
+export interface FieldMappingTable {
+  status: Record<string, TicketStatus>;
+  /** null: "no priority" (the policy's default priority applies). */
+  priority: Record<string, Priority | null>;
+}
+export interface ConnectionMapping {
+  /** The connector's shipped mapping. */
+  defaults: FieldMappingTable;
+  /** This connection's overrides (entries that differ from the defaults). */
+  overrides: FieldMappingTable;
+  /** Raw values sync found that nothing maps yet (they count as open / no priority until mapped). */
+  unmapped: { field: "status" | "priority"; raw: string }[];
+  /** Distinct raw values seen on this connection's stored tickets. */
+  observed: { status: string[]; priority: string[] };
+}
+const rawKey = z.string().trim().min(1).max(200);
+const MAX_MAPPING_ENTRIES = 500;
+/** PUT /connections/:id/mapping replaces the overrides; `{ status: {}, priority: {} }` resets to the defaults. */
+export const updateMappingBody = z.object({
+  status: z
+    .record(rawKey, z.enum(TICKET_STATUSES))
+    .default({})
+    .refine((r) => Object.keys(r).length <= MAX_MAPPING_ENTRIES, `At most ${MAX_MAPPING_ENTRIES} statuses.`),
+  priority: z
+    .record(rawKey, z.enum(PRIORITIES).nullable())
+    .default({})
+    .refine((r) => Object.keys(r).length <= MAX_MAPPING_ENTRIES, `At most ${MAX_MAPPING_ENTRIES} priorities.`),
+});
+
+// ---------- webhook secret (T-57) ----------
+
+/** Returned only by the admin-only, audited reveal (and never in list or detail DTOs). */
+export interface WebhookSecretReveal {
+  webhookUrl: string;
+  /** "slai": paste `secret` into the help desk. "provider": the help desk signs; paste its secret into slai. */
+  secretSource: "slai" | "provider";
+  /** slai's generated secret; null when the provider's own secret is used (or none was set yet). */
+  secret: string | null;
+  /** True when a secret is stored (for "provider", whether it was pasted in yet). */
+  configured: boolean;
+  steps: string[];
+}
+/** For providers that generate their own signing secret: the admin pastes it into slai. */
+export const setWebhookSecretBody = z.object({ secret: z.string().trim().min(8).max(500) });
 
 // ---------- customers (our customer's customers) ----------
 
@@ -355,7 +437,10 @@ export interface Contract {
   customerAccountId: string | null;
   status: ContractStatus;
   uploadedAt: string;
-  uploadedBy: string;
+  /** User id of the uploader (null if that user was deleted). */
+  uploadedBy: string | null;
+  /** The uploader's display name, so clients needn't resolve `uploadedBy`. */
+  uploadedByName: string | null;
   error: string | null;
   /** Present once extraction finished. */
   extraction: {
@@ -367,6 +452,20 @@ export interface Contract {
 }
 /** `POST /contracts` is multipart: `file` (pdf/docx/txt/md, ≤ 20 MB) + optional `customerAccountId`. */
 
+/** Longest contract text `GET /contracts/:id/text` returns; the rest is cut and `truncated` set. */
+export const CONTRACT_TEXT_MAX_CHARS = 400_000;
+/**
+ * `GET /contracts/:id/text`: the plain text slai extracted from the file (unpdf for PDF,
+ * mammoth for DOCX), for reading citations in place. A PDF has one entry per page
+ * (`page` from 1, matching citation pages); other formats are one entry with `page: null`.
+ */
+export interface ContractText {
+  contractId: string;
+  filename: string;
+  pages: { page: number | null; text: string }[];
+  truncated: boolean;
+}
+
 export type PolicyStatus = "draft" | "active" | "superseded" | "archived";
 export interface Policy {
   id: string;
@@ -377,7 +476,10 @@ export interface Policy {
   isDefault: boolean;
   /** The engine's SlaPolicy definition (validated by @slai/sla-engine policySchema). */
   definition: unknown;
+  /** User id of the approving admin; null while a draft. */
   approvedBy: string | null;
+  /** The approver's display name. */
+  approvedByName: string | null;
   approvedAt: string | null;
   createdAt: string;
 }
@@ -479,8 +581,16 @@ export interface AgentAction {
   /** Why autopilot did not send it (guardrail), if blocked. */
   blockedReason: string | null;
   createdAt: string;
+  /**
+   * User id of the person who approved or rejected it. Null with `decidedAt` set means
+   * slai decided on its own (an autopilot send, or an assist-mode internal note).
+   */
   decidedBy: string | null;
+  /** The decider's display name (null when `decidedBy` is null). */
+  decidedByName: string | null;
   decidedAt: string | null;
+  /** Knowledge the draft relied on (public replies). Always set by the API; optional for older clients. */
+  usedKnowledge?: KnowledgeRef[];
 }
 export const approveActionBody = z.object({ body: z.string().min(1).max(20000).optional() });
 export const rejectActionBody = z.object({ reason: z.string().max(2000).optional() });
@@ -502,6 +612,83 @@ export const autonomyRuleBody = z.object({
   triggerAt: z.enum(["warning", "at_risk", "breached"]),
   minConfidence: z.number().min(0).max(1).default(0.8),
 });
+
+// ---------- knowledge (T-47) ----------
+
+export const KNOWLEDGE_SOURCE_KINDS = ["helpdesk_articles", "saved_replies", "manual"] as const;
+export type KnowledgeSourceKind = (typeof KNOWLEDGE_SOURCE_KINDS)[number];
+export type KnowledgeSourceStatus = "idle" | "syncing" | "error";
+
+/** Where drafts get their facts: a help desk's articles, or saved replies written in slai (`manual`). */
+export interface KnowledgeSource {
+  id: string;
+  connectionId: string | null;
+  kind: KnowledgeSourceKind;
+  name: string;
+  status: KnowledgeSourceStatus;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  articleCount: number;
+  enabledCount: number;
+  createdAt: string;
+}
+/** `helpdesk_articles` needs a connection whose connector supports knowledge; `manual` takes none. */
+export const createKnowledgeSourceBody = z.object({
+  kind: z.enum(["helpdesk_articles", "manual"]),
+  name: z.string().trim().min(1).max(120),
+  connectionId: z.uuid().nullable().default(null),
+});
+
+export interface KnowledgeArticle {
+  id: string;
+  sourceId: string;
+  sourceKind: KnowledgeSourceKind;
+  sourceName: string;
+  externalId: string | null;
+  title: string;
+  url: string | null;
+  bodyText: string;
+  locale: string | null;
+  enabled: boolean;
+  /** The help desk's last update (synced articles) or the last edit in slai (saved replies). */
+  updatedAt: string;
+}
+/** `GET /knowledge-articles?q=&sourceId=&cursor=&limit=`; `q` is a full-text search over title and body. */
+export const knowledgeArticleQuery = z.object({
+  q: z.string().trim().max(200).optional(),
+  sourceId: z.uuid().optional(),
+  cursor: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export const updateKnowledgeArticleBody = z.object({ enabled: z.boolean() });
+
+/** A saved reply written in slai; stored as an article of the org's `manual` source. */
+export const savedReplyBody = z.object({
+  title: z.string().trim().min(1).max(200),
+  bodyText: z.string().trim().min(1).max(10_000),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .nullable()
+    .default(null),
+});
+export const updateSavedReplyBody = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  bodyText: z.string().trim().min(1).max(10_000).optional(),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .nullable()
+    .optional(),
+  enabled: z.boolean().optional(),
+});
+
+/** An article a draft relied on. `id` is null when the article has since been deleted. */
+export interface KnowledgeRef {
+  id: string | null;
+  title: string;
+  url: string | null;
+}
 
 // ---------- dashboard, replay, usage, audit ----------
 
@@ -548,8 +735,73 @@ export interface UsageSummary {
   creditsUsed: number;
   costCents: number;
   spendCapCents: number | null;
-  byKind: { kind: string; count: number; costCents: number }[];
+  byKind: { kind: string; count: number; credits: number; costCents: number }[];
   trackedTickets: number;
+}
+
+// ---------- billing (T-65) ----------
+
+export interface BillingInvoice {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountDueCents: number;
+  amountPaidCents: number;
+  createdAt: string;
+  hostedUrl: string | null;
+  pdfUrl: string | null;
+}
+
+export interface BillingSummary {
+  /** "stripe" when Stripe keys are configured; "manual" means plans are set by an admin (local dev). */
+  mode: "stripe" | "manual";
+  plan: PlanId;
+  status: BillingStatus;
+  /** Derived from status and time: what the org may do now. */
+  state: BillingState;
+  /** The most an agent may do on this plan and state. Monitoring and alerts are never limited. */
+  ceiling: AgentCeiling;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  pastDueSince: string | null;
+  graceEndsAt: string | null;
+  hasSubscription: boolean;
+  /** Whether a Stripe customer exists (the Customer Portal needs one). */
+  hasCustomer: boolean;
+  period: { start: string; end: string };
+  trackedTickets: { used: number; limit: number | null; overage: number; overageCents: number };
+  credits: {
+    used: number;
+    included: number;
+    purchasedAvailable: number;
+    fromIncluded: number;
+    fromPurchased: number;
+    overage: number;
+    overageCents: number;
+    /** The spend cap in credits (1 credit = 1 cent). */
+    cap: number;
+    /** The owner's explicit cap, or null for the default (included + purchased + 50% of included). */
+    capOverrideCents: number | null;
+    remaining: number;
+  };
+  /** Overage (tickets and credits) is billed only on a paid plan; otherwise it is flagged. */
+  overageBilled: boolean;
+  invoices: BillingInvoice[];
+}
+
+export const billingCheckoutBody = z.object({ plan: z.enum(CHECKOUT_PLANS) });
+export const creditPackCheckoutBody = z.object({ pack: z.string().min(1).max(40) });
+/** Manual mode only (no Stripe keys, not production): an admin sets the plan directly. */
+export const manualBillingBody = z.object({
+  plan: z.enum(PLAN_IDS).optional(),
+  status: z.enum(BILLING_STATUSES).optional(),
+  trialEndsAt: z.iso.datetime().nullable().optional(),
+  pastDueSince: z.iso.datetime().nullable().optional(),
+  grantCredits: z.number().int().positive().max(10_000_000).optional(),
+});
+/** `url` is where to send the browser (Stripe Checkout or the Customer Portal). */
+export interface BillingRedirect {
+  url: string;
 }
 
 export interface AuditEvent {
@@ -612,7 +864,7 @@ export const notificationChannelBody = z.object({
  *   PATCH  /org/sso/providers/:id  updateSsoProviderBody → SsoProvider (admin)
  *   DELETE /org/sso/providers/:id  (admin)
  *   POST   /org/sso/providers/:id/verify-domain → SsoProvider | 422 domain_not_verified (admin)
- *   GET    /members                → List<Member>         POST /members/invite inviteBody (admin)
+ *   GET    /members                → List<Member>         POST /members/invite inviteBody → Invitation (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
  *   POST   /members/:userId/reset-mfa  resetMemberMfaBody → MfaResetResult (admin; 403 step_up_required,
  *                                   cannot_reset_owner, cross_org_member; 409 last_owner, self_reset)
@@ -633,6 +885,11 @@ export const notificationChannelBody = z.object({
  *   GET    /connections/:id        → Connection           DELETE /connections/:id (admin)
  *   POST   /connections/:id/test   → { ok, accountName }
  *   POST   /connections/:id/sync   → 202
+ *   GET    /connections/:id/mapping → ConnectionMapping    PUT updateMappingBody → ConnectionMapping (admin)
+ *   POST   /connections/:id/webhook-secret/reveal → WebhookSecretReveal (admin, audited)
+ *   PUT    /connections/:id/webhook-secret  setWebhookSecretBody → 204 (admin, audited; provider-signed only)
+ *   GET    /connections/oauth/:provider/start?name=&<params> → 302 to the provider (admin)
+ *   GET    /connections/oauth/:provider/callback → 302 to APP_URL/connections/:id (or ?oauth_error=)
  *   POST   /webhooks/:connectionId (public; signature-verified by the connector)
  *
  *   GET    /customers              → List<CustomerAccount>   POST /customers upsertCustomerBody
@@ -641,6 +898,7 @@ export const notificationChannelBody = z.object({
  *   GET    /contracts              → List<Contract>       POST /contracts (multipart) → Contract
  *   GET    /contracts/:id          → Contract             POST /contracts/:id/extract → 202
  *   GET    /contracts/:id/file     → the original file (download)
+ *   GET    /contracts/:id/text     → ContractText (extracted plain text with page boundaries)
  *
  *   GET    /policies               → List<Policy>         POST /policies { name, definition } → Policy
  *   GET    /policies/:id           → Policy               PATCH /policies/:id updatePolicyBody (draft only)
@@ -654,14 +912,27 @@ export const notificationChannelBody = z.object({
  *   POST   /actions/:id/approve    approveActionBody → AgentAction
  *   POST   /actions/:id/reject     rejectActionBody → AgentAction
  *
+ *   GET    /knowledge-sources      → List<KnowledgeSource>   POST createKnowledgeSourceBody → KnowledgeSource (admin)
+ *   POST   /knowledge-sources/:id/sync → 202 (admin)
+ *   GET    /knowledge-articles?q=&sourceId=&cursor= → List<KnowledgeArticle>
+ *   PATCH  /knowledge-articles/:id updateKnowledgeArticleBody → KnowledgeArticle (admin)
+ *   POST   /saved-replies          savedReplyBody → KnowledgeArticle (admin)
+ *   PATCH  /saved-replies/:id      updateSavedReplyBody → KnowledgeArticle (admin)   DELETE /saved-replies/:id (admin)
+ *
  *   GET    /autonomy-rules         → AutonomyRule[]       POST autonomyRuleBody; PUT/DELETE /autonomy-rules/:id (admin)
  *   GET    /notification-channels  → NotificationChannel[]  POST/PATCH/DELETE (admin)
  *
  *   GET    /dashboard              → DashboardSummary
  *   POST   /replays                createReplayBody → Replay     GET /replays, /replays/:id
  *   GET    /usage                  → UsageSummary
+ *   GET    /billing                → BillingSummary
+ *   POST   /billing/checkout       billingCheckoutBody → BillingRedirect (owner/admin)
+ *   POST   /billing/portal         → BillingRedirect (owner/admin)
+ *   POST   /billing/credit-packs/checkout  creditPackCheckoutBody → BillingRedirect (owner/admin)
+ *   POST   /billing/manual         manualBillingBody → BillingSummary (owner/admin; manual mode, not production)
+ *   POST   /billing/webhook        (public; Stripe-Signature verified over the raw body)
  *   GET    /audit-events?cursor=   → List<AuditEvent> (admin)
  *   GET    /events                 Server-Sent Events: `ticket.updated`, `action.created`, `replay.progress`
  *   GET    /healthz, /readyz       (unauthenticated)
  */
-export const API_BASE = "/api/v1";
+export { API_BASE } from "./base.js";

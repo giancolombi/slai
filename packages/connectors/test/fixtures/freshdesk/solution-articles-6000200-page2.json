@@ -1,0 +1,16 @@
+[
+  {
+    "id": 7000303,
+    "type": 1,
+    "category_id": 5000100,
+    "folder_id": 6000200,
+    "title": "S3 export permissions",
+    "description": "<p>Grant <code>s3:PutObject</code> and <code>s3:PutObjectAcl</code>.</p>",
+    "description_text": null,
+    "status": 2,
+    "agent_id": 8000001,
+    "tags": [],
+    "created_at": "2026-03-02T00:00:00Z",
+    "updated_at": "2026-08-01T00:00:00Z"
+  }
+]

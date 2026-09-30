@@ -2,7 +2,7 @@ import { evaluateTicket } from "@slai/sla-engine";
 import { afterEach, describe, expect, it } from "vitest";
 import { demo, resetDemoStore } from "../src/connectors/demo/index.js";
 import { toEngineEvents } from "../src/lib/events.js";
-import type { CanonicalTicket, ConnectorClient } from "../src/types.js";
+import type { CanonicalTicket, ConnectorClient, KnowledgeArticle } from "../src/types.js";
 import { rejection } from "./helpers/fake-fetch.js";
 import { calendarPolicy, metric } from "./helpers/policy.js";
 
@@ -164,5 +164,37 @@ describe("demo connector", () => {
     });
     expect((await rejection(c.getTicketWithHistory("nope"))).kind).toBe("not_found");
     expect(demo.supportsWebhooks).toBe(false);
+  });
+});
+
+describe("demo help center (T-47)", () => {
+  it("lists a deterministic, paginated set of articles for every ticket category", async () => {
+    expect(demo.supportsKnowledge).toBe(true);
+    const c = client();
+    const all: KnowledgeArticle[] = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const page = await c.listKnowledgeArticles!(cursor);
+      all.push(...page.items);
+      cursor = page.nextCursor;
+      pages++;
+    } while (cursor);
+    expect(pages).toBeGreaterThan(1);
+    expect(all.length).toBeGreaterThanOrEqual(25);
+    expect(new Set(all.map((a) => a.sourceId)).size).toBe(all.length);
+    for (const a of all) {
+      expect(a.url).toMatch(/^https:\/\/help\.acme-cloud\.example\/articles\/[a-z0-9-]+$/);
+      expect(a.bodyText.length).toBeGreaterThan(80);
+      expect(a.updatedAt.getTime()).toBeLessThan(NOW.getTime());
+    }
+    const titles = all.map((a) => a.title).join("\n");
+    for (const topic of [/SAML/, /SCIM/, /2FA/, /rate limits/i, /Webhook/, /invoice/i, /CSV/, /S3/, /Salesforce/]) {
+      expect(titles).toMatch(topic);
+    }
+    // The help center does not depend on the ticket seed.
+    const other = await client({ seed: "other" }).listKnowledgeArticles!(null);
+    expect(other.items).toEqual(all.slice(0, other.items.length));
+    expect(await rejection(c.listKnowledgeArticles!("not-a-cursor"))).toMatchObject({ kind: "invalid" });
   });
 });

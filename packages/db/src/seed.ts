@@ -1,6 +1,7 @@
 /**
  * Demo data: org "Acme Cloud", owner demo@slai.dev (pre-enrolled in TOTP with a
- * fixed, dev-only secret), a `demo` help-desk connection, customer accounts, an
+ * fixed, dev-only secret), a `demo` help-desk connection and its help-center
+ * knowledge source, customer accounts, an
  * active default Enterprise policy and an active Premium policy. Idempotent:
  * rerunning updates rows in place.
  */
@@ -16,6 +17,7 @@ import {
   autonomyRules,
   connections,
   customerAccounts,
+  knowledgeSources,
   memberships,
   notificationChannels,
   organizations,
@@ -176,6 +178,9 @@ async function upsertPolicy(tx: Tx, orgId: string, def: Omit<PolicyInput, "id">,
   return id;
 }
 
+/** The demo org runs Scale in manual billing mode (no Stripe), so autopilot works locally (T-65). */
+const DEMO_BILLING = { plan: "scale", billingStatus: "active" as const, trialEndsAt: null };
+
 export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecrets?: AuthSecret[] } = {}) {
   const secrets = opts.authSecrets ?? authSecretsFromEnv();
   const { db, close } = connect(ownerUrl, { max: 1, applicationName: "slai-seed" });
@@ -184,8 +189,8 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
       // Session-scoped org setting is not needed: the owner role bypasses RLS for seeding.
       const [org] = await tx
         .insert(organizations)
-        .values({ name: DEMO.orgName, slug: DEMO.orgSlug, plan: "growth", monthlySpendCapCents: 50_000 })
-        .onConflictDoUpdate({ target: organizations.slug, set: { name: DEMO.orgName } })
+        .values({ name: DEMO.orgName, slug: DEMO.orgSlug, monthlySpendCapCents: 50_000, ...DEMO_BILLING })
+        .onConflictDoUpdate({ target: organizations.slug, set: { name: DEMO.orgName, ...DEMO_BILLING } })
         .returning();
       const orgId = org!.id;
 
@@ -245,6 +250,23 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
             aad: AAD.connectionWebhookSecret(connectionId),
           }),
           config: { ticketsPerDay: 40 },
+          createdBy: userId,
+        });
+      }
+
+      // The demo help desk's help center; the worker syncs its articles on its first sweep (T-47).
+      const [kb] = await tx
+        .select({ id: knowledgeSources.id })
+        .from(knowledgeSources)
+        .where(and(eq(knowledgeSources.connectionId, connectionId), eq(knowledgeSources.kind, "helpdesk_articles")));
+      const knowledgeSourceId = kb?.id ?? crypto.randomUUID();
+      if (!kb) {
+        await tx.insert(knowledgeSources).values({
+          id: knowledgeSourceId,
+          orgId,
+          connectionId,
+          kind: "helpdesk_articles",
+          name: "Acme Cloud Help Center",
           createdBy: userId,
         });
       }
@@ -355,7 +377,13 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
           .insert(notificationChannels)
           .values({ orgId, kind: "email", target: "support-leads@acme-cloud.example", minRisk: "at_risk" });
       }
-      return { orgId, userId, connectionId, policyIds: { enterprise: enterpriseId, premium: premiumId } };
+      return {
+        orgId,
+        userId,
+        connectionId,
+        knowledgeSourceId,
+        policyIds: { enterprise: enterpriseId, premium: premiumId },
+      };
     });
   } finally {
     await close();

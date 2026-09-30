@@ -9,6 +9,7 @@
  * - Tickets (update, comment): https://developer.zendesk.com/api-reference/ticketing/tickets/tickets/
  * - Tags without overwrite: https://developer.zendesk.com/documentation/ticketing/managing-tickets/adding-tags-to-tickets-without-overwriting-existing-tags/
  * - Webhook signatures: https://developer.zendesk.com/documentation/webhooks/verifying/
+ * - Help Center articles (cursor pagination, draft flag, html_url): https://developer.zendesk.com/api-reference/help_center/help-center-api/articles/
  * - Webhook event payloads: https://developer.zendesk.com/api-reference/webhooks/event-types/ticket-events/
  *
  * History comes from ticket audits: every field change and comment with its
@@ -21,6 +22,7 @@ import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "
 import { header, verifyHmac } from "../lib/hmac.js";
 import { basicAuth, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
+import { oauthFetch, oauthTokenFields, readTokens } from "../lib/oauth.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
@@ -33,17 +35,23 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
-const credentialsSchema = z.object({
-  subdomain: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9][a-z0-9-]*$/, "Just the subdomain, e.g. acme for acme.zendesk.com"),
-  email: z.email(),
-  apiToken: z.string().min(1),
-});
+const SUBDOMAIN = /^[a-z0-9][a-z0-9-]*$/;
+const credentialsSchema = z
+  .object({
+    subdomain: z.string().trim().toLowerCase().regex(SUBDOMAIN, "Just the subdomain, e.g. acme for acme.zendesk.com"),
+    /** API token auth (email + token), or an OAuth access token from the connect flow. */
+    email: z.email().optional(),
+    apiToken: z.string().min(1).optional(),
+    accessToken: z.string().min(1).optional(),
+    ...oauthTokenFields,
+  })
+  .refine((c) => c.accessToken !== undefined || (c.email !== undefined && c.apiToken !== undefined), {
+    message: "Agent email and API token are required.",
+    path: ["apiToken"],
+  });
 export type ZendeskCredentials = z.infer<typeof credentialsSchema>;
 
 const defaultMapping: FieldMapping = {
@@ -114,6 +122,20 @@ const zAudits = z.object({
   meta: z.object({ has_more: z.boolean() }).nullish(),
   links: z.object({ next: z.string().nullish() }).nullish(),
 });
+const zArticle = z.object({
+  id,
+  title: z.string().nullish(),
+  html_url: z.string().nullish(),
+  body: z.string().nullish(),
+  locale: z.string().nullish(),
+  draft: z.boolean().nullish(),
+  updated_at: z.string(),
+});
+const zArticles = z.object({
+  articles: z.array(zArticle),
+  meta: z.object({ has_more: z.boolean().nullish(), after_cursor: z.string().nullish() }).nullish(),
+});
+
 const zUpdate = z.object({
   ticket: zTicket.partial().nullish(),
   audit: z.object({ events: z.array(z.object({ id, type: z.string() })) }).nullish(),
@@ -156,17 +178,50 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Admin Center → Apps and integrations → Webhooks → Create webhook → Trigger or automation.",
+      "Endpoint URL {url}, method POST, format JSON, no authentication. Create it.",
+      "Open the webhook, choose Reveal secret, and paste the signing secret below.",
+      'Objects and rules → Triggers: add a trigger on "Ticket is Created or Updated" that notifies this webhook with the body {"ticket_id": "{{ticket.id}}"}.',
+    ],
+  },
+  oauth: {
+    authorizeUrl: "https://{subdomain}.zendesk.com/oauth/authorizations/new",
+    tokenUrl: "https://{subdomain}.zendesk.com/oauth/tokens",
+    scopes: ["read", "write"],
+    pkce: true,
+    params: [
+      {
+        key: "subdomain",
+        label: "Zendesk subdomain",
+        placeholder: "acme",
+        help: "acme for acme.zendesk.com",
+        pattern: "[a-z0-9][a-z0-9-]*",
+      },
+    ],
+    toCredentials: ({ token, clientId, clientSecret, params, now }) => ({
+      subdomain: params.subdomain,
+      ...readTokens(token, now),
+      clientId,
+      clientSecret,
+    }),
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developer.zendesk.com/api-reference/",
+  supportsKnowledge: true,
   create(ctx: ConnectorContext<ZendeskCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const sub = creds.subdomain;
     const http = new HttpClient({
       baseUrl: `https://${sub}.zendesk.com`,
-      fetch: ctx.fetch,
+      fetch: creds.accessToken ? oauthFetch(ctx, creds, `https://${sub}.zendesk.com/oauth/tokens`) : ctx.fetch,
       signal: ctx.signal,
-      headers: { Authorization: basicAuth(`${creds.email}/token`, creds.apiToken) },
+      headers: creds.accessToken
+        ? {}
+        : { Authorization: basicAuth(`${creds.email ?? ""}/token`, creds.apiToken ?? "") },
     });
     const key = (...parts: (string | number)[]) => ["zendesk", sub, ...parts].join(":");
 
@@ -399,6 +454,30 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
         else if (p.ticket && typeof p.ticket === "object") ticketId = String((p.ticket as { id: unknown }).id);
         if (!ticketId || !/^\d+$/.test(ticketId)) return { ok: false, reason: "malformed" };
         return { ok: true, ticketSourceIds: [ticketId] };
+      },
+
+      async listKnowledgeArticles(cursor) {
+        const isState = (v: unknown): v is { a: string } => typeof (v as { a?: unknown })?.a === "string";
+        const state = decodeCursor(cursor, isState);
+        const data = parseAs(
+          zArticles,
+          await http.get("/api/v2/help_center/articles.json", {
+            query: { "page[size]": 100, "page[after]": state?.a },
+          }),
+          "help center articles",
+        );
+        const items: KnowledgeArticle[] = data.articles
+          .filter((a) => a.draft !== true)
+          .map((a) => ({
+            sourceId: a.id,
+            title: a.title ?? "",
+            url: a.html_url ?? null,
+            bodyText: htmlToText(a.body),
+            locale: a.locale ?? null,
+            updatedAt: parseTime(a.updated_at, `article ${a.id}.updated_at`),
+          }));
+        const after = data.meta?.has_more ? data.meta.after_cursor : null;
+        return { items, nextCursor: after ? encodeCursor({ a: after }) : null };
       },
 
       async postInternalNote(sourceId, body) {

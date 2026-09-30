@@ -147,6 +147,13 @@ export const zammad: ConnectorDefinition<ZammadCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Settings → Manage → Webhook → New Webhook, endpoint {url}, HMAC SHA1 signature token {secret}.",
+      "Settings → Manage → Trigger → New Trigger: on ticket create and update, action Webhook → the webhook above.",
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://docs.zammad.org/en/latest/api/intro.html",

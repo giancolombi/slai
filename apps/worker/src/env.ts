@@ -38,6 +38,11 @@ export const envSchema = z.object({
   SYNC_INTERVAL_DEMO_SECONDS: seconds(60),
   SYNC_INTERVAL_SECONDS: seconds(300),
   SYNC_BACKFILL_DAYS: z.coerce.number().int().positive().max(365).default(14),
+  /** Stripe (T-65). Without a key, billing runs in manual mode and no usage is reported. */
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
+  STRIPE_METER_TRACKED_TICKETS: z.string().min(1).default("slai_tracked_ticket_overage"),
+  STRIPE_METER_CREDITS: z.string().min(1).default("slai_credit_overage"),
+  BILLING_INTERVAL_SECONDS: seconds(3600),
 });
 
 export type Env = z.infer<typeof envSchema>;

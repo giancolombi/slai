@@ -10,21 +10,29 @@
 import type {
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
   createConnectionBody,
+  createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   inviteBody,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
+  savedReplyBody,
+  setWebhookSecretBody,
   signupBody,
   switchOrgBody,
+  updateMappingBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
+  updateSavedReplyBody,
   updateSsoProviderBody,
   upsertCustomerBody,
 } from "@slai/shared";
@@ -36,11 +44,18 @@ import {
   type AuditEvent,
   type AutonomyRule,
   type BackupCodes,
+  type BillingRedirect,
+  type BillingSummary,
   type Connection,
+  type ConnectionMapping,
   type ConnectorInfo,
   type Contract,
+  type ContractText,
   type CustomerAccount,
   type DashboardSummary,
+  type Invitation,
+  type KnowledgeArticle,
+  type KnowledgeSource,
   type List,
   type Me,
   type Member,
@@ -61,6 +76,7 @@ import {
   type TicketSummary,
   type TotpEnrollment,
   type UsageSummary,
+  type WebhookSecretReveal,
 } from "@slai/shared";
 import type { z } from "zod";
 
@@ -239,20 +255,19 @@ const del = <T = void>(path: string) => request<T>("DELETE", path);
 type In<S extends z.ZodType> = z.input<S>;
 const id = encodeURIComponent;
 
-/** `POST /members/invite` response. The contract doesn't name it; the API returns the pending invitation. */
-export interface Invitation {
-  id?: string;
-  email: string;
-  role: Role;
-  expiresAt?: string;
-}
-
 export interface TicketQuery {
   risk?: Risk | "";
   status?: TicketStatus | "";
   customerId?: string;
   q?: string;
   cursor?: string | null;
+}
+
+export interface KnowledgeArticleQuery {
+  q?: string;
+  sourceId?: string;
+  cursor?: string | null;
+  limit?: number;
 }
 
 export const api = {
@@ -315,6 +330,19 @@ export const api = {
     remove: (connectionId: string) => del(`/connections/${id(connectionId)}`),
     test: (connectionId: string) => post<{ ok: boolean; accountName: string }>(`/connections/${id(connectionId)}/test`),
     sync: (connectionId: string) => post<void>(`/connections/${id(connectionId)}/sync`),
+    mapping: (connectionId: string) => get<ConnectionMapping>(`/connections/${id(connectionId)}/mapping`),
+    updateMapping: (connectionId: string, body: In<typeof updateMappingBody>) =>
+      put<ConnectionMapping>(`/connections/${id(connectionId)}/mapping`, body),
+    /** Admin-only and audited: the webhook URL, secret (when slai owns it) and setup steps. */
+    revealWebhookSecret: (connectionId: string) =>
+      post<WebhookSecretReveal>(`/connections/${id(connectionId)}/webhook-secret/reveal`),
+    setWebhookSecret: (connectionId: string, secret: string) =>
+      put<void>(`/connections/${id(connectionId)}/webhook-secret`, {
+        secret,
+      } satisfies In<typeof setWebhookSecretBody>),
+    /** A top-level navigation (not fetch): the API redirects to the provider's consent screen. */
+    oauthStartUrl: (provider: string, query: Record<string, string>) =>
+      buildUrl(`/connections/oauth/${id(provider)}/start`, query),
   },
   customers: {
     list: () => get<List<CustomerAccount>>("/customers"),
@@ -334,6 +362,7 @@ export const api = {
     },
     extract: (contractId: string) => post<void>(`/contracts/${id(contractId)}/extract`),
     fileUrl: (contractId: string) => `${API_BASE}/contracts/${id(contractId)}/file`,
+    text: (contractId: string) => get<ContractText>(`/contracts/${id(contractId)}/text`),
   },
   policies: {
     list: () => get<List<Policy>>("/policies"),
@@ -366,6 +395,19 @@ export const api = {
       put<AutonomyRule>(`/autonomy-rules/${id(ruleId)}`, body),
     remove: (ruleId: string) => del(`/autonomy-rules/${id(ruleId)}`),
   },
+  knowledge: {
+    sources: () => get<List<KnowledgeSource>>("/knowledge-sources"),
+    createSource: (body: In<typeof createKnowledgeSourceBody>) => post<KnowledgeSource>("/knowledge-sources", body),
+    syncSource: (sourceId: string) => post<{ queued: boolean }>(`/knowledge-sources/${id(sourceId)}/sync`),
+    articles: (query: KnowledgeArticleQuery = {}, signal?: AbortSignal) =>
+      get<List<KnowledgeArticle>>("/knowledge-articles", query as Query, signal),
+    setEnabled: (articleId: string, enabled: boolean) =>
+      patch<KnowledgeArticle>(`/knowledge-articles/${id(articleId)}`, { enabled }),
+    createReply: (body: In<typeof savedReplyBody>) => post<KnowledgeArticle>("/saved-replies", body),
+    updateReply: (articleId: string, body: In<typeof updateSavedReplyBody>) =>
+      patch<KnowledgeArticle>(`/saved-replies/${id(articleId)}`, body),
+    removeReply: (articleId: string) => del(`/saved-replies/${id(articleId)}`),
+  },
   notifications: {
     list: () => get<NotificationChannel[]>("/notification-channels"),
     create: (body: In<typeof notificationChannelBody>) => post<NotificationChannel>("/notification-channels", body),
@@ -383,6 +425,14 @@ export const api = {
   },
   usage: {
     get: () => get<UsageSummary>("/usage"),
+  },
+  billing: {
+    get: () => get<BillingSummary>("/billing"),
+    checkout: (body: In<typeof billingCheckoutBody>) => post<BillingRedirect>("/billing/checkout", body),
+    portal: () => post<BillingRedirect>("/billing/portal"),
+    creditPackCheckout: (body: In<typeof creditPackCheckoutBody>) =>
+      post<BillingRedirect>("/billing/credit-packs/checkout", body),
+    manual: (body: In<typeof manualBillingBody>) => post<BillingSummary>("/billing/manual", body),
   },
   audit: {
     list: (cursor?: string | null) => get<List<AuditEvent>>("/audit-events", { cursor }),

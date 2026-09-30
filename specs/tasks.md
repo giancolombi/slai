@@ -43,8 +43,8 @@ Each task references the requirements it serves.
 - [x] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
 - [x] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
 - [x] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
-- [ ] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
-- [ ] T-25 Status/priority mapping override UI and API (PR-8)
+- [x] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
+- [x] T-25 Status/priority mapping override UI and API (PR-8)
 
 ## M3: Agents
 - [x] T-30 Providers: Anthropic, OpenAI, and mock; routing, fallback, retries, usage and cost (TR-16, TR-30)
@@ -64,8 +64,10 @@ Each task references the requirements it serves.
 - [x] T-45 Breach Replay job (PR-22) and policy preview (PR-5)
 - [x] T-46 Metering to `usage_ledger`; spend-cap degradation (PR-23, TR-30)
 
-- [ ] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
-      Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17)
+- [x] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
+      Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17, TR-21h)
+- [ ] T-47b Knowledge follow-ups: Zammad knowledge base, help-desk saved replies/macros (`saved_replies`
+      sources), Freshdesk subfolders and translations, Intercom translations (TR-21h)
 - [x] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
       sync (avoids a burst of drafts and credit spend on connect) (TR-21f)
 - [x] T-49 Make help-desk writes and their action record idempotent across retries (no double send) (TR-21g)
@@ -81,10 +83,17 @@ Each task references the requirements it serves.
 - [x] T-54 Contracts and the contract review screen (citations; ambiguity gating on approve) (PR-3, PR-4)
 - [x] T-55 Policies, customers, connections, autonomy rules, replay report, usage, audit, team, settings
 
-- [ ] T-56 Wire SSE live updates (replace polling)
-- [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
-- [ ] T-58 Inline contract text on the review screen; bundle splitting (the MFA QR code shipped in T-52a)
-- [ ] T-59 API contract: document that `approvedBy`/`uploadedBy`/`decidedBy` are user ids; type the invite response; invitation email and accept endpoint
+- [x] T-56 Wire SSE live updates: one EventSource per tab, cache invalidation per event (coalesced),
+      jittered backoff reconnect, a top-bar status, polling only as the fallback; every state the UI
+      shows is announced (`action.updated`, run start/finish, replay start) (TR-22a)
+- [x] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout, Zendesk); show the webhook secret for providers that need it pasted (TR-11a). Real OAuth apps still need registering per provider.
+- [x] T-58 Inline contract text on the review screen (`GET /contracts/:id/text`, document pane with
+      citation scroll and highlight); bundle splitting (vendor chunks, zod-free entry: entry chunk
+      466.6 → 62 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
+- [x] T-59 API contract: `approvedBy`/`uploadedBy`/`decidedBy` documented as user ids, with
+      `…ByName` display names on the DTOs; the invite response is the shared `Invitation` DTO
+- [ ] T-59a Invitation email (worker mailer) and accept flow (sign up or sign in, then join the org).
+      Moved to after the better-auth merge (T-15 to T-19); now unblocked
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
@@ -94,4 +103,8 @@ Each task references the requirements it serves.
 - [ ] T-63 Deployment: containers, managed Postgres, secrets manager, TLS, backups
 - [ ] T-64 SOC 2 readiness: access reviews, vendor list (E2B, Anthropic, OpenAI), incident
       response, retention and deletion jobs
-- [ ] T-65 Billing: Stripe plans, credit packs, tracked-ticket counting (PR-23)
+- [x] T-65 Billing: plans as code, plan ceilings in dispatch, tracked-ticket counting and monthly
+      snapshots, credits ledger and spend cap, 14-day trial, Stripe Checkout/Portal/credit packs,
+      signed idempotent webhook, past-due grace, overage via Billing Meters, manual mode (PR-23, TR-33 to TR-35)
+- [ ] T-66 Billing with a real Stripe test account: products, prices and Billing Meters created; Customer
+      Portal configured (plan switching); webhook endpoint registered; a full checkout → invoice → overage run

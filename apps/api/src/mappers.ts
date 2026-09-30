@@ -5,17 +5,20 @@ import type {
   AgentRun,
   Contract,
   CustomerAccount,
+  KnowledgeRef,
   Metric,
   MetricView,
   Policy,
   Replay,
   TicketSummary,
 } from "@slai/shared";
+import { z } from "zod";
 
 type Row<T extends { $inferSelect: unknown }> = T["$inferSelect"];
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
 
-export function toPolicy(p: Row<typeof schema.slaPolicies>): Policy {
+/** `approvedByName` is the approver's display name (null when unapproved or unknown). */
+export function toPolicy(p: Row<typeof schema.slaPolicies>, approvedByName: string | null = null): Policy {
   return {
     id: p.id,
     name: p.name,
@@ -25,6 +28,7 @@ export function toPolicy(p: Row<typeof schema.slaPolicies>): Policy {
     isDefault: p.isDefault,
     definition: p.definition,
     approvedBy: p.approvedBy,
+    approvedByName: p.approvedBy ? approvedByName : null,
     approvedAt: iso(p.approvedAt),
     createdAt: p.createdAt.toISOString(),
   };
@@ -45,7 +49,11 @@ export function toCustomer(
   };
 }
 
-export function toContract(c: Row<typeof schema.contracts>, uploadedBy: string | null, policyIds: string[]): Contract {
+export function toContract(
+  c: Row<typeof schema.contracts>,
+  uploadedByName: string | null,
+  policyIds: string[],
+): Contract {
   const x = (c.extraction ?? null) as Partial<NonNullable<Contract["extraction"]>> | null;
   return {
     id: c.id,
@@ -53,7 +61,8 @@ export function toContract(c: Row<typeof schema.contracts>, uploadedBy: string |
     customerAccountId: c.customerAccountId,
     status: c.status,
     uploadedAt: c.createdAt.toISOString(),
-    uploadedBy: uploadedBy ?? "",
+    uploadedBy: c.uploadedBy,
+    uploadedByName: c.uploadedBy ? uploadedByName : null,
     error: c.error,
     extraction: x
       ? { summary: x.summary ?? "", policyIds, ambiguities: x.ambiguities ?? [], citations: x.citations ?? [] }
@@ -79,6 +88,7 @@ export function toAgentRun(r: Row<typeof schema.agentRuns>): AgentRun {
 export function toAgentAction(
   a: Row<typeof schema.agentActions>,
   ticket: { displayKey: string; subject: string },
+  decidedByName: string | null = null,
 ): AgentAction {
   return {
     id: a.id,
@@ -93,8 +103,26 @@ export function toAgentAction(
     blockedReason: a.blockedReason,
     createdAt: a.createdAt.toISOString(),
     decidedBy: a.decidedBy,
+    decidedByName: a.decidedBy ? decidedByName : null,
     decidedAt: iso(a.decidedAt),
+    usedKnowledge: usedKnowledge(a.payload),
   };
+}
+
+const knowledgeRef = z.object({
+  id: z.string().nullable().catch(null),
+  title: z.string(),
+  url: z.string().nullable().catch(null),
+});
+
+/** The articles a draft relied on, as the worker recorded them on the action (T-47); [] when absent or malformed. */
+export function usedKnowledge(payload: unknown): KnowledgeRef[] {
+  const raw = (payload as { usedArticles?: unknown } | null)?.usedArticles;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((r) => {
+    const p = knowledgeRef.safeParse(r);
+    return p.success ? [p.data] : [];
+  });
 }
 
 export function toReplay(r: Row<typeof schema.replays>): Replay {

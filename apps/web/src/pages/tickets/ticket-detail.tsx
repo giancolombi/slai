@@ -29,9 +29,15 @@ import { useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { METRIC_LABEL, providerLabel, STATUS_LABEL } from "../../lib/labels";
-import { usePersonName } from "../../lib/people";
+import { deciderLabel } from "../../lib/people";
 import { usePolicy, useTicket } from "../../lib/queries";
-import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog } from "../approvals/draft-parts";
+import {
+  ActionKindLabel,
+  ActionStatusBadge,
+  ConfidenceMeter,
+  RejectDialog,
+  UsedKnowledge,
+} from "../approvals/draft-parts";
 import { PriorityBadge } from "./priority-badge";
 
 const route = getRouteApi("/_app/tickets/$ticketId");
@@ -80,7 +86,6 @@ function BackLink() {
 }
 
 function TicketView({ ticket: t }: { ticket: TicketDetail }) {
-  const person = usePersonName();
   const policy = usePolicy(t.policy?.id);
   const def = policy.data?.definition as { warnAt?: unknown } | undefined;
   const warnAt =
@@ -286,9 +291,10 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
                       <ActionStatusBadge status={a.status} />
                     </div>
                     <p className="line-clamp-2 text-xs text-ink-muted">{a.body}</p>
-                    {a.decidedBy && (
+                    <UsedKnowledge refs={a.usedKnowledge} compact />
+                    {a.decidedAt && (
                       <p className="text-2xs text-ink-subtle">
-                        {person(a.decidedBy)} · {a.decidedAt ? formatRelative(a.decidedAt) : ""}
+                        {deciderLabel(a)} · {formatRelative(a.decidedAt)}
                       </p>
                     )}
                   </li>
@@ -448,6 +454,7 @@ function DraftCard({ action: a, ticketId }: { action: AgentAction; ticketId: str
           Draft body
         </Label>
         <Textarea id={id} value={body} onChange={(e) => setBody(e.target.value)} rows={7} />
+        {a.kind === "public_reply" && <UsedKnowledge refs={a.usedKnowledge} />}
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
         {body !== (a.body ?? "") && (

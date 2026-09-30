@@ -8,9 +8,11 @@ import type {
   AgentAction,
   AuditEvent,
   AutonomyRule,
+  BillingSummary,
   Connection,
   Contract,
   DashboardSummary,
+  KnowledgeArticle,
   Me,
   Member,
   MetricView,
@@ -25,6 +27,7 @@ import type {
   TicketSummary,
   UsageSummary,
 } from "@slai/shared";
+import { billingPeriod, creditBalance, entitlements, TRIAL, trackedOverage } from "@slai/shared";
 import { RISK_ORDER, riskForFraction } from "@slai/ui";
 import {
   ACME_ORG_ID,
@@ -35,6 +38,7 @@ import {
   buildConnections,
   buildContracts,
   buildCustomers,
+  buildKnowledge,
   buildMe,
   buildMembers,
   buildOrgSettings,
@@ -43,12 +47,14 @@ import {
   buildReplays,
   buildRuns,
   buildTickets,
+  buildTrialBilling,
   DAY,
   HOUR,
+  type MockBilling,
   type MockCustomer,
+  type MockKnowledgeSource,
   type MockMetric,
   type MockTicket,
-  PLAN_LIMITS,
   SANDBOX_ORG_ID,
 } from "./fixtures";
 
@@ -66,8 +72,11 @@ export interface OrgData {
   channels: NotificationChannel[];
   replays: Replay[];
   audit: AuditEvent[];
+  knowledgeSources: MockKnowledgeSource[];
+  knowledgeArticles: KnowledgeArticle[];
   /** Extra usage recorded during the demo (cents). */
   usageExtraCents: number;
+  billing: MockBilling;
   /** When the org was created (drives the dashboard period). */
   createdAt: number;
 }
@@ -84,7 +93,8 @@ export interface MockDb {
 }
 
 const STORAGE_KEY = "slai-mock-db";
-const VERSION = 6;
+// 7: knowledge sources and articles (T-47) on top of the auth changes.
+const VERSION = 7;
 
 /** Mock-mode backup codes (any 6-digit TOTP code except 000000 is accepted). */
 export const MOCK_BACKUP_CODES = Array.from({ length: 10 }, (_, i) => `mock${i}-codes`);
@@ -97,6 +107,7 @@ function seedAcme(now: number): OrgData {
     actions.filter((a) => a.status === "proposed" || a.status === "blocked").map((a) => a.ticketId),
   );
   for (const t of tickets) t.agentRuns = buildRuns(now, t, withDraft.has(t.id));
+  const knowledge = buildKnowledge(now);
   return {
     settings: buildOrgSettings(),
     sso: buildOrgSso(),
@@ -111,14 +122,17 @@ function seedAcme(now: number): OrgData {
     channels: buildChannels(),
     replays: buildReplays(now),
     audit: buildAudit(now),
+    knowledgeSources: knowledge.sources,
+    knowledgeArticles: knowledge.articles,
     usageExtraCents: 0,
+    billing: buildTrialBilling(now, 9),
     createdAt: now - 142 * DAY,
   };
 }
 
 export function emptyOrg(id: string, name: string, owner: Member, now: number): OrgData {
   return {
-    settings: { id, name, plan: "replay", monthlySpendCapCents: null },
+    settings: { id, name, plan: TRIAL.plan, monthlySpendCapCents: null },
     sso: { enforceSso: false, requireMfaForSso: false, requireIdpMfa: false, providers: [] },
     members: [owner],
     connections: [],
@@ -140,7 +154,10 @@ export function emptyOrg(id: string, name: string, owner: Member, now: number): 
     channels: [],
     replays: [],
     audit: [],
+    knowledgeSources: [],
+    knowledgeArticles: [],
     usageExtraCents: 0,
+    billing: buildTrialBilling(now),
     createdAt: now,
   };
 }
@@ -381,17 +398,15 @@ export function dashboard(now: number): DashboardSummary {
   };
 }
 
+/** Agent usage this period; 1 credit = 1 cent, so credits used equals cost. */
 export function usage(now: number): UsageSummary {
   const o = org();
-  const start = new Date(now);
-  start.setUTCDate(1);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setUTCMonth(end.getUTCMonth() + 1);
+  const { start, end } = billingPeriod(new Date(now));
+  const period = { start: start.toISOString(), end: end.toISOString() };
   if (o.tickets.length === 0) {
     return {
-      period: { start: start.toISOString(), end: end.toISOString() },
-      creditsUsed: 0,
+      period,
+      creditsUsed: o.usageExtraCents,
       costCents: o.usageExtraCents,
       spendCapCents: o.settings.monthlySpendCapCents,
       byKind: [],
@@ -399,25 +414,80 @@ export function usage(now: number): UsageSummary {
     };
   }
   const byKind = [
-    { kind: "triage", count: 3_214, costCents: 9_642 },
-    { kind: "draft_reply", count: 1_146, costCents: 34_380 },
-    { kind: "autopilot_reply", count: 212, costCents: 10_600 },
-    { kind: "contract_extraction", count: 6, costCents: 2_700 },
-    { kind: "policy_preview", count: 14, costCents: 420 },
-    { kind: "sandbox_seconds", count: 41_870, costCents: 4_187 + o.usageExtraCents },
-  ];
+    { kind: "triage", count: 540, costCents: 1_620 },
+    { kind: "draft_reply", count: 41, costCents: 1_230 },
+    { kind: "contract_extraction", count: 1, costCents: 450 },
+    { kind: "policy_preview", count: 6, costCents: 180 },
+    { kind: "sandbox_seconds", count: 3_120, costCents: 312 + o.usageExtraCents },
+  ].map((k) => ({ ...k, credits: k.costCents })); // 1 credit = $0.01
+  const costCents = byKind.reduce((s, k) => s + k.costCents, 0);
   return {
-    period: { start: start.toISOString(), end: end.toISOString() },
-    creditsUsed: 18_420 + Math.round(o.usageExtraCents / 3),
-    costCents: byKind.reduce((s, k) => s + k.costCents, 0),
+    period,
+    creditsUsed: costCents,
+    costCents,
     spendCapCents: o.settings.monthlySpendCapCents,
     byKind,
     trackedTickets: 5_214,
   };
 }
 
-export function planLimit(plan: string) {
-  return PLAN_LIMITS[plan] ?? 7_500;
+/** GET /billing: the stored facts run through the shared plan rules, like the API. */
+export function billing(now: number): BillingSummary {
+  const o = org();
+  const b = o.billing;
+  const at = new Date(now);
+  const e = entitlements(
+    {
+      plan: b.plan,
+      status: b.status,
+      trialEndsAt: b.trialEndsAt ? new Date(b.trialEndsAt) : null,
+      pastDueSince: b.pastDueSince ? new Date(b.pastDueSince) : null,
+    },
+    at,
+  );
+  const u = usage(now);
+  const credits = creditBalance({
+    used: u.creditsUsed,
+    included: e.includedCredits,
+    purchasedAvailable: b.purchasedCredits,
+    capOverrideCents: o.settings.monthlySpendCapCents,
+    overageAllowed: e.overageBilled && e.plan.creditOverage,
+  });
+  const ticketOverage = trackedOverage(u.trackedTickets, e.trackedTicketLimit);
+  return {
+    mode: b.mode,
+    plan: e.plan.id,
+    status: b.status,
+    state: e.state,
+    ceiling: e.ceiling,
+    trialEndsAt: b.trialEndsAt,
+    trialDaysLeft: e.trialDaysLeft,
+    pastDueSince: b.pastDueSince,
+    graceEndsAt: e.graceEndsAt?.toISOString() ?? null,
+    hasSubscription: b.hasSubscription,
+    hasCustomer: b.hasCustomer,
+    period: u.period,
+    trackedTickets: {
+      used: u.trackedTickets,
+      limit: e.trackedTicketLimit,
+      overage: ticketOverage,
+      overageCents: e.overageBilled ? ticketOverage * (e.plan.ticketOverageCents ?? 0) : 0,
+    },
+    credits: {
+      used: u.creditsUsed,
+      included: e.includedCredits,
+      purchasedAvailable: b.purchasedCredits,
+      fromIncluded: credits.fromIncluded,
+      fromPurchased: credits.fromPurchased,
+      overage: credits.overage,
+      overageCents: e.overageBilled ? credits.overage : 0,
+      cap: credits.cap,
+      capOverrideCents: o.settings.monthlySpendCapCents,
+      remaining: credits.remaining,
+    },
+    overageBilled: e.overageBilled,
+    invoices: b.invoices,
+  };
 }
 
 export function audit(
