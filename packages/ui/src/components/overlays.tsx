@@ -213,8 +213,14 @@ export const DropdownMenuItem = forwardRef<
       className={cn(itemClass, destructive && "text-breached-text [&_svg]:text-breached-text", className)}
       {...props}
     >
-      {children}
-      {shortcut && <span className="ml-auto pl-4 font-mono text-2xs text-ink-subtle">{shortcut}</span>}
+      {props.asChild ? (
+        children
+      ) : (
+        <>
+          {children}
+          {shortcut && <span className="ml-auto pl-4 font-mono text-2xs text-ink-subtle">{shortcut}</span>}
+        </>
+      )}
     </MenuPrimitive.Item>
   );
 });
