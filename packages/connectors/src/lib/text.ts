@@ -96,7 +96,8 @@ export function textToHtml(text: string): string {
  */
 const PLACEHOLDER = /\{\{[^{}]{0,300}\}\}|\{%[^%]{0,300}%\}|#\{[^{}\n]{0,200}\}/g;
 const LIQUID_COMMENT = /\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\}/gi;
-const FALLBACK = /\b(?:fallback|default)\s*[:=]\s*(?:"([^"]*)"|'([^']*)'|([^,|%}"']+))/i;
+/** `fallback: "x"`, `default: 'x'`, `fallback=x`, or Front's bare `| 'x'`. */
+const FALLBACK = /(?:\b(?:fallback|default)\s*[:=]\s*|\|\s*(?=["']))(?:"([^"]*)"|'([^']*)'|([^,|%}"']+))/i;
 /** Marks where a placeholder was removed, so only the punctuation around it is tidied. */
 const GAP = "\u0000";
 

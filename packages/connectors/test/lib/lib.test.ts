@@ -169,6 +169,8 @@ describe("text", () => {
     expect(stripPlaceholders("Hello {{ first_name }} and welcome")).toBe("Hello and welcome");
     expect(stripPlaceholders('Hi {{first_name | fallback: "there"}}, one sec.')).toBe("Hi there, one sec.");
     expect(stripPlaceholders("Hi {%customer.firstName,fallback=there%}!")).toBe("Hi there!");
+    expect(stripPlaceholders("Hi {{recipient.first_name | 'there'}}, hello")).toBe("Hi there, hello");
+    expect(stripPlaceholders("Total {{ticket.amount | money }} due")).toBe("Total due");
     expect(stripPlaceholders("Dear #{ticket.customer.firstname} #{ticket.customer.lastname}.")).toBe("Dear.");
     expect(stripPlaceholders("{{ticket.requester.name}}, your order shipped")).toBe("your order shipped");
     expect(
