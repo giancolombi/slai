@@ -147,7 +147,7 @@ export function MappingEditor({ mapping, canEdit, saving, onSave }: MappingEdito
                   {canEdit ? (
                     <Select
                       size="sm"
-                      className="w-60"
+                      className="w-72"
                       aria-label={`slai ${field} for ${row.raw}`}
                       value={row.choice}
                       options={optionsFor(row)}
