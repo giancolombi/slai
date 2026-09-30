@@ -14,6 +14,13 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   zammad: { baseUrl: "https://support.acme.example", apiToken: "t" },
   salesforce: { instanceUrl: "https://acme.my.salesforce.com", clientId: "id", clientSecret: "s" },
   servicenow: { instanceUrl: "https://acme.service-now.com", username: "slai.integration", password: "p" },
+  zoho_desk: {
+    dataCenter: "com",
+    orgId: "60012345",
+    clientId: "1000.CLIENTID",
+    clientSecret: "s",
+    refreshToken: "1000.r.t",
+  },
   demo: {},
 };
 
@@ -33,6 +40,7 @@ describe("registry", () => {
       "servicenow",
       "zammad",
       "zendesk",
+      "zoho_desk",
     ]);
     expect(getConnector("nope")).toBeNull();
   });

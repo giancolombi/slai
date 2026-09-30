@@ -1,0 +1,22 @@
+{
+  "data": [
+    {
+      "id": "481520000001236001",
+      "content": "<div>Checked the delivery logs: 30s timeouts from the EU relay only.</div>",
+      "contentType": "html",
+      "isPublic": false,
+      "commenterId": "481520000000195001",
+      "commentedTime": "2026-09-28T10:00:00.000Z",
+      "modifiedTime": "2026-09-28T10:00:00.000Z",
+      "commenter": {
+        "id": "481520000000195001",
+        "name": "Priya Raman",
+        "firstName": "Priya",
+        "lastName": "Raman",
+        "email": "priya.raman@northwind.example",
+        "type": "AGENT",
+        "roleName": "Support Rep"
+      }
+    }
+  ]
+}
