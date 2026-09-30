@@ -39,6 +39,7 @@ import {
   type Connection,
   type ConnectorInfo,
   type Contract,
+  type ContractText,
   type CustomerAccount,
   type DashboardSummary,
   type Invitation,
@@ -327,6 +328,7 @@ export const api = {
     },
     extract: (contractId: string) => post<void>(`/contracts/${id(contractId)}/extract`),
     fileUrl: (contractId: string) => `${API_BASE}/contracts/${id(contractId)}/file`,
+    text: (contractId: string) => get<ContractText>(`/contracts/${id(contractId)}/text`),
   },
   policies: {
     list: () => get<List<Policy>>("/policies"),

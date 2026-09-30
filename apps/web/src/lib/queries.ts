@@ -19,6 +19,8 @@ export const qk = {
   customers: ["customers"] as const,
   contracts: ["contracts"] as const,
   contract: (id: string) => ["contracts", id] as const,
+  // Not under "contracts": a file's text never changes, so contract events needn't refetch it.
+  contractText: (id: string) => ["contract-text", id] as const,
   policies: ["policies"] as const,
   policy: (id: string) => ["policies", id] as const,
   tickets: (q: TicketQuery = {}) => ["tickets", q] as const,
@@ -88,6 +90,12 @@ export const useContract = (id: string) => {
       q.state.data?.status === "extracting" || q.state.data?.status === "uploaded" ? fallback : false,
   });
 };
+export const useContractText = (id: string) =>
+  useQuery({
+    queryKey: qk.contractText(id),
+    queryFn: () => api.contracts.text(id),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 export const usePolicies = () => useQuery({ queryKey: qk.policies, queryFn: api.policies.list });
 export const usePolicy = (id: string | null | undefined) =>
   useQuery({ queryKey: qk.policy(id ?? ""), queryFn: () => api.policies.get(id!), enabled: Boolean(id) });

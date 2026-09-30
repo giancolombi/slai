@@ -15,6 +15,10 @@ import {
   Progress,
   SegmentedControl,
   Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Tooltip,
   toast,
 } from "@slai/ui";
@@ -32,6 +36,7 @@ import {
   Gauge,
   Lock,
   PencilLine,
+  Quote,
   RotateCcw,
   Save,
   ShieldCheck,
@@ -42,6 +47,7 @@ import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { personLabel } from "../../lib/people";
 import { qk, useContract, useCustomers, useMe, usePolicy } from "../../lib/queries";
+import { type DocumentFocus, DocumentPane } from "./document-pane";
 import { PolicyForm } from "./policy-form";
 import {
   citationDomId,
@@ -350,6 +356,8 @@ function PolicyReview({
   const [resolutions, setResolutions] = useResolutions(policy.id);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [preview, setPreview] = useState<PolicyPreview | null>(null);
+  const [paneTab, setPaneTab] = useState<"document" | "citations">("document");
+  const [docFocus, setDocFocus] = useState<DocumentFocus | null>(null);
   const citationsRef = useRef<HTMLDivElement>(null);
 
   const readOnly = policy.status !== "draft";
@@ -447,10 +455,11 @@ function PolicyReview({
   const unresolved = new Set(gate.unresolved);
   const issues = new Map(gate.issues.map((i) => [i.path, i.message]));
 
+  // A citation marker (or "Show in contract") opens the document at the quoted passage.
   const showCitation = useCallback((path: string) => {
     setActivePath(path);
-    const el = document.getElementById(citationDomId(path));
-    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPaneTab("document");
+    setDocFocus({ path, nonce: Date.now() });
   }, []);
 
   const jumpToField = useCallback((path: string) => {
@@ -518,46 +527,77 @@ function PolicyReview({
           />
         )}
 
-        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(340px,420px)]">
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(360px,480px)]">
           <PolicyForm value={draft} onChange={setDraft} />
           <aside
-            aria-label="Contract citations"
+            aria-label="The contract and its citations"
             className={cn("flex flex-col gap-3", !embedded && "lg:sticky lg:top-20")}
           >
             {preview && <PreviewCard preview={preview} onClose={() => setPreview(null)} />}
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-ink">Citations</h2>
-              <span className="font-mono text-2xs text-ink-muted tnum">{scopedCitations.length} clauses</span>
-            </div>
-            <div
-              ref={citationsRef}
-              className="flex max-h-none flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-thin lg:max-h-[calc(100dvh-13rem)]"
-            >
-              {scopedCitations.length === 0 && (
-                <p className="rounded-md border border-dashed border-line-strong p-4 text-sm text-ink-muted">
-                  The extraction returned no citations. Check every value against the original document.
-                </p>
-              )}
-              {scopedCitations.map((c) => (
-                // biome-ignore lint/a11y/noStaticElementInteractions: hover preview; the quote's field button is the keyboard path
+            <Tabs value={paneTab} onValueChange={(v) => setPaneTab(v as "document" | "citations")}>
+              <TabsList aria-label="Contract views">
+                <TabsTrigger value="document">
+                  <FileText aria-hidden /> Contract
+                </TabsTrigger>
+                <TabsTrigger value="citations">
+                  <Quote aria-hidden /> Citations
+                  <span className="font-mono text-2xs text-ink-muted tnum">{scopedCitations.length}</span>
+                </TabsTrigger>
+              </TabsList>
+              {/* Kept mounted so the reader's place in the document survives a look at the list. */}
+              <TabsContent value="document" forceMount className="pt-3 data-[state=inactive]:hidden">
+                <DocumentPane
+                  contractId={contract.id}
+                  citations={scopedCitations}
+                  activePath={activePath}
+                  focus={docFocus}
+                  unresolved={unresolved}
+                  label={(p) => pathLabel(p, draft)}
+                  onSelectPath={jumpToField}
+                />
+              </TabsContent>
+              <TabsContent value="citations" className="pt-3">
                 <div
-                  key={c.path}
-                  id={citationDomId(c.path)}
-                  className="scroll-mt-4"
-                  onMouseEnter={() => setActivePath(c.path)}
+                  ref={citationsRef}
+                  className="flex max-h-none flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-thin lg:max-h-[calc(100dvh-15rem)]"
                 >
-                  <CitationQuote
-                    quote={c.quote}
-                    document={c.document}
-                    page={c.page}
-                    fieldLabel={pathLabel(c.path, draft)}
-                    active={activePath === c.path}
-                    ambiguous={unresolved.has(c.path)}
-                    onSelect={() => jumpToField(c.path)}
-                  />
+                  {scopedCitations.length === 0 && (
+                    <p className="rounded-md border border-dashed border-line-strong p-4 text-sm text-ink-muted">
+                      The extraction returned no citations. Check every value against the original document.
+                    </p>
+                  )}
+                  {scopedCitations.map((c) => (
+                    // biome-ignore lint/a11y/noStaticElementInteractions: hover preview; the quote's field button is the keyboard path
+                    <div
+                      key={c.path}
+                      id={citationDomId(c.path)}
+                      className="flex scroll-mt-4 flex-col items-start gap-1"
+                      onMouseEnter={() => setActivePath(c.path)}
+                    >
+                      <CitationQuote
+                        className="w-full"
+                        quote={c.quote}
+                        document={c.document}
+                        page={c.page}
+                        fieldLabel={pathLabel(c.path, draft)}
+                        active={activePath === c.path}
+                        ambiguous={unresolved.has(c.path)}
+                        onSelect={() => jumpToField(c.path)}
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        leadingIcon={<FileSearch />}
+                        onClick={() => showCitation(c.path)}
+                        aria-label={`Show the quote for ${pathLabel(c.path, draft)} in the contract`}
+                      >
+                        Show in contract
+                      </Button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </TabsContent>
+            </Tabs>
           </aside>
         </div>
       </div>

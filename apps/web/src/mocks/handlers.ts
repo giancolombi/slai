@@ -3,6 +3,7 @@ import type {
   AutonomyRule,
   Connection,
   Contract,
+  ContractText,
   CustomerAccount,
   List,
   Member,
@@ -196,6 +197,29 @@ function advanceReplays(now: number) {
       };
     }
   }
+}
+
+/** Plausible contract text for the demo: each cited quote sits on its cited page among boilerplate clauses. */
+function mockContractText(c: Contract): ContractText {
+  const citations = c.extraction?.citations ?? [];
+  const boiler = [
+    "This Schedule forms part of the Agreement between the parties and is subject to its terms.",
+    "Capitalised terms not defined here have the meaning given in the Master Services Agreement.",
+    "The Supplier shall provide the Support Services with reasonable skill, care and diligence.",
+    "Nothing in this Schedule limits either party's rights under clause 14 (Liability).",
+  ];
+  const paged = citations.some((x) => x.page !== null);
+  const last = Math.max(1, ...citations.map((x) => x.page ?? 1));
+  const pages: ContractText["pages"] = [];
+  for (let n = 1; n <= (paged ? last : 1); n++) {
+    const quotes = citations.filter((x) => (paged ? x.page === n : true)).map((x) => x.quote);
+    const clauses = [...new Set(quotes)].flatMap((q, i) => [`${n}.${i + 1} ${q}`, boiler[(n + i) % boiler.length]!]);
+    pages.push({
+      page: paged ? n : null,
+      text: [`${c.filename}`, "", boiler[n % boiler.length]!, "", ...clauses.map((x) => `${x}\n`)].join("\n"),
+    });
+  }
+  return { contractId: c.id, filename: c.filename, pages, truncated: false };
 }
 
 function customerView(c: ReturnType<typeof org>["customers"][number], now: number): CustomerAccount {
@@ -805,6 +829,14 @@ export const handlers = [
       advanceContracts(Date.now());
       const c = org().contracts.find((x) => x.id === params.id);
       return c ? HttpResponse.json(c) : fail(404, "not_found", "Contract not found.");
+    }),
+  ),
+  http.get(
+    url("/contracts/:id/text"),
+    guarded(({ params }) => {
+      const c = org().contracts.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Contract not found.");
+      return HttpResponse.json(mockContractText(c));
     }),
   ),
   http.get(url("/contracts/:id/file"), async ({ params }) => {
