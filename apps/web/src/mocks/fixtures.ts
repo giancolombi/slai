@@ -978,7 +978,7 @@ function buildTimeline(
   items.push({
     at: at(0.02),
     type: "agent_triage",
-    label: `Triage: ${r.pick(["Bug", "Incident", "How-to", "Account", "Billing"])} · suggested priority ${t.priority} · confidence ${(0.8 + r.next() * 0.17).toFixed(2)}`,
+    label: `Triage: ${r.pick(["Bug", "Incident", "How-to", "Account", "Billing"])} · suggested priority ${t.priority} · ${Math.round((0.8 + r.next() * 0.17) * 100)}% confident`,
     author: "slai agent",
   });
   if (t.assignee) items.push({ at: at(0.04), type: "assigned", label: `Assigned to ${t.assignee}` });

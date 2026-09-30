@@ -96,7 +96,7 @@ export function ApprovalsInbox({
       onReject: () => reject(undefined),
       onEdit: () => editorRef.current?.focus(),
     },
-    !rejecting && !readOnly,
+    !rejecting,
   );
 
   if (items.length === 0) {
@@ -181,18 +181,22 @@ export function ApprovalsInbox({
             <Kbd>j</Kbd>
             <Kbd>k</Kbd> move
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>a</Kbd> approve
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>r</Kbd> reject
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>e</Kbd> edit
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>Esc</Kbd> done editing
-          </span>
+          {!readOnly && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>a</Kbd> approve
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>r</Kbd> reject
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>e</Kbd> edit
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>Esc</Kbd> done editing
+              </span>
+            </>
+          )}
         </div>
       </Card>
 

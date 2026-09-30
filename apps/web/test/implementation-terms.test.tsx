@@ -20,7 +20,7 @@ import { createAppRouter } from "../src/router";
  * content (ticket subjects, help articles) legitimately says "API token" or "request ID", so
  * those are not listed; token *counts* are.
  */
-export const FORBIDDEN =
+const FORBIDDEN =
   /(\bclaude-|\bgpt-|\bqwen\b|\bollama\b|\be2b\b|\bsandbox(?:ed|es)?\b|\bsandbox (?:id|seconds|time)\b|\b\d[\d,.]*\s*(?:k\s*)?tokens\b|\bmicro-?dollars?\b|\bmicros\b|\bRLS\b|pg-boss|\bNOTIFY\b|\bTR-\d|\bPR-\d|\bT-\d{2}\b|\bpolicies\[\d+\]|\bcalendar\.weekly\b|\bmodel_call\b|\bDATABASE_[A-Z_]+|\bMODEL_PROVIDER\b|\bdeterministic\b|\bmock (?:provider|mode)\b|\bDesign system\b|\bwall\b|\b(?:first_response|next_response|periodic_update|on_hold|needs_review|at_risk|draft_reply|public_reply|internal_note|sandbox_seconds|contract_extraction|autopilot_reply)\b|\b[a-z_]+\.[a-z_]+_[a-z_]+\b)/i;
 
 /** UUIDs are internal ids; admins only ever need them inside a copyable setup value (a <code>). */
@@ -36,7 +36,7 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
   Element.prototype.scrollIntoView ??= () => {};
   window.scrollTo = () => {};
-  server.listen({ onUnhandledRequest: "bypass" });
+  server.listen({ onUnhandledFrame: "bypass" });
 });
 beforeEach(() => resetDb());
 afterEach(() => server.resetHandlers());
