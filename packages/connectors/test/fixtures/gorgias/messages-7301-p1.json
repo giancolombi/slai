@@ -1,0 +1,65 @@
+{
+  "object": "list",
+  "uri": "/api/messages?ticket_id=7301",
+  "data": [
+    {
+      "id": 910001,
+      "ticket_id": 7301,
+      "channel": "email",
+      "via": "email",
+      "from_agent": false,
+      "public": true,
+      "rule_id": null,
+      "subject": "Order #LG-20418 arrived damaged",
+      "sender": { "id": 5501, "email": "priya.natarajan@larkspur-goods.example", "name": "Priya Natarajan" },
+      "receiver": { "id": null, "email": "help@tidewater-support.example", "name": "Tidewater Support" },
+      "source": {
+        "type": "email",
+        "from": { "address": "priya.natarajan@larkspur-goods.example", "name": "Priya Natarajan" },
+        "to": [{ "address": "help@tidewater-support.example", "name": "Tidewater Support" }]
+      },
+      "body_text": "Hello, my order #LG-20418 arrived with a cracked lid. Can you send a replacement?",
+      "body_html": "<p>Hello, my order #LG-20418 arrived with a cracked lid. Can you send a replacement?</p>",
+      "stripped_text": "Hello, my order #LG-20418 arrived with a cracked lid. Can you send a replacement?",
+      "created_datetime": "2026-09-28T09:00:00.000000",
+      "sent_datetime": "2026-09-28T09:00:00.000000"
+    },
+    {
+      "id": 910002,
+      "ticket_id": 7301,
+      "channel": "email",
+      "via": "rule",
+      "from_agent": true,
+      "public": true,
+      "rule_id": 12,
+      "subject": "Re: Order #LG-20418 arrived damaged",
+      "sender": { "id": 2, "email": "help@tidewater-support.example", "name": "Tidewater Support" },
+      "source": {
+        "type": "email",
+        "from": { "address": "help@tidewater-support.example", "name": "Tidewater Support" },
+        "to": [{ "address": "priya.natarajan@larkspur-goods.example", "name": "Priya Natarajan" }]
+      },
+      "body_text": "Thanks for reaching out! We usually reply within a few hours.",
+      "body_html": null,
+      "created_datetime": "2026-09-28T09:05:00.000000",
+      "sent_datetime": "2026-09-28T09:05:02.000000"
+    },
+    {
+      "id": 910003,
+      "ticket_id": 7301,
+      "channel": "internal-note",
+      "via": "helpdesk",
+      "from_agent": true,
+      "public": false,
+      "rule_id": null,
+      "subject": null,
+      "sender": { "id": 88, "email": "marco.villa@tidewater-support.example", "name": "Marco Villa" },
+      "source": { "type": "internal-note", "from": null, "to": [] },
+      "body_text": null,
+      "body_html": "<div>Checked the warehouse photos &mdash; packaging was fine. Carrier damage.</div>",
+      "created_datetime": "2026-09-28T09:40:00.000000",
+      "sent_datetime": null
+    }
+  ],
+  "meta": { "prev_cursor": null, "next_cursor": "bXNnLWN1cnNvci0y", "total_resources": null }
+}

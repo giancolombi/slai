@@ -1,0 +1,41 @@
+{
+  "object": "list",
+  "uri": "/api/tickets",
+  "data": [
+    {
+      "id": 7302,
+      "uri": "/api/tickets/7302/",
+      "status": "closed",
+      "priority": "normal",
+      "channel": "chat",
+      "via": "chat",
+      "customer": { "id": 5507, "email": "tomas.berg@fjordline-outdoor.example", "name": "Tomas Berg" },
+      "assignee_user": null,
+      "assignee_team": null,
+      "subject": "Where is my return label?",
+      "tags": [],
+      "created_datetime": "2026-09-28T14:10:00.000000",
+      "updated_datetime": "2026-09-28T16:00:00.000000",
+      "snooze_datetime": "2026-09-30T16:00:00.000000",
+      "closed_datetime": "2026-09-28T16:00:00.000000"
+    },
+    {
+      "id": 7301,
+      "uri": "/api/tickets/7301/",
+      "status": "open",
+      "priority": "high",
+      "channel": "email",
+      "via": "email",
+      "customer": { "id": 5501, "email": "priya.natarajan@larkspur-goods.example", "name": "Priya Natarajan" },
+      "assignee_user": { "id": 88, "email": "marco.villa@tidewater-support.example", "name": "Marco Villa" },
+      "assignee_team": { "id": 4, "name": "Tier 1" },
+      "subject": "Order #LG-20418 arrived damaged",
+      "tags": [{ "id": 32, "name": "vip" }],
+      "created_datetime": "2026-09-28T09:00:00.000000",
+      "updated_datetime": "2026-09-28T13:05:00.000000",
+      "snooze_datetime": null,
+      "closed_datetime": null
+    }
+  ],
+  "meta": { "prev_cursor": null, "next_cursor": "dGt0LWN1cnNvci0y", "total_resources": null }
+}

@@ -1,0 +1,41 @@
+{
+  "object": "list",
+  "uri": "/api/tickets",
+  "data": [
+    {
+      "id": 7296,
+      "uri": "/api/tickets/7296/",
+      "status": "closed",
+      "priority": "critical",
+      "channel": "email",
+      "via": "email",
+      "customer": { "id": 5488, "email": "ada.mensah@copperkettle.example", "name": "Ada Mensah" },
+      "assignee_user": { "id": 91, "email": "jo.lindqvist@tidewater-support.example", "name": "Jo Lindqvist" },
+      "assignee_team": null,
+      "subject": "Charged twice for subscription",
+      "tags": [{ "id": 40, "name": "billing" }],
+      "created_datetime": "2026-09-27T22:40:00.000000",
+      "updated_datetime": "2026-09-28T08:15:00.000000",
+      "snooze_datetime": null,
+      "closed_datetime": "2026-09-28T08:15:00.000000"
+    },
+    {
+      "id": 7150,
+      "uri": "/api/tickets/7150/",
+      "status": "closed",
+      "priority": "low",
+      "channel": "email",
+      "via": "email",
+      "customer": { "id": 5300, "email": "li.wei@harborline.example", "name": "Li Wei" },
+      "assignee_user": null,
+      "assignee_team": null,
+      "subject": "Gift card balance",
+      "tags": [],
+      "created_datetime": "2026-09-19T11:00:00.000000",
+      "updated_datetime": "2026-09-20T09:00:00.000000",
+      "snooze_datetime": null,
+      "closed_datetime": "2026-09-20T09:00:00.000000"
+    }
+  ],
+  "meta": { "prev_cursor": "dGt0LWN1cnNvci0x", "next_cursor": "dGt0LWN1cnNvci0z", "total_resources": null }
+}

@@ -23,6 +23,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   },
   front: { apiToken: "t" },
   help_scout: { clientId: "id", clientSecret: "s" },
+  gorgias: { domain: "acme", email: "a@acme.com", apiKey: "k" },
   demo: {},
 };
 
@@ -36,6 +37,7 @@ describe("registry", () => {
       "demo",
       "freshdesk",
       "front",
+      "gorgias",
       "help_scout",
       "hubspot",
       "intercom",

@@ -1,6 +1,7 @@
 import { demo } from "./connectors/demo/index.js";
 import { freshdesk } from "./connectors/freshdesk.js";
 import { front } from "./connectors/front.js";
+import { gorgias } from "./connectors/gorgias.js";
 import { helpScout } from "./connectors/help-scout.js";
 import { hubspot } from "./connectors/hubspot.js";
 import { intercom } from "./connectors/intercom.js";
@@ -26,6 +27,7 @@ const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   zoho_desk: zohoDesk,
   front,
   help_scout: helpScout,
+  gorgias,
   demo,
 };
 
