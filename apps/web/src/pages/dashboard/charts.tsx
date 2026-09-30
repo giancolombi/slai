@@ -1,6 +1,7 @@
 import type { DashboardSummary } from "@slai/shared";
 import { cn, formatDate, formatPercent } from "@slai/ui";
 import { type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from "react";
+import { seriesPaths } from "./series-paths";
 
 type TrendPoint = DashboardSummary["attainmentTrend"][number];
 
@@ -88,14 +89,13 @@ export function AttainmentChart({ data, active, setActive, onKeyDown }: ChartPro
   const ticks: number[] = [];
   for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) ticks.push(Number(t.toFixed(1)));
 
-  let line = "";
-  data.forEach((d, i) => {
-    if (d.percent === null) return;
-    line += `${line ? "L" : "M"}${x(i).toFixed(1)},${y(d.percent).toFixed(1)}`;
-  });
-  const firstIdx = data.findIndex((d) => d.percent !== null);
-  const lastIdx = data.length - 1 - [...data].reverse().findIndex((d) => d.percent !== null);
-  const area = `${line} L${x(lastIdx)},${PAD.top + plotH} L${x(firstIdx)},${PAD.top + plotH} Z`;
+  const lastIdx = data.findLastIndex((d) => d.percent !== null);
+  const { line, area } = seriesPaths(
+    data.map((d) => d.percent),
+    x,
+    y,
+    PAD.top + plotH,
+  );
   const labelEvery = Math.max(1, Math.ceil(data.length / Math.max(2, Math.floor(plotW / 90))));
   const point = active !== null ? data[active] : null;
   const first = values[0];
@@ -103,6 +103,11 @@ export function AttainmentChart({ data, active, setActive, onKeyDown }: ChartPro
 
   return (
     <div ref={ref} className="relative">
+      {values.length === 0 && (
+        <p className="absolute inset-x-0 top-1/2 z-[1] -translate-y-1/2 text-center text-sm text-ink-muted">
+          No SLA cycles measured in this period yet.
+        </p>
+      )}
       <svg
         width={width}
         height={height}
@@ -152,17 +157,19 @@ export function AttainmentChart({ data, active, setActive, onKeyDown }: ChartPro
             </text>
           </g>
         )}
-        <path d={area} fill="url(#attain-fill)" />
-        <path
-          d={line}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
+        {area && <path d={area} fill="url(#attain-fill)" />}
+        {line && (
+          <path
+            d={line}
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        )}
         {data.map((d, i) =>
-          i % labelEvery === 0 || i === data.length - 1 ? (
+          i % labelEvery === 0 || (i === data.length - 1 && i % labelEvery >= labelEvery / 2) ? (
             <text
               key={d.date}
               x={x(i)}

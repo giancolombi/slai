@@ -27,6 +27,7 @@ import { Archive, ArrowRight, Gauge, ScrollText, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage } from "../../lib/api";
+import { usePersonName } from "../../lib/people";
 import { qk, useContracts, useCustomers, useMe, usePolicies } from "../../lib/queries";
 import { normalizeDefinition } from "../contracts/policy-paths";
 import { PolicySummary } from "./policy-summary";
@@ -41,6 +42,7 @@ const STATUS: Record<PolicyStatus, { label: string; tone: BadgeTone }> = {
 };
 
 export function PoliciesPage() {
+  const person = usePersonName();
   const { policyId } = route.useSearch();
   const navigate = useNavigate({ from: "/policies" });
   const policies = usePolicies();
@@ -162,7 +164,7 @@ export function PoliciesPage() {
                     <TD className="hidden text-xs text-ink-muted lg:table-cell">
                       {p.approvedAt ? (
                         <>
-                          <span className="text-ink">{p.approvedBy}</span>
+                          <span className="text-ink">{person(p.approvedBy)}</span>
                           <span className="block">{formatDate(p.approvedAt)}</span>
                         </>
                       ) : (
@@ -196,6 +198,7 @@ export function PoliciesPage() {
 }
 
 function PolicySheet({ policy, onClose }: { policy: Policy | null; onClose: () => void }) {
+  const person = usePersonName();
   const queryClient = useQueryClient();
   const me = useMe();
   const admin = me.data?.role === "owner" || me.data?.role === "admin";
@@ -241,7 +244,7 @@ function PolicySheet({ policy, onClose }: { policy: Policy | null; onClose: () =
       description={
         policy
           ? policy.approvedAt
-            ? `Approved by ${policy.approvedBy} on ${formatDateTime(policy.approvedAt)}`
+            ? `Approved by ${person(policy.approvedBy)} on ${formatDateTime(policy.approvedAt)}`
             : `Draft created ${formatDateTime(policy.createdAt)}`
           : undefined
       }

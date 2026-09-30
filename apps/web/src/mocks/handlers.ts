@@ -9,19 +9,22 @@ import type {
   NotificationChannel,
   Policy,
   Replay,
-  Role,
 } from "@slai/shared";
 import {
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
   createConnectionBody,
+  createPolicyBody,
   createReplayBody,
   inviteBody,
   loginBody,
   notificationChannelBody,
+  policyPreviewBody,
   rejectActionBody,
   signupBody,
+  switchOrgBody,
+  updateMemberBody,
   updateOrgBody,
   updatePolicyBody,
   upsertCustomerBody,
@@ -286,7 +289,9 @@ export const handlers = [
   http.post(
     url("/auth/switch-org"),
     guarded(async ({ request }) => {
-      const { organizationId } = (await request.json()) as { organizationId: string };
+      const body = await parse(request, switchOrgBody);
+      if (body instanceof Response) return body;
+      const { organizationId } = body;
       const d = getDb();
       const target = d.me.organizations.find((o) => o.id === organizationId);
       if (!target || !d.orgs[organizationId]) return fail(404, "not_found", "Organization not found.");
@@ -371,7 +376,9 @@ export const handlers = [
     url("/members/:userId"),
     guarded(async ({ request, params }) => {
       if (getDb().me.role !== "owner") return fail(403, "forbidden", "Only the owner can change roles.");
-      const { role } = (await request.json()) as { role: Role };
+      const body = await parse(request, updateMemberBody);
+      if (body instanceof Response) return body;
+      const { role } = body;
       const m = org().members.find((x) => x.userId === params.userId);
       if (!m) return fail(404, "not_found", "Member not found.");
       if (m.role === "owner") return fail(409, "last_owner", "The owner's role can't be changed here.");
@@ -614,14 +621,16 @@ export const handlers = [
   http.post(
     url("/policies"),
     guarded(async ({ request }) => {
-      const body = (await request.json()) as { name: string; definition: unknown };
+      const body = await parse(request, createPolicyBody);
+      if (body instanceof Response) return body;
+      const base = body.basedOn ? org().policies.find((x) => x.id === body.basedOn) : undefined;
       const p: Policy = {
         id: crypto.randomUUID(),
         name: body.name,
-        version: 1,
+        version: base ? base.version + 1 : 1,
         status: "draft",
-        contractId: null,
-        isDefault: false,
+        contractId: body.contractId ?? base?.contractId ?? null,
+        isDefault: body.isDefault,
         definition: body.definition,
         approvedBy: null,
         approvedAt: null,
@@ -693,8 +702,9 @@ export const handlers = [
     url("/policies/:id/preview"),
     guarded(async ({ request }) => {
       await latency(900, 1600);
-      const body = (await request.json().catch(() => ({}))) as { days?: number };
-      const days = body.days ?? 90;
+      const body = await parse(request, policyPreviewBody);
+      if (body instanceof Response) return body;
+      const days = body.days;
       const scale = days / 90;
       org().usageExtraCents += 30;
       return HttpResponse.json({

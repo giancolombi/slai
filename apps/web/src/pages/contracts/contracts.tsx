@@ -35,6 +35,7 @@ import {
 import { type ReactNode, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage } from "../../lib/api";
+import { usePersonName } from "../../lib/people";
 import { qk, useContracts, useCustomers } from "../../lib/queries";
 import { ContractUpload } from "./upload-dropzone";
 
@@ -134,6 +135,7 @@ function ContractsTable({
   items: Contract[];
   customerName: (id: string | null) => string | null;
 }) {
+  const person = usePersonName();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const retry = useMutation({
@@ -229,7 +231,7 @@ function ContractsTable({
               </TD>
               <TD className="hidden text-xs text-ink-muted lg:table-cell">
                 <span title={formatDateTime(c.uploadedAt)}>{formatRelative(c.uploadedAt)}</span>
-                <span className="block">{c.uploadedBy}</span>
+                <span className="block">{person(c.uploadedBy)}</span>
               </TD>
               <TD align="right" onClick={(e) => e.stopPropagation()}>
                 {c.status === "needs_review" && (

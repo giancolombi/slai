@@ -40,6 +40,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage, isApiError } from "../../lib/api";
+import { usePersonName } from "../../lib/people";
 import { qk, useContract, useCustomers, useMe, usePolicy } from "../../lib/queries";
 import { PolicyForm } from "./policy-form";
 import { citationDomId, definedPaths, fieldDomId, normalizeDefinition, pathLabel } from "./policy-paths";
@@ -68,6 +69,7 @@ export interface ContractReviewProps {
 
 /** Review an extracted policy against its contract, resolve ambiguities, and approve it. */
 export function ContractReview({ contractId, onApproved, embedded = false }: ContractReviewProps) {
+  const person = usePersonName();
   const contract = useContract(contractId);
   const customers = useCustomers();
   const customerName = customers.data?.items.find((c) => c.id === contract.data?.customerAccountId)?.name ?? null;
@@ -90,7 +92,7 @@ export function ContractReview({ contractId, onApproved, embedded = false }: Con
             <span className="inline-flex flex-wrap items-center gap-x-2">
               {customerName && <span className="font-medium text-ink">{customerName}</span>}
               <span>
-                Uploaded by {contract.data.uploadedBy} {formatRelative(contract.data.uploadedAt)}
+                Uploaded by {person(contract.data.uploadedBy)} {formatRelative(contract.data.uploadedAt)}
               </span>
             </span>
           ) : undefined
@@ -569,6 +571,7 @@ function Summary({
   resolved: number;
   total: number;
 }) {
+  const person = usePersonName();
   const approved = policy.status !== "draft";
   return (
     <Card className="overflow-hidden">
@@ -593,7 +596,7 @@ function Summary({
           {approved && policy.approvedBy && (
             <p className="mt-3 inline-flex items-center gap-1.5 text-xs text-ink-muted">
               <Lock className="size-3.5" aria-hidden />
-              Approved by <span className="font-medium text-ink">{policy.approvedBy}</span>
+              Approved by <span className="font-medium text-ink">{person(policy.approvedBy)}</span>
               {policy.approvedAt && <> on {formatDateTime(policy.approvedAt)}</>}. Approved versions are read-only.
             </p>
           )}

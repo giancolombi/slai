@@ -100,8 +100,12 @@ function DashboardBody({ data }: { data: DashboardSummary }) {
             value={hot}
             detail={
               <span className="flex flex-wrap gap-x-3">
-                <span className="text-at-risk-text">{data.byRisk.at_risk} at risk</span>
-                <span className="text-breached-text">{data.byRisk.breached} breached</span>
+                <span className={data.byRisk.at_risk > 0 ? "text-at-risk-text" : "text-ink-muted"}>
+                  {data.byRisk.at_risk} at risk
+                </span>
+                <span className={data.byRisk.breached > 0 ? "text-breached-text" : "text-ink-muted"}>
+                  {data.byRisk.breached} breached
+                </span>
                 <span>{formatNumber(data.openTickets)} open</span>
               </span>
             }

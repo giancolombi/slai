@@ -11,12 +11,16 @@ import type {
   approveActionBody,
   autonomyRuleBody,
   createConnectionBody,
+  createPolicyBody,
   createReplayBody,
   inviteBody,
   loginBody,
   notificationChannelBody,
+  policyPreviewBody,
   rejectActionBody,
   signupBody,
+  switchOrgBody,
+  updateMemberBody,
   updateOrgBody,
   updatePolicyBody,
   upsertCustomerBody,
@@ -221,6 +225,14 @@ const del = <T = void>(path: string) => request<T>("DELETE", path);
 type In<S extends z.ZodType> = z.input<S>;
 const id = encodeURIComponent;
 
+/** `POST /members/invite` response. The contract doesn't name it; the API returns the pending invitation. */
+export interface Invitation {
+  id?: string;
+  email: string;
+  role: Role;
+  expiresAt?: string;
+}
+
 export interface TicketQuery {
   risk?: Risk | "";
   status?: TicketStatus | "";
@@ -237,7 +249,8 @@ export const api = {
     logout: () => post<void>("/auth/logout"),
     mfaSetup: () => post<MfaSetup>("/auth/mfa/setup"),
     mfaVerify: (totp: string) => post<Me>("/auth/mfa/verify", { totp }),
-    switchOrg: (organizationId: string) => post<Me>("/auth/switch-org", { organizationId }),
+    switchOrg: (organizationId: string) =>
+      post<Me>("/auth/switch-org", { organizationId } satisfies In<typeof switchOrgBody>),
   },
   org: {
     get: () => get<OrgSettings>("/org"),
@@ -245,8 +258,9 @@ export const api = {
   },
   members: {
     list: () => get<List<Member>>("/members"),
-    invite: (body: In<typeof inviteBody>) => post<Member>("/members/invite", body),
-    setRole: (userId: string, role: Role) => patch<Member>(`/members/${id(userId)}`, { role }),
+    invite: (body: In<typeof inviteBody>) => post<Invitation>("/members/invite", body),
+    setRole: (userId: string, role: Role) =>
+      patch<Member>(`/members/${id(userId)}`, { role } satisfies In<typeof updateMemberBody>),
     remove: (userId: string) => del(`/members/${id(userId)}`),
   },
   connectors: {
@@ -282,11 +296,11 @@ export const api = {
   policies: {
     list: () => get<List<Policy>>("/policies"),
     get: (policyId: string) => get<Policy>(`/policies/${id(policyId)}`),
-    create: (body: { name: string; definition: unknown }) => post<Policy>("/policies", body),
+    create: (body: In<typeof createPolicyBody>) => post<Policy>("/policies", body),
     update: (policyId: string, body: In<typeof updatePolicyBody>) => patch<Policy>(`/policies/${id(policyId)}`, body),
     approve: (policyId: string) => post<Policy>(`/policies/${id(policyId)}/approve`),
     archive: (policyId: string) => post<Policy>(`/policies/${id(policyId)}/archive`),
-    preview: (policyId: string, body: { connectionId?: string; days: number }) =>
+    preview: (policyId: string, body: In<typeof policyPreviewBody>) =>
       post<PolicyPreview>(`/policies/${id(policyId)}/preview`, body),
   },
   tickets: {
