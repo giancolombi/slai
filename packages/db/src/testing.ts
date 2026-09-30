@@ -38,11 +38,13 @@ export async function createTestDatabase(dbName: string): Promise<TestDbUrls> {
   const urls = testDbUrls(dbName);
   const admin = postgres(withDb(urls.owner, "postgres"), { max: 1, onnotice: () => {} });
   try {
+    // Suites set up in parallel; migrations touch cluster-wide roles (ALTER ROLE), so run them one at a time.
+    await admin`select pg_advisory_lock(hashtext('slai_test_migrations'))`;
     await admin.unsafe(`drop database if exists ${dbName} with (force)`);
     await admin.unsafe(`create database ${dbName}`);
+    await runMigrations(urls.owner);
   } finally {
     await admin.end({ timeout: 5 });
   }
-  await runMigrations(urls.owner);
   return urls;
 }
