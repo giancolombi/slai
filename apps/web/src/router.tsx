@@ -187,7 +187,19 @@ const customersRoute = createRoute({
 const connectionsRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/connections",
+  // Set by the OAuth callback when a "Continue with <Provider>" flow fails.
+  validateSearch: (s: Record<string, unknown>): { oauth_error?: string } => ({ oauth_error: str(s.oauth_error) }),
   component: lazyRouteComponent(() => import("./pages/connections/connections"), "ConnectionsPage"),
+});
+
+const connectionRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/connections/$connectionId",
+  // `connected=1` right after connecting: show the webhook setup once.
+  validateSearch: (s: Record<string, unknown>): { connected?: boolean } => ({
+    connected: s.connected === 1 || s.connected === "1" || s.connected === true ? true : undefined,
+  }),
+  component: lazyRouteComponent(() => import("./pages/connections/connection-detail"), "ConnectionDetailPage"),
 });
 
 const autonomyRoute = createRoute({
@@ -252,6 +264,7 @@ const routeTree = rootRoute.addChildren([
     policiesRoute,
     customersRoute,
     connectionsRoute,
+    connectionRoute,
     autonomyRoute,
     knowledgeRoute,
     replaysRoute,

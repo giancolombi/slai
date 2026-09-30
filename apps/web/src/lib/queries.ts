@@ -9,6 +9,8 @@ export const qk = {
   members: ["members"] as const,
   connectors: ["connectors"] as const,
   connections: ["connections"] as const,
+  connection: (id: string) => ["connections", id] as const,
+  connectionMapping: (id: string) => ["connections", id, "mapping"] as const,
   customers: ["customers"] as const,
   contracts: ["contracts"] as const,
   contract: (id: string) => ["contracts", id] as const,
@@ -64,6 +66,10 @@ export const useMembers = () => useQuery({ queryKey: qk.members, queryFn: api.me
 export const useConnectors = () =>
   useQuery({ queryKey: qk.connectors, queryFn: api.connectors.list, staleTime: 10 * 60_000 });
 export const useConnections = () => useQuery({ queryKey: qk.connections, queryFn: api.connections.list });
+export const useConnection = (id: string) =>
+  useQuery({ queryKey: qk.connection(id), queryFn: () => api.connections.get(id) });
+export const useConnectionMapping = (id: string) =>
+  useQuery({ queryKey: qk.connectionMapping(id), queryFn: () => api.connections.mapping(id) });
 export const useCustomers = () => useQuery({ queryKey: qk.customers, queryFn: api.customers.list });
 export const useContracts = (poll = false) =>
   useQuery({
