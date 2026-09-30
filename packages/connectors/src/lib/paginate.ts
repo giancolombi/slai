@@ -47,9 +47,10 @@ export async function collectPages<T, Tok>(
 /** Parses an RFC 8288 Link header and returns the rel="next" URL, if any. */
 export function nextLink(link: string | null): string | null {
   if (!link) return null;
-  for (const part of link.split(",")) {
-    const m = part.match(/<([^>]+)>\s*;\s*rel="?next"?/i);
-    if (m?.[1]) return m[1];
+  // URLs may contain raw commas (e.g. include=requester,stats), so match
+  // <url>; params entries instead of splitting on ",".
+  for (const m of link.matchAll(/<([^>]*)>((?:\s*;\s*[^;,<]*)*)/g)) {
+    if (/;\s*rel\s*=\s*"?next"?/i.test(m[2] ?? "") && m[1]) return m[1];
   }
   return null;
 }

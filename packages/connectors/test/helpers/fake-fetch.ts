@@ -92,8 +92,10 @@ export function fakeFetch(routes: Route[]) {
       : route.json === undefined
         ? ""
         : JSON.stringify(route.json);
-    return new Response(payload, {
-      status: route.status ?? 200,
+    const status = route.status ?? 200;
+    // 204/205 must not carry a body.
+    return new Response(status === 204 || status === 205 ? null : payload, {
+      status,
       headers: { "content-type": "application/json", ...route.responseHeaders },
     });
   };

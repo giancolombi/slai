@@ -167,6 +167,10 @@ describe("paginate", () => {
     expect(items).toEqual([1, 2, 3]);
     expect(nextLink('<https://a/x?page=2>; rel="next", <https://a/x?page=9>; rel="last"')).toBe("https://a/x?page=2");
     expect(nextLink(null)).toBeNull();
+    expect(nextLink('<https://a/t?include=requester,stats&page=3>; rel="next"')).toBe(
+      "https://a/t?include=requester,stats&page=3",
+    );
+    expect(nextLink('<https://a/t?page=1>; rel="prev"')).toBeNull();
   });
 });
 
