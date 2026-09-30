@@ -1,6 +1,6 @@
 {
   "$schema": "https://biomejs.dev/schemas/latest/schema.json",
-  "files": { "includes": ["**", "!**/node_modules", "!**/dist", "!**/*.gen.ts", "!docs"] },
+  "files": { "includes": ["**", "!**/node_modules", "!**/dist", "!**/*.gen.ts", "!docs", "!.claude"] },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "linter": {
     "rules": {
