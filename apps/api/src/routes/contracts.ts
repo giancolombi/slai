@@ -16,6 +16,7 @@ import { type AppDeps, type AppEnv, auditBase, auth } from "../context.js";
 import { contractText, isTextExtractable } from "../contract-text.js";
 import { ApiError, badRequest, conflict, notFound } from "../errors.js";
 import { toContract } from "../mappers.js";
+import { requireRole } from "../middleware/auth.js";
 import { assertInOrg } from "../org-refs.js";
 import { decodeCursor, idCursor, page, pageQuery } from "../pagination.js";
 import { safeFilename, sniffContract } from "../upload.js";
@@ -166,6 +167,26 @@ export function contractRoutes(deps: AppDeps) {
       await notifyEvent(tx, { orgId: a.orgId, type: "contract.updated", id });
     });
     return c.json({ queued: true }, 202);
+  });
+
+  /** Archive (admin). The retention job hard-deletes the row and file CONTRACT_RETENTION_DAYS later (T-64). */
+  app.post("/:id/archive", requireRole("admin"), async (c) => {
+    const a = auth(c);
+    const id = idParam(c, "id", "Contract");
+    const dto = await deps.orgDb.withOrg(a.orgId, async (tx) => {
+      const { c: row } = await loadOne(tx, id);
+      if (row.status !== "archived") {
+        await tx.update(contracts).set({ status: "archived", archivedAt: deps.now() }).where(eq(contracts.id, id));
+        await audit(tx, {
+          ...auditBase(c),
+          orgId: a.orgId,
+          action: "contract.archived",
+          target: { type: "contract", id },
+        });
+      }
+      return (await withPolicies(tx, [await loadOne(tx, id)]))[0]!;
+    });
+    return c.json(dto);
   });
 
   app.get("/:id/text", async (c) => {

@@ -1,28 +1,26 @@
 import { randomUUID } from "node:crypto";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import type { MiddlewareHandler } from "hono";
+import { clientIp, type TrustProxy } from "../client-ip.js";
 import type { AppEnv } from "../context.js";
 import { ApiError } from "../errors.js";
 
 const REQUEST_ID = /^[A-Za-z0-9._-]{8,100}$/;
 
 /** Request id (honors a well-formed incoming X-Request-Id) and client IP. */
-export function requestContext(opts: { trustProxy: boolean }): MiddlewareHandler<AppEnv> {
+export function requestContext(opts: { trustProxy: TrustProxy }): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const incoming = c.req.header("x-request-id");
     const id = incoming && REQUEST_ID.test(incoming) ? incoming : randomUUID();
     c.set("requestId", id);
     c.set("auth", null);
-    let ip: string | null = null;
-    if (opts.trustProxy) ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || null;
-    if (!ip) {
-      try {
-        ip = getConnInfo(c).remote.address ?? null;
-      } catch {
-        ip = null; // not running under node-server (tests)
-      }
+    let remote: string | null = null;
+    try {
+      remote = getConnInfo(c).remote.address ?? null;
+    } catch {
+      remote = null; // not running under node-server (tests)
     }
-    c.set("ip", ip);
+    c.set("ip", clientIp(c.req.header("x-forwarded-for"), remote, opts.trustProxy));
     c.header("X-Request-Id", id);
     await next();
   };

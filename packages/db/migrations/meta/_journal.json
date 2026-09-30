@@ -57,6 +57,13 @@
       "when": 1790773753269,
       "tag": "0007_t65_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790774708255,
+      "tag": "0008_soc2",
+      "breakpoints": true
     }
   ]
 }
