@@ -1,10 +1,13 @@
-/**
- * Credentials waiting for a TOTP code, kept in memory only (never in the URL or storage).
- * A reload drops them, which sends the person back to /login.
- */
-let pending: { email: string; password: string } | null = null;
+import type { SecondFactor } from "@slai/shared";
 
-export function setPendingLogin(value: { email: string; password: string } | null) {
+/**
+ * A sign-in waiting for its second factor. The server holds the challenge in an
+ * httpOnly cookie; the page only needs the email (for display) and the methods
+ * offered. Memory only: a reload sends the person back to /login.
+ */
+let pending: { email: string; methods: SecondFactor[] } | null = null;
+
+export function setPendingLogin(value: { email: string; methods: SecondFactor[] } | null) {
   pending = value;
 }
 

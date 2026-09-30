@@ -4,6 +4,8 @@ import { api, isApiError, type TicketQuery } from "./api";
 export const qk = {
   me: ["me"] as const,
   org: ["org"] as const,
+  sso: ["org-sso"] as const,
+  passkeys: ["passkeys"] as const,
   members: ["members"] as const,
   connectors: ["connectors"] as const,
   connections: ["connections"] as const,
@@ -24,11 +26,17 @@ export const qk = {
   audit: ["audit"] as const,
 };
 
-export function createQueryClient(options: { onUnauthorized?: () => void } = {}) {
+export function createQueryClient(
+  options: { onUnauthorized?: () => void; onMfaGate?: (to: "/mfa/setup" | "/mfa") => void } = {},
+) {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error) => {
-        if (isApiError(error) && error.isUnauthorized) options.onUnauthorized?.();
+        if (!isApiError(error)) return;
+        if (error.isUnauthorized) options.onUnauthorized?.();
+        // The server's MFA gate: a session without its second factor can only use /auth.
+        else if (error.isEnrollmentRequired) options.onMfaGate?.("/mfa/setup");
+        else if (error.isMfaRequired) options.onMfaGate?.("/mfa");
       },
     }),
     defaultOptions: {
@@ -48,6 +56,8 @@ export const meQuery = queryOptions({ queryKey: qk.me, queryFn: api.auth.me, sta
 
 export const useMe = () => useQuery(meQuery);
 export const useOrg = () => useQuery({ queryKey: qk.org, queryFn: api.org.get });
+export const useOrgSso = (enabled = true) => useQuery({ queryKey: qk.sso, queryFn: api.sso.get, enabled });
+export const usePasskeys = () => useQuery({ queryKey: qk.passkeys, queryFn: api.passkeys.list });
 export const useMembers = () => useQuery({ queryKey: qk.members, queryFn: api.members.list });
 export const useConnectors = () =>
   useQuery({ queryKey: qk.connectors, queryFn: api.connectors.list, staleTime: 10 * 60_000 });
