@@ -32,7 +32,7 @@ export const manifestSchema = z.object({
 });
 export type Manifest = z.infer<typeof manifestSchema>;
 
-const usageSchema = z.object({
+const usageSchema = z.strictObject({
   provider,
   model: z.string(),
   inputTokens: z.number().int().nonnegative(),
@@ -43,14 +43,14 @@ const usageSchema = z.object({
 });
 
 export const sandboxResultSchema = z.discriminatedUnion("ok", [
-  z.object({
+  z.strictObject({
     ok: z.literal(true),
     output: z.unknown(),
     usage: z.array(usageSchema),
     modelCalls: z.number().int().nonnegative(),
     wallMs: z.number().nonnegative(),
   }),
-  z.object({
+  z.strictObject({
     ok: z.literal(false),
     error: z.enum(["invalid_output", "bound_exceeded", "provider_error", "sandbox_error"]),
     message: z.string(),
