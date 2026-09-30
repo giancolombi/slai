@@ -271,3 +271,20 @@ export async function retryOnceOnAuth<T>(
     return run();
   }
 }
+
+/**
+ * Runs a read of help-center articles or saved replies. A 403 there means the
+ * token lacks the scope, role or plan for that resource while tickets still
+ * work, so it becomes `unsupported`: the worker records it on the knowledge
+ * source instead of putting the whole connection in error.
+ */
+export async function forbiddenAsUnsupported<T>(what: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (e instanceof ConnectorError && e.kind === "auth" && / → 403\b/.test(e.message)) {
+      throw new ConnectorError(`${what}: this token is not allowed to read them (403)`, "unsupported");
+    }
+    throw e;
+  }
+}

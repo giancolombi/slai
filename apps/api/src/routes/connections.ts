@@ -78,7 +78,10 @@ export async function insertConnection(
     metadata: { provider: def.provider, name: input.name, via: input.via },
   });
   await deps.jobs.send(tx, "sync-connection", { orgId: input.orgId, connectionId: id, full: true });
-  if (def.supportsKnowledge) await addKnowledgeSource(tx, c, deps, { connectionId: id, name: input.name });
+  if (def.supportsKnowledge)
+    await addKnowledgeSource(tx, c, deps, { connectionId: id, name: input.name, kind: "helpdesk_articles" });
+  if (def.supportsSavedReplies)
+    await addKnowledgeSource(tx, c, deps, { connectionId: id, name: input.name, kind: "saved_replies" });
   return row!;
 }
 
@@ -174,6 +177,7 @@ export function connectionRoutes(deps: AppDeps) {
           }
         : {}),
       supportsKnowledge: d.supportsKnowledge ?? false,
+      supportsSavedReplies: d.supportsSavedReplies ?? false,
     }));
     return c.json(items);
   });

@@ -19,6 +19,10 @@
  * - Application webhooks (HMAC-SHA256 of `timestamp:body`, base64): https://dev.frontapp.com/docs/application-webhooks
  * - Rule webhooks (HMAC-SHA1 of body with the API secret, base64): https://dev.frontapp.com/docs/rule-webhooks
  * - Rate limits (429 + Retry-After): https://dev.frontapp.com/docs/rate-limiting
+ * - Message templates (saved replies; `_results[]` id/name/subject/body HTML, `limit` ≤ 100,
+ *   `_pagination.next`): https://dev.frontapp.com/reference/list-message-templates
+ *   Company templates only: team and teammate templates have their own endpoints and are not read.
+ * - Template variables (`{{recipient.first_name}}`): https://help.front.com/en/articles/2306
  *
  * Updated-since listing uses the company event feed (GET /events?q[after]=…,
  * oldest first) rather than conversation search: search's `after:` filter only
@@ -57,10 +61,10 @@ import type { AuthorRole, Priority } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, hmac, safeEqual } from "../lib/hmac.js";
-import { HttpClient } from "../lib/http.js";
+import { forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
-import { htmlToText, plainText, textToHtml } from "../lib/text.js";
+import { htmlToText, plainText, savedReplyText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
 import {
   type CanonicalComment,
@@ -71,6 +75,7 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
 const BASE = "https://api2.frontapp.com";
@@ -180,6 +185,15 @@ type ZComment = z.infer<typeof zComment>;
 const list = <T extends z.ZodType>(item: T) =>
   z.object({ _pagination: z.object({ next: z.string().nullish() }).nullish(), _results: z.array(item) });
 
+const zTemplate = z
+  .object({
+    id: z.string(),
+    name: z.string().nullish(),
+    body: z.string().nullish(),
+    updated_at: z.number().nullish(),
+  })
+  .loose();
+
 const zTargetTeammate = z.object({ id: z.string() }).loose();
 const zTargetStatus = z.object({ id: z.string().nullish(), name: z.string().nullish(), category: z.string() }).loose();
 
@@ -248,6 +262,7 @@ export const front: ConnectorDefinition<FrontCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  supportsSavedReplies: true,
   webhookSetup: {
     secret: "provider",
     steps: [
@@ -568,6 +583,34 @@ export const front: ConnectorDefinition<FrontCredentials> = {
           items: [...latest.values()].map(snapshot),
           nextCursor: next && data._results.length > 0 ? encodeCursor({ n: next }) : null,
         };
+      },
+
+      async listSavedReplies(cursor) {
+        return forbiddenAsUnsupported("Front message templates", async () => {
+          const isState = (v: unknown): v is { n: string } => typeof (v as { n?: unknown })?.n === "string";
+          const state = decodeCursor(cursor, isState);
+          const data = parseAs(
+            list(zTemplate),
+            await http.get(state ? frontUrl(state.n) : "/message_templates", state ? {} : { query: { limit: 100 } }),
+            "message templates",
+          );
+          const items: KnowledgeArticle[] = [];
+          for (const t of data._results) {
+            const bodyText = savedReplyText(t.body, "html");
+            if (!bodyText) continue;
+            items.push({
+              sourceId: t.id,
+              title: t.name ?? "",
+              url: null,
+              bodyText,
+              locale: null,
+              // Front does not document a template timestamp; a fixed one keeps syncs deterministic.
+              updatedAt: t.updated_at ? unix(t.updated_at, `message template ${t.id}`) : new Date(0),
+            });
+          }
+          const next = data._pagination?.next ? frontUrl(data._pagination.next) : null;
+          return { items, nextCursor: next && data._results.length > 0 ? encodeCursor({ n: next }) : null };
+        });
       },
 
       async getTicketWithHistory(sourceId) {

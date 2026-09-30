@@ -1,0 +1,26 @@
+{
+  "results": [
+    {
+      "id": "179889003900",
+      "knowledgeBaseId": "5501",
+      "title": "Draft: new billing FAQ",
+      "language": "en",
+      "state": "DRAFT",
+      "url": null,
+      "body": "<p>Not ready.</p>",
+      "translations": {},
+      "updatedAt": "2026-05-01T10:00:00.000Z"
+    },
+    {
+      "id": "179889003901",
+      "knowledgeBaseId": "5501",
+      "title": "Export tickets to CSV",
+      "language": "en",
+      "state": "PUBLISHED",
+      "url": "https://help.acme.example/knowledge/export-tickets",
+      "body": "<p>Use Reports → Export.</p>",
+      "translations": {},
+      "updatedAt": "2026-05-02T10:00:00.000Z"
+    }
+  ]
+}

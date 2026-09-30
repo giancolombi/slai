@@ -187,6 +187,14 @@ export interface ConnectorClient {
    * definition sets `supportsKnowledge`. Bodies are bounded plain text.
    */
   listKnowledgeArticles?(cursor: string | null): Promise<Page<KnowledgeArticle>>;
+  /**
+   * The help desk's saved replies (macros, canned responses, templates),
+   * paginated (T-47b). Present only when the definition sets
+   * `supportsSavedReplies`. Only replies an agent would send to a customer;
+   * placeholders such as `{{ticket.requester.first_name}}` are stripped, so
+   * bodies are bounded plain text safe to quote.
+   */
+  listSavedReplies?(cursor: string | null): Promise<Page<KnowledgeArticle>>;
 }
 
 /** A help-center article or saved reply, as plain text, for draft agents to rely on. */
@@ -271,5 +279,7 @@ export interface ConnectorDefinition<Credentials = unknown> {
   docsUrl: string;
   /** The client implements `listKnowledgeArticles` (T-47). Absent means false. */
   supportsKnowledge?: boolean;
+  /** The client implements `listSavedReplies` (T-47b). Absent means false. */
+  supportsSavedReplies?: boolean;
   create(ctx: ConnectorContext<Credentials>): ConnectorClient;
 }

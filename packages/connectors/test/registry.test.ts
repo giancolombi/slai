@@ -29,6 +29,9 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   demo: {},
 };
 
+/** Help desks whose public API exposes saved replies/macros (T-47b). */
+const SAVED_REPLY_PROVIDERS = ["demo", "freshdesk", "front", "gorgias", "help_scout", "intercom", "zammad", "zendesk"];
+
 describe("registry", () => {
   it("registers every connector and the demo", () => {
     expect(
@@ -59,7 +62,7 @@ describe("registry", () => {
     const withKnowledge = listConnectors()
       .filter((c) => c.supportsKnowledge)
       .map((c) => c.provider);
-    expect(withKnowledge).toEqual(expect.arrayContaining(["zendesk", "intercom", "freshdesk"]));
+    expect(withKnowledge).toEqual(expect.arrayContaining(["zendesk", "intercom", "freshdesk", "zammad", "hubspot"]));
     for (const def of listConnectors()) {
       if (!def.supportsKnowledge) continue;
       const client = def.create({
@@ -69,6 +72,23 @@ describe("registry", () => {
         fetch: noFetch,
       });
       expect(typeof client.listKnowledgeArticles, def.provider).toBe("function");
+    }
+  });
+
+  it("marks the connectors that sync saved replies, and only they implement the call", () => {
+    const withReplies = listConnectors()
+      .filter((c) => c.supportsSavedReplies)
+      .map((c) => c.provider)
+      .sort();
+    expect(withReplies).toEqual(SAVED_REPLY_PROVIDERS);
+    for (const def of listConnectors()) {
+      const client = def.create({
+        credentials: def.credentialsSchema.parse(SAMPLE_CREDENTIALS[def.provider]),
+        config: { seed: "t" },
+        mapping: def.defaultMapping,
+        fetch: noFetch,
+      });
+      expect(typeof client.listSavedReplies, def.provider).toBe(def.supportsSavedReplies ? "function" : "undefined");
     }
   });
 

@@ -1391,8 +1391,15 @@ export const handlers = [
         } else {
           const conn = o.connections.find((c) => c.id === body.connectionId);
           if (!conn) return fail(400, "invalid_request", "Choose a connected help desk.");
-          if (!CONNECTORS.find((c) => c.provider === conn.provider)?.supportsKnowledge)
-            return fail(400, "invalid_request", "This help desk has no help center slai can sync.");
+          const def = CONNECTORS.find((c) => c.provider === conn.provider);
+          if (body.kind === "saved_replies" ? !def?.supportsSavedReplies : !def?.supportsKnowledge)
+            return fail(
+              400,
+              "invalid_request",
+              body.kind === "saved_replies"
+                ? "This help desk has no saved replies slai can sync."
+                : "This help desk has no help center slai can sync.",
+            );
           if (o.knowledgeSources.some((s) => s.connectionId === conn.id && s.kind === body.kind))
             return fail(409, "conflict", "This help desk is already a knowledge source.");
         }

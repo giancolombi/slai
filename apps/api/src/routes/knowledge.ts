@@ -15,7 +15,7 @@ import {
 import { and, asc, eq, ilike, or, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { type AppDeps, type AppEnv, auditBase, auth, type Ctx } from "../context.js";
+import { type AnyConnector, type AppDeps, type AppEnv, auditBase, auth, type Ctx } from "../context.js";
 import { badRequest, conflict, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { decodeCursor, encodeCursor } from "../pagination.js";
@@ -58,15 +58,27 @@ const toArticle = (a: ArticleRow, s: Pick<SourceRow, "kind" | "name">): Knowledg
 const likePattern = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const offsetCursor = z.object({ o: z.number().int().min(0) });
 
+/** What a help desk calls each synced kind, for messages and default source names. */
+const SYNCED = {
+  helpdesk_articles: { what: "help-center articles", suffix: "help center" },
+  saved_replies: { what: "saved replies", suffix: "saved replies" },
+} as const;
+type SyncedKind = keyof typeof SYNCED;
+
+/** Whether the help desk's connector can sync this kind of source. */
+const supports = (def: AnyConnector | null, kind: SyncedKind) =>
+  kind === "saved_replies" ? def?.supportsSavedReplies === true : def?.supportsKnowledge === true;
+
 /**
- * A new connection whose help desk has a help center gets an article source,
- * synced right away (in the caller's transaction, so both commit together).
+ * A new connection gets a source for its help center and one for its saved
+ * replies (when the help desk has them), synced right away (in the caller's
+ * transaction, so both commit together).
  */
 export async function addKnowledgeSource(
   tx: Tx,
   c: Ctx,
   deps: Pick<AppDeps, "jobs">,
-  conn: { connectionId: string; name: string },
+  conn: { connectionId: string; name: string; kind: SyncedKind },
 ): Promise<void> {
   const a = auth(c);
   const [row] = await tx
@@ -74,8 +86,8 @@ export async function addKnowledgeSource(
     .values({
       orgId: a.orgId,
       connectionId: conn.connectionId,
-      kind: "helpdesk_articles",
-      name: `${conn.name} help center`.slice(0, 120),
+      kind: conn.kind,
+      name: `${conn.name} ${SYNCED[conn.kind].suffix}`.slice(0, 120),
       createdBy: a.user.id,
     })
     .onConflictDoNothing()
@@ -138,16 +150,17 @@ export function knowledgeRoutes(deps: AppDeps) {
     const input = await body(c, createKnowledgeSourceBody);
     const dto = await deps.orgDb.withOrg(a.orgId, async (tx) => {
       let provider: string | null = null;
-      if (input.kind === "helpdesk_articles") {
-        if (!input.connectionId) throw badRequest("Choose the help desk connection to take articles from.");
+      if (input.kind !== "manual") {
+        const { what } = SYNCED[input.kind];
+        if (!input.connectionId) throw badRequest(`Choose the help desk connection to take ${what} from.`);
         const [conn] = await tx
           .select({ id: connections.id, provider: connections.provider })
           .from(connections)
           .where(eq(connections.id, input.connectionId));
         if (!conn) throw badRequest("Connection not found.");
         const def = deps.connectors.get(conn.provider);
-        if (!def?.supportsKnowledge)
-          throw badRequest(`${def?.displayName ?? conn.provider} does not provide help-center articles to slai yet.`);
+        if (!supports(def, input.kind))
+          throw badRequest(`${def?.displayName ?? conn.provider} does not provide ${what} to slai yet.`);
         provider = conn.provider;
       } else if (input.connectionId) {
         throw badRequest("Saved replies written in slai have no connection.");
@@ -163,7 +176,12 @@ export function knowledgeRoutes(deps: AppDeps) {
         })
         .onConflictDoNothing()
         .returning();
-      if (!row) throw conflict("This connection already has an article source.");
+      if (!row)
+        throw conflict(
+          input.kind === "saved_replies"
+            ? "This connection already has a saved-replies source."
+            : "This connection already has an article source.",
+        );
       await audit(tx, {
         ...auditBase(c),
         orgId: a.orgId,

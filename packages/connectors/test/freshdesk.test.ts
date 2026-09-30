@@ -10,11 +10,11 @@ const BASE = "https://acme.freshdesk.com";
 const AUTH = `Basic ${Buffer.from("fd_key:X").toString("base64")}`;
 const MIN = 60_000;
 
-function client(routes: Route[]) {
+function client(routes: Route[], config: Record<string, unknown> = {}) {
   const f = fakeFetch(routes);
   const c = freshdesk.create({
     credentials: { domain: "acme", apiKey: "fd_key" },
-    config: {},
+    config,
     mapping: freshdesk.defaultMapping,
     fetch: f.fetch,
   });
@@ -259,6 +259,8 @@ describe("freshdesk solution articles (knowledge)", () => {
       headers: { authorization: AUTH },
       fixture: "freshdesk/solution-folders-5000100.json",
     },
+    // A key that may not read settings: primary language only, locale unknown.
+    { method: "GET", url: `${BASE}/api/v2/settings/helpdesk`, status: 403, json: { code: "access_denied" } },
     {
       method: "GET",
       url: `${BASE}/api/v2/solutions/folders/6000200/articles?page=1&per_page=100`,
@@ -313,12 +315,167 @@ describe("freshdesk solution articles (knowledge)", () => {
   });
 
   it("returns nothing when there are no folders", async () => {
-    const { c } = client([{ method: "GET", url: `${BASE}/api/v2/solutions/categories`, json: [] }]);
+    const { c } = client([
+      { method: "GET", url: `${BASE}/api/v2/solutions/categories`, json: [] },
+      { method: "GET", url: `${BASE}/api/v2/settings/helpdesk`, fixture: "freshdesk/settings-helpdesk.json" },
+    ]);
     expect(await c.listKnowledgeArticles!(null)).toEqual({ items: [], nextCursor: null });
+  });
+
+  it("walks subfolders, skips agents-only folders, adds portal translations, and uses the custom portal domain", async () => {
+    const { c, f } = client(
+      [
+        { method: "GET", url: `${BASE}/api/v2/solutions/categories`, fixture: "freshdesk/solution-categories.json" },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/categories/5000100/folders`,
+          fixture: "freshdesk/solution-folders-hierarchy.json",
+        },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000200/subfolders`,
+          fixture: "freshdesk/solution-subfolders-6000200.json",
+        },
+        { method: "GET", url: `${BASE}/api/v2/settings/helpdesk`, fixture: "freshdesk/settings-helpdesk.json" },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000200/articles?page=1&per_page=100`,
+          fixture: "freshdesk/solution-articles-6000200-page1.json",
+        },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000210/articles?page=1&per_page=100`,
+          fixture: "freshdesk/solution-articles-6000210-page1.json",
+        },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000200/articles/de?page=1&per_page=100`,
+          fixture: "freshdesk/solution-articles-6000200-de.json",
+        },
+        // The subfolder is not translated into German.
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000210/articles/de?page=1&per_page=100`,
+          status: 404,
+          json: { code: "not_found" },
+        },
+      ],
+      { portalDomain: "Help.Acme.com" },
+    );
+    const all = [];
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const p = await c.listKnowledgeArticles!(cursor);
+      all.push(...p.items);
+      cursor = p.nextCursor;
+      pages++;
+    } while (cursor);
+    expect(pages).toBe(4);
+    expect(all.map((a) => [a.sourceId, a.locale, a.url])).toEqual([
+      ["7000301", "en", "https://help.acme.com/support/solutions/articles/7000301"],
+      ["7000501", "en", "https://help.acme.com/support/solutions/articles/7000501"],
+      ["7000301:de", "de", "https://help.acme.com/de/support/solutions/articles/7000301"],
+    ]);
+    expect(all[2]).toMatchObject({
+      title: "Große Workspaces asynchron exportieren",
+      bodyText: "Exporte über 5 Mio. Zeilen laufen im Hintergrund.",
+      updatedAt: new Date("2026-09-05T00:00:00Z"),
+    });
+    // The agents-only folder and its subfolders are never read.
+    expect(f.calls.some((call) => call.url.includes("6000299"))).toBe(false);
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("ignores an invalid portal domain and keeps the Freshdesk host", async () => {
+    const { c } = client(
+      [
+        { method: "GET", url: `${BASE}/api/v2/solutions/categories`, fixture: "freshdesk/solution-categories.json" },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/categories/5000100/folders`,
+          json: [{ id: 6000201, visibility: 1 }],
+        },
+        { method: "GET", url: `${BASE}/api/v2/settings/helpdesk`, json: { primary_language: "en" } },
+        {
+          method: "GET",
+          url: `${BASE}/api/v2/solutions/folders/6000201/articles?page=1&per_page=100`,
+          fixture: "freshdesk/solution-articles-6000201-page1.json",
+        },
+      ],
+      { portalDomain: "evil.example/phish?x=" },
+    );
+    const p = await c.listKnowledgeArticles!(null);
+    expect(p.items.map((a) => a.url)).toEqual([`${BASE}/support/solutions/articles/7000401`]);
+    expect(p.nextCursor).toBeNull();
   });
 
   it("rejects a malformed cursor", async () => {
     const { c } = client([]);
     expect((await rejection(c.listKnowledgeArticles!(encodeCursor({ nope: 1 })))).kind).toBe("invalid");
+    const badLang = encodeCursor({ f: ["1"], l: ["../x"], j: 0, i: 0, p: 1 });
+    expect((await rejection(c.listKnowledgeArticles!(badLang))).kind).toBe("invalid");
+  });
+});
+
+describe("freshdesk canned responses (saved replies)", () => {
+  it("declares saved-reply support", () => {
+    expect(freshdesk.supportsSavedReplies).toBe(true);
+  });
+
+  it("lists shared folders' canned responses as plain text without placeholders, skipping personal folders", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/canned_response_folders`,
+        headers: { authorization: AUTH },
+        fixture: "freshdesk/canned-response-folders.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/canned_response_folders/9000100/responses`,
+        headers: { authorization: AUTH },
+        fixture: "freshdesk/canned-responses-9000100.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/canned_response_folders/9000102/responses`,
+        fixture: "freshdesk/canned-responses-9000102.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    // The reply that was only a placeholder is dropped.
+    expect(p1.items).toEqual([
+      {
+        sourceId: "9100001",
+        title: "Reset 2FA",
+        url: null,
+        bodyText: "Hi,\n\nAn admin can reset your second factor from Settings → Members.",
+        locale: null,
+        updatedAt: new Date("2026-08-01T10:00:00Z"),
+      },
+    ]);
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    expect(p2.items.map((r) => [r.sourceId, r.bodyText])).toEqual([
+      ["9100010", "Go to Settings → Billing → Contacts and add the new contact."],
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.calls.some((call) => call.url.includes("9000101"))).toBe(false);
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a key that may not read canned responses as unsupported", async () => {
+    const { c } = client([
+      { method: "GET", url: `${BASE}/api/v2/canned_response_folders`, status: 403, json: { code: "access_denied" } },
+    ]);
+    expect(await rejection(c.listSavedReplies!(null))).toMatchObject({
+      kind: "unsupported",
+      message: expect.stringMatching(/Freshdesk canned responses/),
+    });
+  });
+
+  it("rejects a malformed cursor", async () => {
+    const { c } = client([]);
+    expect((await rejection(c.listSavedReplies!(encodeCursor({ nope: 1 })))).kind).toBe("invalid");
   });
 });

@@ -318,15 +318,42 @@
     body, with a GIN index). Both are org-scoped with forced RLS; `slai_worker`
     sees only the scheduling columns of sources.
   - Connectors with `supportsKnowledge` implement
-    `listKnowledgeArticles(cursor)`: Zendesk Help Center, Intercom articles,
-    Freshdesk solutions and the demo help center. Published articles only, as
-    bounded plain text.
-  - `sync-knowledge` pages through a source and upserts by external id,
-    keeping each article's `enabled` flag, then deletes articles the help desk
-    no longer returns. It runs when a connection with a help center is created
-    (the API adds the source), on request, and daily from the sweep (sources
-    never synced or synced over 24h ago). Rate limits retry; other failures set
-    the source to `error`.
+    `listKnowledgeArticles(cursor)`: Zendesk Help Center, Intercom articles
+    (every published locale in `translated_content`), Freshdesk solutions
+    (subfolders walked, agents-only folders skipped; every portal language
+    from `settings/helpdesk`),
+    Zammad knowledge base (public answers only, per locale), HubSpot knowledge
+    base (beta API, see below) and the demo help center. Published articles
+    only, as bounded plain text. A translation's external id is
+    `<id>:<locale>`; the default language keeps the plain id.
+  - Freshdesk's API does not expose the portal's custom domain; a connection
+    may set `config.portalDomain` (a hostname) and article URLs use it,
+    prefixed with `/<lang>` for translations.
+  - Connectors with `supportsSavedReplies` implement `listSavedReplies(cursor)`
+    (T-47b), returning the same shape (URL null): Zendesk active macros that
+    add a public comment (a macro that sets `comment_mode_is_public: false` is
+    skipped; unset counts as public, the composer default), Intercom macros
+    (API 2.16), Freshdesk canned responses (personal folders skipped), Help
+    Scout saved replies per mailbox, Front message templates, Gorgias macros
+    with a `setResponseText` action (archived skipped), Zammad text modules
+    (inactive skipped) and the demo help desk's macros. Placeholders
+    (`{{ticket.requester.first_name}}`, `{% … %}`, `{%customer.firstName%}`,
+    `#{ticket.customer.firstname}`) are stripped, not rendered: a declared
+    fallback (`fallback: "there"`) is kept, otherwise the placeholder and the
+    space before a following comma go ("Hi {{…}}," → "Hi,"). A saved reply is
+    knowledge for many tickets, so we never fill in one requester's name.
+  - A 403 from a knowledge or saved-reply endpoint (missing scope, role or
+    plan) is reported as `unsupported` on the source; it never puts the
+    connection in error, since tickets still sync.
+  - `sync-knowledge` pages through a source (`listKnowledgeArticles` for
+    `helpdesk_articles`, `listSavedReplies` for `saved_replies`) and upserts by
+    external id, keeping each article's `enabled` flag, then deletes articles
+    the help desk no longer returns. It runs when a connection is created (the
+    API adds a `helpdesk_articles` and/or `saved_replies` source, per the
+    connector's flags; admins can add either later for a supporting
+    connection), on request, and daily from the sweep (sources never synced or
+    synced over 24h ago). Rate limits retry; other failures set the source to
+    `error`.
   - Retrieval: the subject plus the customer's last public message become an
     any-term `to_tsquery` (letters and digits only, at most 40 terms). The top
     4 enabled articles and saved replies by `ts_rank` are passed as
@@ -338,8 +365,20 @@
     or the knowledge. The mock provider quotes and links the most relevant item
     (two shared content words, one in the title), at confidence 0.9; with
     nothing relevant it stays unsure.
-  - Not yet: help-desk saved replies/macros (`saved_replies` sources report an
-    error), Zammad (its knowledge-base API is undocumented), translations.
+  - Platform notes (verified 2026-09): HubSpot's knowledge-base API is beta
+    only (`/cms/knowledge-base/2027-03-beta/articles`, Developer Beta Terms,
+    Service Hub Professional+, scope `cms.knowledge_base.articles.read`), so
+    OAuth asks for that scope as an `optional_scope` and a portal without it
+    gets an `unsupported` source error. HubSpot has no saved-replies API.
+    Zammad's knowledge base is documented (`POST
+    /api/v1/knowledge_bases/init` for the index, one `answers/{id}?include_contents=`
+    call per answer for the body); public URLs are
+    `/help/<locale>/<category id>-<slug>/<answer id>-<slug>`, a path
+    `custom_address` replaces `/help`, and a custom domain gives no URL.
+    Help Scout saved replies (and Front templates without `updated_at`) carry
+    no update time, so `updatedAt` is the epoch. Other
+    connectors (Jira SM, Salesforce, ServiceNow, Zoho Desk, Linear, GitHub)
+    have no knowledge sources yet.
 
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,

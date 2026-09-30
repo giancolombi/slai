@@ -66,8 +66,9 @@ Each task references the requirements it serves.
 
 - [x] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
       Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17, TR-21h)
-- [ ] T-47b Knowledge follow-ups: Zammad knowledge base, help-desk saved replies/macros (`saved_replies`
-      sources), Freshdesk subfolders and translations, Intercom translations (TR-21h)
+- [x] T-47b Knowledge follow-ups: Zammad knowledge base, help-desk saved replies/macros (`saved_replies`
+      sources), Freshdesk subfolders and translations, Intercom translations (TR-21h). Also HubSpot
+      knowledge base (beta API) and Freshdesk custom portal domain (`config.portalDomain`)
 - [x] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
       sync (avoids a burst of drafts and credit spend on connect) (TR-21f)
 - [x] T-49 Make help-desk writes and their action record idempotent across retries (no double send) (TR-21g)

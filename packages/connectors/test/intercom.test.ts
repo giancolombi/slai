@@ -293,7 +293,7 @@ describe("intercom articles (knowledge)", () => {
     expect(intercom.supportsKnowledge).toBe(true);
   });
 
-  it("pages through published articles as plain text, skipping drafts", async () => {
+  it("pages through published articles and their published translations as plain text, skipping drafts", async () => {
     const { c, f } = client([
       {
         method: "GET",
@@ -318,10 +318,72 @@ describe("intercom articles (knowledge)", () => {
         locale: "en",
         updatedAt: new Date(1758000000 * 1000),
       },
+      // The French translation is its own item; the draft pt-BR one, the default-locale
+      // copy and the non-object entries of translated_content are not.
+      {
+        sourceId: "6871119:fr",
+        title: "Relancer les livraisons de webhooks",
+        url: "https://intercom.help/acme/fr/articles/6871119-relancer-les-livraisons-de-webhooks",
+        bodyText: "Les webhooks sont relancés pendant 24 heures.",
+        locale: "fr",
+        updatedAt: new Date(1758100000 * 1000),
+      },
     ]);
     const p2 = await c.listKnowledgeArticles!(p1.nextCursor);
     expect(p2.items).toEqual([expect.objectContaining({ sourceId: "6871121", url: null, locale: "fr" })]);
     expect(p2.nextCursor).toBeNull();
     expect(f.unused()).toEqual([]);
+  });
+});
+
+describe("intercom macros (saved replies)", () => {
+  it("declares saved-reply support", () => {
+    expect(intercom.supportsSavedReplies).toBe(true);
+  });
+
+  it("pages through macros as text, keeping placeholder fallbacks", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/macros?per_page=150`,
+        headers: HEADERS,
+        fixture: "intercom/macros-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/macros?per_page=150&starting_after=WzE3MTk0OTM3NTcuMCwgIjEyNCJd`,
+        headers: HEADERS,
+        fixture: "intercom/macros-page2.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "123",
+        title: "Webhook delays",
+        url: null,
+        bodyText: "Hi there, webhooks are retried for 24 hours.",
+        locale: null,
+        updatedAt: new Date("2026-09-10T08:00:00.000Z"),
+      },
+      {
+        // No body_text: the HTML body's <attribute/> placeholder (no default) is dropped.
+        sourceId: "124",
+        title: "Password reset",
+        url: null,
+        bodyText: "Hello,\n\nUse Forgot password on the sign-in page & check spam.",
+        locale: null,
+        updatedAt: new Date(1719493757 * 1000),
+      },
+    ]);
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    // A macro that is nothing but a placeholder is empty and skipped.
+    expect(p2).toEqual({ items: [], nextCursor: null });
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a token without access to macros as unsupported", async () => {
+    const { c } = client([{ method: "GET", url: `${BASE}/macros?per_page=150`, status: 403, json: { errors: [] } }]);
+    expect(await rejection(c.listSavedReplies!(null))).toMatchObject({ kind: "unsupported" });
   });
 });

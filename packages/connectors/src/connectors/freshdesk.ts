@@ -7,6 +7,21 @@
  * - Conversations: https://developers.freshdesk.com/api/#list_all_ticket_notes
  * - Rate limits: https://support.freshdesk.com/support/solutions/articles/225439-what-are-the-rate-limits-for-the-api-calls-to-freshdesk-
  * - Solutions (categories → folders → articles; status 2 = published): https://developers.freshdesk.com/api/#solutions
+ * - Solution subfolders (Flexible Hierarchy, `sub_folders_count`) and translated articles
+ *   (`/solutions/folders/{id}/articles/{language_code}`): https://developers.freshdesk.com/api/#solutions
+ * - Helpdesk settings (primary_language, portal_languages): https://developers.freshdesk.com/api/#settings
+ * - Canned responses (folders; `/canned_response_folders/{id}/responses` includes bodies):
+ *   https://developers.freshdesk.com/api/#canned-responses
+ *
+ * KNOWLEDGE — published solution articles from every folder and subfolder
+ * customers can see (agents-only folders, visibility 3, are skipped), in the
+ * primary language and every other language shown on the portal
+ * (`portal_languages`). A translation's id is `{article id}:{language}`.
+ * Article URLs use `{domain}.freshdesk.com` unless the connection sets
+ * `config.portalDomain` (e.g. help.acme.com): the API does not expose the
+ * portal's custom domain. Translations live under `/{language}/support/…`.
+ * Saved replies are canned responses from shared folders (personal folders
+ * belong to one agent and are skipped), with placeholders stripped.
  *
  * LIMITATION — status history is synthesized. Freshdesk API v2 has no official
  * per-ticket activities endpoint, so we rebuild status transitions from the
@@ -28,20 +43,21 @@
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, optTime, parseTime } from "../lib/events.js";
 import { header, safeEqual } from "../lib/hmac.js";
-import { basicAuth, HttpClient } from "../lib/http.js";
+import { basicAuth, forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor, nextLink } from "../lib/paginate.js";
-import { htmlToText, plainText, textToHtml } from "../lib/text.js";
+import { htmlToText, plainText, savedReplyText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
-import type {
-  CanonicalComment,
-  CanonicalEvent,
-  CanonicalTicket,
-  ConnectorClient,
-  ConnectorContext,
-  ConnectorDefinition,
-  FieldMapping,
-  KnowledgeArticle,
+import {
+  type CanonicalComment,
+  type CanonicalEvent,
+  type CanonicalTicket,
+  type ConnectorClient,
+  type ConnectorContext,
+  type ConnectorDefinition,
+  ConnectorError,
+  type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
 const credentialsSchema = z.object({
@@ -109,6 +125,11 @@ const zConversation = z.object({
 type FConversation = z.infer<typeof zConversation>;
 
 const zSolutionRef = z.object({ id });
+const zSolutionFolder = z.object({
+  id,
+  visibility: z.number().nullish(),
+  sub_folders_count: z.number().nullish(),
+});
 const zSolutionArticle = z.object({
   id,
   title: z.string().nullish(),
@@ -119,9 +140,32 @@ const zSolutionArticle = z.object({
 });
 /** Solution article status: 1 draft, 2 published. */
 const PUBLISHED = 2;
-/** Folders (and pages per folder) we read at most in one knowledge sync. */
+/** Folder visibility 3: agents only. Those articles are internal, never for a customer reply. */
+const AGENTS_ONLY = 3;
+/** Folders (and pages per folder) we read at most in one knowledge sync, and how deep subfolders go. */
 const MAX_FOLDERS = 1000;
 const MAX_ARTICLE_PAGES = 100;
+const MAX_FOLDER_DEPTH = 5;
+/** A language code safe to put in a URL path, e.g. "de" or "pt-BR". */
+const LANGUAGE = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i;
+const zHelpdeskSettings = z.object({
+  primary_language: z.string().nullish(),
+  portal_languages: z.array(z.string()).nullish(),
+});
+const zCannedFolder = z.object({ id, personal: z.boolean().nullish() });
+const zCannedResponse = z.object({
+  id,
+  title: z.string().nullish(),
+  content: z.string().nullish(),
+  content_html: z.string().nullish(),
+  updated_at: z.string(),
+});
+/** A custom portal domain from the connection config, e.g. help.acme.com. */
+const zPortalDomain = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/);
 
 const zWebhook = z.union([
   z.object({ freshdesk_webhook: z.object({ ticket_id: id }).loose() }).loose(),
@@ -161,9 +205,12 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
   defaultMapping,
   docsUrl: "https://developers.freshdesk.com/api/",
   supportsKnowledge: true,
+  supportsSavedReplies: true,
   create(ctx: ConnectorContext<FreshdeskCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const domain = creds.domain;
+    const portal = zPortalDomain.safeParse((ctx.config as { portalDomain?: unknown } | undefined)?.portalDomain);
+    const portalHost = portal.success ? portal.data : `${domain}.freshdesk.com`;
     const http = new HttpClient({
       baseUrl: `https://${domain}.freshdesk.com`,
       fetch: ctx.fetch,
@@ -171,6 +218,66 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
       headers: { Authorization: basicAuth(creds.apiKey, "X") },
     });
     const key = (...parts: (string | number)[]) => ["freshdesk", domain, ...parts].join(":");
+
+    /**
+     * Every solution folder customers can see: each category's folders and,
+     * breadth-first, their subfolders (Flexible Hierarchy), skipping
+     * agents-only folders and everything below them.
+     */
+    const solutionFolders = async (): Promise<string[]> => {
+      const categories = parseAs(
+        z.array(zSolutionRef),
+        await http.get("/api/v2/solutions/categories"),
+        "solution categories",
+      );
+      let level: z.infer<typeof zSolutionFolder>[] = [];
+      for (const c of categories) {
+        level.push(
+          ...parseAs(
+            z.array(zSolutionFolder),
+            await http.get(`/api/v2/solutions/categories/${encodeURIComponent(c.id)}/folders`),
+            "solution folders",
+          ),
+        );
+      }
+      const out: string[] = [];
+      for (let depth = 0; level.length && out.length < MAX_FOLDERS; depth++) {
+        const next: typeof level = [];
+        for (const f of level) {
+          if (f.visibility === AGENTS_ONLY) continue;
+          out.push(f.id);
+          if (out.length >= MAX_FOLDERS) break;
+          if ((f.sub_folders_count ?? 0) > 0 && depth + 1 < MAX_FOLDER_DEPTH) {
+            next.push(
+              ...parseAs(
+                z.array(zSolutionFolder),
+                await http.get(`/api/v2/solutions/folders/${encodeURIComponent(f.id)}/subfolders`),
+                "solution subfolders",
+              ),
+            );
+          }
+        }
+        level = next;
+      }
+      return out;
+    };
+
+    /**
+     * The primary language first, then the other languages shown on the
+     * portal. Reading settings needs an admin key; without it (or where the
+     * endpoint is missing) we sync the primary language only, as "" (unknown).
+     */
+    const portalLanguages = async (): Promise<string[]> => {
+      try {
+        const s = parseAs(zHelpdeskSettings, await http.get("/api/v2/settings/helpdesk"), "helpdesk settings");
+        const primary = s.primary_language && LANGUAGE.test(s.primary_language) ? s.primary_language : "";
+        const others = (s.portal_languages ?? []).filter((l) => LANGUAGE.test(l) && l !== primary);
+        return [primary, ...new Set(others)];
+      } catch (e) {
+        if (e instanceof ConnectorError && ["auth", "not_found", "invalid"].includes(e.kind)) return [""];
+        throw e;
+      }
+    };
 
     const snapshot = (t: FTicket): CanonicalTicket => {
       const m = mappingIssues(ctx.mapping, t.status, t.priority ?? null);
@@ -365,54 +472,98 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
       },
 
       async listKnowledgeArticles(cursor) {
-        // Traversal state: the folder ids (found on the first call), which folder, and which page.
-        const isState = (v: unknown): v is { f: string[]; i: number; p: number } =>
-          Array.isArray((v as { f?: unknown })?.f) &&
-          typeof (v as { i?: unknown })?.i === "number" &&
-          typeof (v as { p?: unknown })?.p === "number";
+        // Traversal state: folder ids and languages (found on the first call; l[0] is the primary
+        // language, "" when unknown), then which language, which folder, and which page.
+        const isState = (v: unknown): v is { f: string[]; l: string[]; j: number; i: number; p: number } => {
+          const o = v as { f?: unknown; l?: unknown; j?: unknown; i?: unknown; p?: unknown } | null;
+          return (
+            Array.isArray(o?.f) &&
+            Array.isArray(o.l) &&
+            o.l.length > 0 &&
+            o.l.every((x) => typeof x === "string" && (x === "" || LANGUAGE.test(x))) &&
+            typeof o.j === "number" &&
+            typeof o.i === "number" &&
+            typeof o.p === "number"
+          );
+        };
         let state = decodeCursor(cursor, isState);
         if (!state) {
-          const categories = parseAs(
-            z.array(zSolutionRef),
-            await http.get("/api/v2/solutions/categories"),
-            "solution categories",
-          );
-          const folders: string[] = [];
-          for (const c of categories) {
-            const fs = parseAs(
-              z.array(zSolutionRef),
-              await http.get(`/api/v2/solutions/categories/${encodeURIComponent(c.id)}/folders`),
-              "solution folders",
-            );
-            folders.push(...fs.map((f) => f.id));
-          }
-          state = { f: folders.slice(0, MAX_FOLDERS), i: 0, p: 1 };
+          const f = await solutionFolders();
+          state = { f, l: await portalLanguages(), j: 0, i: 0, p: 1 };
         }
-        const folder = state.f[state.i];
-        if (folder === undefined) return { items: [], nextCursor: null };
-        const res = await http.request<unknown>(
-          "GET",
-          `/api/v2/solutions/folders/${encodeURIComponent(folder)}/articles`,
-          { query: { page: state.p, per_page: 100 } },
-        );
+        const st = state;
+        const folder = st.f[st.i];
+        const lang = st.l[st.j];
+        if (folder === undefined || lang === undefined) return { items: [], nextCursor: null };
+        const primary = st.j === 0;
+        const nextFolder = () =>
+          st.i + 1 < st.f.length
+            ? { ...st, i: st.i + 1, p: 1 }
+            : st.j + 1 < st.l.length
+              ? { ...st, j: st.j + 1, i: 0, p: 1 }
+              : null;
+        const path = `/api/v2/solutions/folders/${encodeURIComponent(folder)}/articles${primary ? "" : `/${encodeURIComponent(lang)}`}`;
+        let res: { data: unknown; headers: Headers };
+        try {
+          res = await http.request<unknown>("GET", path, { query: { page: st.p, per_page: 100 } });
+        } catch (e) {
+          // A folder that is not translated into this language.
+          if (!primary && e instanceof ConnectorError && e.kind === "not_found") {
+            const next = nextFolder();
+            return { items: [], nextCursor: next ? encodeCursor(next) : null };
+          }
+          throw e;
+        }
         const articles = parseAs(z.array(zSolutionArticle), res.data, "solution articles");
         const items: KnowledgeArticle[] = articles
           .filter((a) => a.status === PUBLISHED)
           .map((a) => ({
-            sourceId: a.id,
+            sourceId: primary ? a.id : `${a.id}:${lang}`,
             title: a.title ?? "",
-            url: `https://${domain}.freshdesk.com/support/solutions/articles/${a.id}`,
+            url: `https://${portalHost}${primary ? "" : `/${lang}`}/support/solutions/articles/${a.id}`,
             bodyText: a.description_text ? plainText(a.description_text) : htmlToText(a.description),
-            locale: null,
+            locale: lang || null,
             updatedAt: parseTime(a.updated_at, `article ${a.id}.updated_at`),
           }));
-        const hasNext = /;\s*rel="?next"?/i.test(res.headers.get("link") ?? "") && state.p < MAX_ARTICLE_PAGES;
-        const next = hasNext
-          ? { ...state, p: state.p + 1 }
-          : state.i + 1 < state.f.length
-            ? { ...state, i: state.i + 1, p: 1 }
-            : null;
+        const hasNext = /;\s*rel="?next"?/i.test(res.headers.get("link") ?? "") && st.p < MAX_ARTICLE_PAGES;
+        const next = hasNext ? { ...st, p: st.p + 1 } : nextFolder();
         return { items, nextCursor: next ? encodeCursor(next) : null };
+      },
+
+      async listSavedReplies(cursor) {
+        return forbiddenAsUnsupported("Freshdesk canned responses", async () => {
+          const isState = (v: unknown): v is { f: string[]; i: number } =>
+            Array.isArray((v as { f?: unknown })?.f) && typeof (v as { i?: unknown })?.i === "number";
+          let state = decodeCursor(cursor, isState);
+          if (!state) {
+            const folders = parseAs(
+              z.array(zCannedFolder),
+              await http.get("/api/v2/canned_response_folders"),
+              "canned response folders",
+            );
+            // Personal folders are one agent's own replies, not the team's.
+            state = { f: folders.filter((f) => f.personal !== true).map((f) => f.id), i: 0 };
+          }
+          const folder = state.f[state.i];
+          if (folder === undefined) return { items: [], nextCursor: null };
+          const responses = parseAs(
+            z.array(zCannedResponse),
+            await http.get(`/api/v2/canned_response_folders/${encodeURIComponent(folder)}/responses`),
+            "canned responses",
+          );
+          const items: KnowledgeArticle[] = responses
+            .map((r) => ({
+              sourceId: r.id,
+              title: r.title ?? "",
+              url: null,
+              bodyText: r.content_html ? savedReplyText(r.content_html, "html") : savedReplyText(r.content, "text"),
+              locale: null,
+              updatedAt: parseTime(r.updated_at, `canned response ${r.id}.updated_at`),
+            }))
+            .filter((r) => r.bodyText);
+          const next = state.i + 1 < state.f.length ? { ...state, i: state.i + 1 } : null;
+          return { items, nextCursor: next ? encodeCursor(next) : null };
+        });
       },
 
       async postInternalNote(sourceId, body) {

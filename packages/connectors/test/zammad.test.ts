@@ -3,7 +3,7 @@ import { evaluateTicket } from "@slai/sla-engine";
 import { describe, expect, it } from "vitest";
 import { zammad } from "../src/connectors/zammad.js";
 import { toEngineEvents } from "../src/lib/events.js";
-import { fakeFetch, type Route, rejection } from "./helpers/fake-fetch.js";
+import { fakeFetch, fixture, type Route, rejection } from "./helpers/fake-fetch.js";
 import { calendarPolicy, metric } from "./helpers/policy.js";
 
 const BASE = "https://support.acme.example";
@@ -214,5 +214,139 @@ describe("zammad connector", () => {
     expect(f.unused()).toEqual([]);
     // No Zammad priority maps to urgent by default: refuse rather than send garbage.
     expect((await rejection(c.updateTicket("42", { priority: "urgent" }))).kind).toBe("invalid");
+  });
+});
+
+describe("zammad text modules (saved replies)", () => {
+  it("pages through active text modules as plain text, placeholders stripped", async () => {
+    expect(zammad.supportsSavedReplies).toBe(true);
+    // A full page (100) means there may be more; the short second page is the last.
+    const full = Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      name: `Module ${i + 1}`,
+      content: `<p>Text ${i + 1}</p>`,
+      active: true,
+      updated_at: "2026-04-01T08:00:00.000Z",
+    }));
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v1/text_modules?page=1&per_page=100`,
+        headers: { authorization: AUTH },
+        json: full,
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v1/text_modules?page=2&per_page=100`,
+        headers: { authorization: AUTH },
+        fixture: "zammad/text-modules-page2.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    expect(p1.items).toHaveLength(100);
+    expect(p1.items[0]).toMatchObject({ sourceId: "1", title: "Module 1", bodyText: "Text 1", url: null });
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    expect(p2.items).toEqual([
+      {
+        sourceId: "101",
+        title: "Password reset",
+        url: null,
+        bodyText: "Hi,\n\nYou can reset your password under Profile → Password; the link is valid for 24 hours.",
+        locale: null,
+        updatedAt: new Date("2026-05-01T08:00:00Z"),
+      },
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a token without access as unsupported, not an auth failure", async () => {
+    const { c } = client([{ method: "GET", url: `${BASE}/api/v1/text_modules?page=1&per_page=100`, status: 403 }]);
+    expect(await rejection(c.listSavedReplies!(null))).toMatchObject({ kind: "unsupported" });
+  });
+});
+
+describe("zammad knowledge base", () => {
+  const kbRoutes: Route[] = [
+    {
+      method: "POST",
+      url: `${BASE}/api/v1/knowledge_bases/init`,
+      headers: { authorization: AUTH },
+      fixture: "zammad/kb-init.json",
+    },
+    { method: "GET", url: `${BASE}/api/v1/locales`, headers: { authorization: AUTH }, fixture: "zammad/locales.json" },
+  ];
+
+  it("lists publicly published answers in every locale, with bodies and public URLs", async () => {
+    expect(zammad.supportsKnowledge).toBe(true);
+    const { c, f } = client([
+      ...kbRoutes,
+      {
+        method: "GET",
+        url: `${BASE}/api/v1/knowledge_bases/1/answers/7?include_contents=30`,
+        headers: { authorization: AUTH },
+        fixture: "zammad/kb-answer-7-en.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v1/knowledge_bases/1/answers/7?include_contents=31`,
+        headers: { authorization: AUTH },
+        fixture: "zammad/kb-answer-7-de.json",
+      },
+    ]);
+    const page = await c.listKnowledgeArticles!(null);
+    // Internal-only (8), draft (9), archived (10) and scheduled (11) answers are left out.
+    expect(page.items).toEqual([
+      {
+        sourceId: "7:en-us",
+        title: "Reset your password",
+        url: `${BASE}/help/en-us/3-getting-started/7-reset-your-password`,
+        bodyText: "Open Profile → Password and choose Reset.\n\nThe link is valid for 24 hours.",
+        locale: "en-us",
+        updatedAt: new Date("2026-04-01T10:00:00Z"),
+      },
+      {
+        sourceId: "7:de-de",
+        title: "Passwort zurücksetzen",
+        url: `${BASE}/help/de-de/3-erste-schritte/7-passwort-zurucksetzen`,
+        bodyText: "Öffnen Sie Profil → Passwort.",
+        locale: "de-de",
+        updatedAt: new Date("2026-04-02T10:00:00Z"),
+      },
+    ]);
+    expect(page.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("links answers under a custom path address, and none under a custom domain", async () => {
+    const init = fixture("zammad/kb-init.json");
+    const withAddress = (address: string) => ({
+      ...init,
+      KnowledgeBase: { "1": { ...init.KnowledgeBase["1"], custom_address: address } },
+    });
+    const answer = (content: string) => ({
+      method: "GET",
+      url: new RegExp(`/api/v1/knowledge_bases/1/answers/7\\?include_contents=${content}$`),
+      fixture: `zammad/kb-answer-7-${content === "30" ? "en" : "de"}.json`,
+    });
+    for (const [address, url] of [
+      ["/support/", `${BASE}/support/en-us/3-getting-started/7-reset-your-password`],
+      ["help.acme.example", null],
+    ] as const) {
+      const { c } = client([
+        { method: "POST", url: `${BASE}/api/v1/knowledge_bases/init`, json: withAddress(address) },
+        kbRoutes[1]!,
+        answer("30"),
+        answer("31"),
+      ]);
+      expect((await c.listKnowledgeArticles!(null)).items[0]!.url).toBe(url);
+    }
+  });
+
+  it("treats a Zammad without a knowledge base as empty, and a forbidden one as unsupported", async () => {
+    const none = client([{ method: "POST", url: `${BASE}/api/v1/knowledge_bases/init`, status: 404 }]);
+    expect(await none.c.listKnowledgeArticles!(null)).toEqual({ items: [], nextCursor: null });
+    const forbidden = client([{ method: "POST", url: `${BASE}/api/v1/knowledge_bases/init`, status: 403 }]);
+    expect(await rejection(forbidden.c.listKnowledgeArticles!(null))).toMatchObject({ kind: "unsupported" });
   });
 });

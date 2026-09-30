@@ -9,6 +9,8 @@
  * - Webhook signature v3: https://developers.hubspot.com/docs/apps/legacy-apps/authentication/validating-requests
  * - Webhook payloads: https://developers.hubspot.com/docs/api-reference/legacy/webhooks/guide
  * - Account details: https://developers.hubspot.com/docs/api-reference/account-account-info-v3/guide
+ * - Knowledge base articles (BETA, 2027-03-beta; Service Hub Professional+, scope
+ *   cms.knowledge_base.articles.read): https://developers.hubspot.com/docs/api-reference/2027-03-beta/cms/knowledge-base/guide
  *
  * Status is the pipeline stage id (`hs_pipeline_stage`). The default mapping
  * covers the default Support pipeline; custom pipelines need a per-connection
@@ -20,6 +22,12 @@
  * opening message. Conversations-inbox threads are not read, and there is no
  * bot detection: HubSpot emails carry no bot marker.
  *
+ * Knowledge (T-47b): HubSpot's knowledge base API is in beta, under HubSpot's
+ * Developer Beta Terms, and may change. The list returns each language variant
+ * as its own article. The scope is requested as optional in OAuth, so portals
+ * without Service Hub Professional still connect; a 403 marks only the
+ * knowledge source unsupported, never the connection.
+ *
  * Webhooks: HubSpot v3 signatures. HubSpot webhooks are always POST, so the
  * signed method is "POST" (WebhookRequest carries no method).
  */
@@ -27,7 +35,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, hmac, safeEqual } from "../lib/hmac.js";
-import { HttpClient } from "../lib/http.js";
+import { forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { oauthFetch, oauthTokenFields, readTokens } from "../lib/oauth.js";
 import { decodeCursor, encodeCursor } from "../lib/paginate.js";
@@ -42,6 +50,7 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
 /** A private-app token, or an OAuth access token (with its refresh token) from the connect flow. */
@@ -100,6 +109,30 @@ const zWebhookEvent = z
   .loose();
 const zWebhook = z.array(zWebhookEvent);
 
+/** The beta knowledge base API's version segment. */
+export const KB_API = "/cms/knowledge-base/2027-03-beta";
+/** Scope for reading knowledge base articles; optional, since it needs Service Hub Professional. */
+export const KB_SCOPE = "cms.knowledge_base.articles.read";
+const zKbArticles = z.object({
+  results: z.array(
+    z
+      .object({
+        id,
+        title: z.string().nullish(),
+        language: z.string().nullish(),
+        state: z.string().nullish(),
+        url: z.string().nullish(),
+        body: z.string().nullish(),
+        updatedAt: z.string(),
+      })
+      .loose(),
+  ),
+  paging: z
+    .object({ next: z.object({ after: z.string().nullish() }).loose().nullish() })
+    .loose()
+    .nullish(),
+});
+
 /** HubSpot v3: decode only these escapes in the URI before signing. */
 const URI_DECODES: Record<string, string> = {
   "%3A": ":",
@@ -129,7 +162,7 @@ export const hubspot: ConnectorDefinition<HubspotCredentials> = {
       key: "accessToken",
       label: "Private app access token",
       secret: true,
-      help: "Settings → Integrations → Private apps. Scopes: tickets, crm.objects.contacts.read, crm.objects.companies.read, sales-email-read.",
+      help: "Settings → Integrations → Private apps. Scopes: tickets, crm.objects.contacts.read, crm.objects.companies.read, sales-email-read; optionally cms.knowledge_base.articles.read (Service Hub Professional) to sync your knowledge base.",
     },
   ],
   supportsWebhooks: true,
@@ -145,12 +178,15 @@ export const hubspot: ConnectorDefinition<HubspotCredentials> = {
     authorizeUrl: "https://app.hubspot.com/oauth/authorize",
     tokenUrl: TOKEN_URL,
     scopes: ["oauth", "tickets", "crm.objects.contacts.read", "crm.objects.companies.read", "sales-email-read"],
+    // Granted when the portal has it (Service Hub Professional+); the install works without it.
+    extraAuthorizeParams: { optional_scope: KB_SCOPE },
     pkce: false,
     toCredentials: ({ token, clientId, clientSecret, now }) => ({ ...readTokens(token, now), clientId, clientSecret }),
   },
   write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl: "https://developers.hubspot.com/docs/api-reference/crm-tickets-v3/guide",
+  supportsKnowledge: true,
   create(ctx: ConnectorContext<HubspotCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const http = new HttpClient({
@@ -435,6 +471,37 @@ export const hubspot: ConnectorDefinition<HubspotCredentials> = {
           if (kind.startsWith("ticket.") || e.objectTypeId === "0-5") ids.add(e.objectId);
         }
         return { ok: true, ticketSourceIds: [...ids] };
+      },
+
+      async listKnowledgeArticles(cursor) {
+        const isState = (v: unknown): v is { a: string } => typeof (v as { a?: unknown })?.a === "string";
+        const after = decodeCursor(cursor, isState)?.a;
+        const data = await forbiddenAsUnsupported("HubSpot knowledge base", async () =>
+          parseAs(
+            zKbArticles,
+            await http.get(`${KB_API}/articles`, { query: { state: "PUBLISHED", limit: 100, after } }),
+            "knowledge base articles",
+          ),
+        );
+        const items: KnowledgeArticle[] = data.results
+          .filter((a) => a.state === "PUBLISHED")
+          .map((a) => ({
+            sourceId: a.id,
+            title: a.title ?? "",
+            url: a.url ?? null,
+            bodyText: htmlToText(a.body),
+            locale: a.language ?? null,
+            updatedAt: parseTime(a.updatedAt, `article ${a.id}.updatedAt`),
+          }));
+        // `after` comes percent-encoded (e.g. "MjU%3D"); decode it once so the query isn't double-encoded.
+        const raw = data.paging?.next?.after;
+        let next = raw ?? null;
+        try {
+          if (raw) next = decodeURIComponent(raw);
+        } catch {
+          // not encoded after all
+        }
+        return { items, nextCursor: next ? encodeCursor({ a: next }) : null };
       },
 
       async postInternalNote(sourceId, body) {
