@@ -1,5 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
-import { audit, invitations, memberships, organizations, type Tx, users } from "@slai/db";
+import { audit, memberships, organizations, type Tx, users } from "@slai/db";
 import {
   type Invitation,
   inviteBody,
@@ -14,8 +13,7 @@ import { type AppDeps, type AppEnv, auditBase, auth, ROLE_RANK } from "../contex
 import { conflict, forbidden, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { body, idParam } from "../validate.js";
-
-const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { createInvitation } from "./invitations.js";
 
 async function ownerCount(tx: Tx): Promise<number> {
   const [r] = await tx
@@ -94,30 +92,32 @@ export function orgRoutes(deps: AppDeps) {
     const a = auth(c);
     const input = await body(c, inviteBody);
     if (input.role === "owner" && a.role !== "owner") throw forbidden("Only owners can invite owners.");
-    const token = randomBytes(32).toString("base64url");
     const inv = await deps.orgDb.withOrg(a.orgId, async (tx) => {
-      const [row] = await tx
-        .insert(invitations)
-        .values({
-          orgId: a.orgId,
-          email: input.email,
-          role: input.role,
-          tokenHash: createHash("sha256").update(token).digest("hex"),
-          invitedBy: a.user.id,
-          expiresAt: new Date(deps.now().getTime() + INVITE_TTL_MS),
-        })
-        .returning();
+      // The token is sealed on the row and emailed by the worker (send-invite-email, T-59a).
+      const row = await createInvitation(deps, tx, {
+        orgId: a.orgId,
+        email: input.email,
+        role: input.role,
+        invitedBy: a.user.id,
+      });
       await audit(tx, {
         ...auditBase(c),
         orgId: a.orgId,
         action: "member.invited",
-        target: { type: "invitation", id: row!.id },
+        target: { type: "invitation", id: row.id },
         metadata: { email: input.email, role: input.role },
       });
-      return row!;
+      return row;
     });
-    // TODO(email): send `${APP_URL}/invite/${token}` via SMTP; the email and accept endpoint follow the auth merge (T-59).
-    const dto: Invitation = { id: inv.id, email: inv.email, role: inv.role, expiresAt: inv.expiresAt.toISOString() };
+    const dto: Invitation = {
+      id: inv.id,
+      email: inv.email,
+      role: inv.role,
+      expiresAt: inv.expiresAt.toISOString(),
+      status: "pending",
+      createdAt: inv.createdAt.toISOString(),
+      invitedBy: a.user.name,
+    };
     return c.json(dto, 201);
   });
 

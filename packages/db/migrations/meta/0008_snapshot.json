@@ -1,5 +1,5 @@
 {
-  "id": "7414d916-51cd-437b-a024-a0eb2ccf931e",
+  "id": "b35f01e1-98af-49e3-b03a-898c65bb3d9f",
   "prevId": "4fe3c6b0-6355-4f0d-9f62-6e98f4216c9d",
   "version": "7",
   "dialect": "postgresql",
@@ -1553,6 +1553,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "token_ciphertext": {
+          "name": "token_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "invited_by": {
           "name": "invited_by",
           "type": "uuid",
@@ -1567,6 +1573,18 @@
         },
         "accepted_at": {
           "name": "accepted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accepted_by": {
+          "name": "accepted_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1617,6 +1635,15 @@
           "tableFrom": "invitations",
           "tableTo": "users",
           "columnsFrom": ["invited_by"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "invitations_accepted_by_users_id_fk": {
+          "name": "invitations_accepted_by_users_id_fk",
+          "tableFrom": "invitations",
+          "tableTo": "users",
+          "columnsFrom": ["accepted_by"],
           "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"

@@ -276,9 +276,16 @@ export const invitations = pgTable(
     email: citext("email").notNull(),
     role: roleEnum("role").notNull(),
     tokenHash: text("token_hash").notNull().unique(),
+    /**
+     * The raw token, sealed (AES-256-GCM, AAD `invitation:<id>`) only until the
+     * worker has emailed it; then null. Resending rotates the token (T-59a).
+     */
+    tokenCiphertext: text("token_ciphertext"),
     invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
     expiresAt: ts("expires_at").notNull(),
     acceptedAt: ts("accepted_at"),
+    acceptedBy: uuid("accepted_by").references(() => users.id, { onDelete: "set null" }),
+    revokedAt: ts("revoked_at"),
     createdAt: createdAt(),
   },
   (t) => [index().on(t.orgId, t.email)],

@@ -21,6 +21,7 @@ import { customerRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
+import { invitationAdminRoutes, invitationAuthRoutes } from "./routes/invitations.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
 import { mfaResetRoutes } from "./routes/mfa-reset.js";
 import { notificationRoutes } from "./routes/notifications.js";
@@ -98,6 +99,7 @@ export function createApp(deps: AppDeps) {
   app.use(`${API_BASE}/*`, loadSession(deps, auth));
   // Our /auth routes, then better-auth's allowlisted endpoints behind the same middleware.
   app.route(AUTH_BASE, authRoutes(deps, auth));
+  app.route(AUTH_BASE, invitationAuthRoutes(deps, auth));
   app.route(AUTH_BASE, authHandler(deps, auth));
 
   // OAuth connect flow: browser navigations that check the session themselves and redirect on failure.
@@ -108,6 +110,7 @@ export function createApp(deps: AppDeps) {
   authed.use("*", requireAuth(), writesNeedMember);
   authed.route("/", orgRoutes(deps));
   authed.route("/", mfaResetRoutes(deps));
+  authed.route("/", invitationAdminRoutes(deps));
   authed.route("/", scimSettingsRoutes(deps));
   authed.route("/", ssoRoutes(deps));
   authed.route("/", connectionRoutes(deps));

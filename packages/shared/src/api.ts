@@ -187,7 +187,31 @@ export interface Invitation {
   email: string;
   role: Role;
   expiresAt: string;
+  /** Pending until accepted (single use), revoked, or past `expiresAt` (7 days; a resend restarts it). */
+  status: InvitationStatus;
+  createdAt: string;
+  /** The inviter's name (null if they were removed). */
+  invitedBy: string | null;
 }
+export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
+/** `GET /auth/invitations/:token` (public; the token is the secret): what the accept page shows. */
+export interface InvitationPreview {
+  organization: { name: string };
+  email: string;
+  role: Role;
+  invitedBy: string | null;
+  expiresAt: string;
+  status: InvitationStatus;
+  /** An account with this email exists (sign in to accept) or not (sign up on the accept page). */
+  account: "exists" | "new";
+  /** The email's domain uses SSO; `enforced`: only SSO may be used to accept. */
+  sso: { providerId: string; enforced: boolean } | null;
+}
+/** `POST /auth/invitations/:token/signup`: a new account for the invited email, joining the org. */
+export const acceptInvitationSignupBody = z.object({
+  name: z.string().min(1).max(120),
+  password: z.string().min(12).max(200),
+});
 export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -837,6 +861,10 @@ export const notificationChannelBody = z.object({
  *   POST   /auth/logout            → 204
  *   GET    /auth/me                → Me (works while MFA is pending)
  *   POST   /auth/switch-org        { organizationId } → Me
+ *   GET    /auth/invitations/:token          → InvitationPreview | 404 (public, rate limited)
+ *   POST   /auth/invitations/:token/signup   acceptInvitationSignupBody → 201 SignInResult (mfa_enrollment_required);
+ *                                            403 sso_required, 409 account_exists, 410 invitation_expired|used|revoked
+ *   POST   /auth/invitations/:token/accept   → Me (signed in with MFA; 403 invitation_email_mismatch, sso_required)
  *   GET    /auth/step-up/passkey-options → WebAuthn request options (MFA done)
  *   POST   /auth/step-up/passkey   stepUpPasskeyBody → StepUp (TOTP step-up: /auth/two-factor/verify-totp)
  * Auth (better-auth, allowlisted; responses normalized to our DTOs and errors):
@@ -865,6 +893,9 @@ export const notificationChannelBody = z.object({
  *   DELETE /org/sso/providers/:id  (admin)
  *   POST   /org/sso/providers/:id/verify-domain → SsoProvider | 422 domain_not_verified (admin)
  *   GET    /members                → List<Member>         POST /members/invite inviteBody → Invitation (admin)
+ *   GET    /members/invitations    → List<Invitation> (admin)
+ *   POST   /members/invitations/:id/resend → Invitation (new token and expiry; admin)
+ *   DELETE /members/invitations/:id → 204, revokes (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
  *   POST   /members/:userId/reset-mfa  resetMemberMfaBody → MfaResetResult (admin; 403 step_up_required,
  *                                   cannot_reset_owner, cross_org_member; 409 last_owner, self_reset)

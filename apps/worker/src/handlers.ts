@@ -5,6 +5,7 @@ import { executeAction, runAgent } from "./agents.js";
 import { billingSnapshotJob } from "./billing.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
+import { sendInviteEmail } from "./invite-email.js";
 import { syncKnowledge } from "./knowledge.js";
 import { runReplay } from "./replay.js";
 import { sendSecurityEmail } from "./security-email.js";
@@ -25,6 +26,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "extract-contract": (p) => extractContractJob(deps, p),
     "run-replay": (p) => runReplay(deps, p),
     "send-security-email": (p) => sendSecurityEmail(deps, p),
+    "send-invite-email": (p) => sendInviteEmail(deps, p),
     "sync-knowledge": (p) => syncKnowledge(deps, p),
     "billing-snapshot": (p) => billingSnapshotJob(deps, p),
   };

@@ -3,6 +3,7 @@
 --   * sessions: step_up_at (fresh TOTP/passkey proof), idp_amr / idp_acr (IdP MFA claims)
 --   * organizations: sso_require_idp_mfa
 --   * scim_tokens (hashed bearer tokens), scim_groups, scim_group_members, scim_group_roles
+--   * invitations: token_ciphertext (until emailed), accepted_by, revoked_at (T-59a)
 CREATE TABLE "scim_group_members" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"org_id" uuid NOT NULL,
@@ -65,6 +66,16 @@ ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_org_id_organizations_id_fk
 ALTER TABLE "scim_tokens" ADD CONSTRAINT "scim_tokens_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "scim_group_members_membership_id_index" ON "scim_group_members" USING btree ("membership_id");--> statement-breakpoint
 CREATE INDEX "scim_tokens_org_id_index" ON "scim_tokens" USING btree ("org_id");--> statement-breakpoint
+
+-- ---------- invitations (T-59a) ----------
+ALTER TABLE "invitations" ADD COLUMN "token_ciphertext" text;--> statement-breakpoint
+ALTER TABLE "invitations" ADD COLUMN "accepted_by" uuid;--> statement-breakpoint
+ALTER TABLE "invitations" ADD COLUMN "revoked_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "invitations" ADD CONSTRAINT "invitations_accepted_by_users_id_fk" FOREIGN KEY ("accepted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+-- slai_auth resolves an invitation by its token hash before any org is known (the accept page);
+-- the claim and the membership are written through withOrg (slai_app). Never the sealed token.
+GRANT SELECT (token_hash, revoked_at, invited_by, created_at, accepted_by) ON invitations TO slai_auth;
+--> statement-breakpoint
 
 -- ---------- grants (T-18 SCIM, T-19 factor recovery) ----------
 -- SCIM groups and role mappings are org data: slai_app through withOrg (RLS).

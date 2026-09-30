@@ -31,6 +31,8 @@ export const JOB_PAYLOADS = {
     /** The admin who did it (null: break-glass by an operator). */
     actorUserId: uuid.nullable(),
   }),
+  /** Email an invitation link to the invitee (T-59a). The token is read sealed from the row, never from the payload. */
+  "send-invite-email": z.object({ orgId: uuid, invitationId: uuid }),
   /** The connection's status/priority mapping changed: re-ingest its open tickets so clocks recompute (T-25). */
   "remap-connection": z.object({ orgId: uuid, connectionId: uuid }),
   /** Page through one knowledge source's articles and upsert them (T-47). */
@@ -53,6 +55,7 @@ export const QUEUE = {
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
   sendSecurityEmail: "send-security-email",
+  sendInviteEmail: "send-invite-email",
   remapConnection: "remap-connection",
   syncKnowledge: "sync-knowledge",
   billingSnapshot: "billing-snapshot",
