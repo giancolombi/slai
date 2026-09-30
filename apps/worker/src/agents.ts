@@ -28,10 +28,10 @@ import {
 import type { Priority } from "@slai/sla-engine";
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { clientFor, connectorFor, loadConnection, markConnectionError } from "./connection.js";
-import { type Autonomy, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
+import { type Autonomy, decideRunLevel, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
-import { CREDITS, currentSpend, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
+import { CREDITS, currentBilling, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
 import { loadRules } from "./react.js";
 import { notifyCapThresholds } from "./spend.js";
 
@@ -163,20 +163,23 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
       customerAccountId: ticket.customerAccountId,
       priority: ticket.priority as Priority | null,
     });
-    const manual = run.requestedBy !== null;
-    let level: Autonomy = manual && rule.level === "observe" ? "assist" : rule.level;
-    let reason = "";
-    if ((await currentSpend(tx, now)) === "over_cap") {
-      level = "observe";
-      reason = "spend cap reached: observe only";
-    } else if (level === "observe") reason = "autonomy is observe";
-    if (level === "observe") {
+    const billing = await currentBilling(tx, now);
+    const decided = decideRunLevel({
+      kind: run.kind === "triage" ? "triage" : "draft_reply",
+      ruleLevel: rule.level,
+      manual: run.requestedBy !== null,
+      ceiling: billing.ceiling,
+      spend: billing.spend,
+    });
+    if (decided.level === "observe") {
       await tx
         .update(agentRuns)
-        .set({ status: "failed", error: reason, finishedAt: now })
+        .set({ status: "failed", error: decided.reason ?? "autonomy is observe", finishedAt: now })
         .where(eq(agentRuns.id, runId));
       return null;
     }
+    // "triage" only reaches here for a triage run, which never drafts or sends.
+    const level: Autonomy = decided.level === "triage" ? "assist" : decided.level;
     await tx.update(agentRuns).set({ status: "running", startedAt: now }).where(eq(agentRuns.id, runId));
     const ctx = await buildContext(tx, deps, orgId, ticket);
     let triageRunId: string | null = null;

@@ -10,11 +10,14 @@
 import type {
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
+  creditPackCheckoutBody,
   createConnectionBody,
   createPolicyBody,
   createReplayBody,
   inviteBody,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
@@ -32,6 +35,8 @@ import {
   type ApiError as ApiErrorBody,
   type AuditEvent,
   type AutonomyRule,
+  type BillingRedirect,
+  type BillingSummary,
   type Connection,
   type ConnectorInfo,
   type Contract,
@@ -341,6 +346,14 @@ export const api = {
   },
   usage: {
     get: () => get<UsageSummary>("/usage"),
+  },
+  billing: {
+    get: () => get<BillingSummary>("/billing"),
+    checkout: (body: In<typeof billingCheckoutBody>) => post<BillingRedirect>("/billing/checkout", body),
+    portal: () => post<BillingRedirect>("/billing/portal"),
+    creditPackCheckout: (body: In<typeof creditPackCheckoutBody>) =>
+      post<BillingRedirect>("/billing/credit-packs/checkout", body),
+    manual: (body: In<typeof manualBillingBody>) => post<BillingSummary>("/billing/manual", body),
   },
   audit: {
     list: (cursor?: string | null) => get<List<AuditEvent>>("/audit-events", { cursor }),

@@ -3,9 +3,12 @@
  * these, and persists the outcome. Keeping them pure keeps them testable and
  * auditable ("why did slai send this reply?").
  */
+import { type AgentCeiling, minCeiling } from "@slai/shared";
 import type { Priority, RiskLevel } from "@slai/sla-engine";
 
 export type Autonomy = "observe" | "assist" | "autopilot";
+/** What an agent may actually do: the rule's autonomy, capped by the plan and the spend cap. */
+export type EffectiveLevel = AgentCeiling;
 
 const RISK_RANK: Record<RiskLevel, number> = { ok: 0, warning: 1, at_risk: 2, breached: 3 };
 
@@ -155,16 +158,35 @@ export interface DispatchDecision {
   runDraft: boolean;
   /** Whether a passing draft may be sent without a human (subject to guardrails). */
   mayAutoSend: boolean;
-  /** The effective level after spend-cap degradation. */
-  effectiveLevel: Autonomy;
+  /** The effective level after the plan ceiling and spend-cap degradation. */
+  effectiveLevel: EffectiveLevel;
   reason: string;
+}
+
+/**
+ * The level an agent may work at: the rule's autonomy, capped by the plan's
+ * ceiling (T-65), and observe over the spend cap. A plan capped at triage
+ * (Starter) turns assist and autopilot into triage only.
+ */
+export function effectiveLevel(
+  level: Autonomy,
+  ceiling: AgentCeiling,
+  spend: SpendState,
+): { level: EffectiveLevel; reason: string | null } {
+  if (spend === "over_cap") return { level: "observe", reason: "spend cap reached: observe only" };
+  if (level === "observe") return { level: "observe", reason: "autonomy is observe" };
+  const capped = minCeiling(level, ceiling);
+  if (capped === level) return { level: capped, reason: null };
+  return { level: capped, reason: capped === "observe" ? "plan allows observe only" : `plan allows up to ${capped}` };
 }
 
 /**
  * What to do when a ticket's risk changes. Agents are dispatched once per
  * crossing of the rule's trigger (not on every re-evaluation), and never for
- * closed tickets. Over the spend cap, autonomy degrades to observe; the
- * SLA clock and alerts are never throttled.
+ * closed tickets. The plan's ceiling caps the rule (Starter triages but never
+ * drafts; a trial never runs autopilot). Over the spend cap, or when the plan
+ * allows only observe (trial expired, past due beyond grace, canceled),
+ * agents stop; the SLA clock and alerts are never throttled.
  */
 export function decideDispatch(input: {
   prevRisk: RiskLevel | null;
@@ -173,22 +195,23 @@ export function decideDispatch(input: {
   actionableRisk: RiskLevel;
   ticketOpen: boolean;
   rule: Pick<AutonomyRuleLike, "level" | "triggerAt">;
+  /** The plan's agent ceiling (`entitlements(...).ceiling`). */
+  ceiling: AgentCeiling;
   spend: SpendState;
   /** True when an agent already produced a pending/sent action for this ticket since its last customer message. */
   alreadyHandled: boolean;
 }): DispatchDecision {
-  const none = (reason: string, effectiveLevel: Autonomy = input.rule.level): DispatchDecision => ({
+  const none = (reason: string, level: EffectiveLevel = input.rule.level): DispatchDecision => ({
     runTriage: false,
     runDraft: false,
     mayAutoSend: false,
-    effectiveLevel,
+    effectiveLevel: level,
     reason,
   });
   if (!input.ticketOpen) return none("ticket is not open");
-  const effectiveLevel: Autonomy = input.spend === "over_cap" ? "observe" : input.rule.level;
-  if (effectiveLevel === "observe") {
-    return none(input.spend === "over_cap" ? "spend cap reached: observe only" : "autonomy is observe", "observe");
-  }
+  const eff = effectiveLevel(input.rule.level, input.ceiling, input.spend);
+  const level = eff.level;
+  if (level === "observe") return none(eff.reason ?? "autonomy is observe", "observe");
   if (!crossed(input.prevRisk, input.nextRisk, input.rule.triggerAt)) return none("trigger not crossed");
   if (!actionableCrossing(input.prevRisk, input.nextRisk, input.actionableRisk, input.rule.triggerAt)) {
     return none("first seen already breached beyond the grace window");
@@ -196,11 +219,32 @@ export function decideDispatch(input: {
   if (input.alreadyHandled) return none("already handled since the last customer message");
   return {
     runTriage: true,
-    runDraft: true,
-    mayAutoSend: effectiveLevel === "autopilot",
-    effectiveLevel,
-    reason: `risk ${input.prevRisk ?? "new"} → ${input.nextRisk} crossed ${input.rule.triggerAt}`,
+    runDraft: level !== "triage",
+    mayAutoSend: level === "autopilot",
+    effectiveLevel: level,
+    reason: `risk ${input.prevRisk ?? "new"} → ${input.nextRisk} crossed ${input.rule.triggerAt}${eff.reason ? ` (${eff.reason})` : ""}`,
   };
+}
+
+/**
+ * The level a queued run may start at (re-checked when the run starts). A
+ * manual run (a user asked) works at least at assist when the rule observes,
+ * but never above the plan's ceiling or over the spend cap. A draft on a
+ * triage-only plan does not run.
+ */
+export function decideRunLevel(input: {
+  kind: "triage" | "draft_reply";
+  ruleLevel: Autonomy;
+  manual: boolean;
+  ceiling: AgentCeiling;
+  spend: SpendState;
+}): { level: EffectiveLevel; reason: string | null } {
+  const base: Autonomy = input.manual && input.ruleLevel === "observe" ? "assist" : input.ruleLevel;
+  const eff = effectiveLevel(base, input.ceiling, input.spend);
+  if (eff.level === "triage" && input.kind === "draft_reply") {
+    return { level: "observe", reason: "plan allows triage only" };
+  }
+  return eff;
 }
 
 /**
@@ -218,9 +262,14 @@ export function channelsToNotify<C extends { minRisk: Exclude<RiskLevel, "ok">; 
 
 // ---------- spend ----------
 
-export function spendState(spentMicros: number, capCents: number | null): SpendState {
-  if (capCents === null) return "ok";
-  return spentMicros >= capCents * 10_000 ? "over_cap" : "ok";
+/**
+ * Credits used this period against the cap in credits (1 credit = 1 cent).
+ * The cap comes from `creditBalance` (@slai/shared): included + purchased +
+ * the overage allowance, or the owner's override. Null means no cap.
+ */
+export function spendState(usedCredits: number, capCredits: number | null): SpendState {
+  if (capCredits === null) return "ok";
+  return usedCredits >= capCredits ? "over_cap" : "ok";
 }
 
 // ---------- idempotent help-desk writes (TR-21g) ----------
