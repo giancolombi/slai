@@ -4,10 +4,23 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@slai/sla-engine": "workspace:*"
+    "@slai/agents": "workspace:*",
+    "@slai/connectors": "workspace:*",
+    "@slai/db": "workspace:*",
+    "@slai/sla-engine": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "nodemailer": "^8.0.0",
+    "pg-boss": "^12.35.0",
+    "pino": "^10.3.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^7.0.0"
   }
 }
