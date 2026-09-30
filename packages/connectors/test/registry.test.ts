@@ -24,6 +24,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   front: { apiToken: "t" },
   help_scout: { clientId: "id", clientSecret: "s" },
   gorgias: { domain: "acme", email: "a@acme.com", apiKey: "k" },
+  linear: { apiKey: "lin_api_t" },
   demo: {},
 };
 
@@ -42,6 +43,7 @@ describe("registry", () => {
       "hubspot",
       "intercom",
       "jira_service_management",
+      "linear",
       "salesforce",
       "servicenow",
       "zammad",

@@ -6,6 +6,7 @@ import { helpScout } from "./connectors/help-scout.js";
 import { hubspot } from "./connectors/hubspot.js";
 import { intercom } from "./connectors/intercom.js";
 import { jiraServiceManagement } from "./connectors/jira-service-management.js";
+import { linear } from "./connectors/linear.js";
 import { salesforce } from "./connectors/salesforce.js";
 import { servicenow } from "./connectors/servicenow.js";
 import { zammad } from "./connectors/zammad.js";
@@ -28,6 +29,7 @@ const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   front,
   help_scout: helpScout,
   gorgias,
+  linear,
   demo,
 };
 
