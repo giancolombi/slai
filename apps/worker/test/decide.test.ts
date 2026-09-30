@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   type AutonomyRuleLike,
+  actionableCrossing,
+  actionableRisk,
   channelsToNotify,
   crossed,
   decideDispatch,
+  decideSendStep,
+  findSentComment,
   matchCustomerAccount,
+  normalizeBody,
   resolveAutonomy,
   resolvePolicyId,
   spendState,
@@ -82,6 +87,7 @@ describe("decideDispatch", () => {
   const base = {
     prevRisk: "warning" as const,
     nextRisk: "at_risk" as const,
+    actionableRisk: "at_risk" as const,
     ticketOpen: true,
     rule: { level: "autopilot" as const, triggerAt: "at_risk" as const },
     spend: "ok" as const,
@@ -112,6 +118,65 @@ describe("decideDispatch", () => {
   });
 });
 
+describe("first evaluation (T-48)", () => {
+  const now = new Date("2026-09-30T12:00:00Z");
+  const ago = (min: number) => new Date(now.getTime() - min * 60_000);
+  const live = (risk: "ok" | "warning" | "at_risk", state = "running") => ({
+    state,
+    risk,
+    cycles: [{ stoppedAt: null, breachAt: new Date(now.getTime() + 3_600_000) }],
+  });
+  const breachedLive = (minAgo: number) => ({
+    state: "breached",
+    risk: "breached" as const,
+    cycles: [{ stoppedAt: null, breachAt: ago(minAgo) }],
+  });
+  const breachedStopped = {
+    state: "breached",
+    risk: "breached" as const,
+    cycles: [{ stoppedAt: ago(30), breachAt: ago(600) }],
+  };
+
+  it("a live breach within the grace window is actionable", () => {
+    expect(actionableRisk([breachedLive(10)], now)).toBe("breached");
+    expect(actionableRisk([breachedLive(60)], now)).toBe("breached");
+  });
+  it("a live breach older than the grace window is not", () => {
+    expect(actionableRisk([breachedLive(61)], now)).toBe("ok");
+    expect(actionableRisk([breachedLive(3 * 24 * 60)], now)).toBe("ok");
+    expect(actionableRisk([breachedLive(90)], now, 2 * 3_600_000)).toBe("breached");
+  });
+  it("stopped cycles never count; other live metrics still do", () => {
+    expect(actionableRisk([breachedStopped], now)).toBe("ok");
+    expect(actionableRisk([breachedStopped, live("at_risk")], now)).toBe("at_risk");
+    expect(actionableRisk([breachedLive(600), live("warning", "paused")], now)).toBe("warning");
+    expect(actionableRisk([{ state: "not_applicable", risk: "ok", cycles: [] }], now)).toBe("ok");
+  });
+  it("only a first evaluation is filtered", () => {
+    expect(actionableCrossing(null, "breached", "ok", "at_risk")).toBe(false);
+    expect(actionableCrossing(null, "breached", "at_risk", "at_risk")).toBe(true);
+    expect(actionableCrossing("warning", "breached", "ok", "at_risk")).toBe(true);
+    expect(actionableCrossing(null, "warning", "warning", "at_risk")).toBe(false);
+  });
+  it("decideDispatch skips a long-breached ticket on first sight, and dispatches a fresh one", () => {
+    const first = {
+      prevRisk: null,
+      nextRisk: "breached" as const,
+      ticketOpen: true,
+      rule: { level: "assist" as const, triggerAt: "at_risk" as const },
+      spend: "ok" as const,
+      alreadyHandled: false,
+    };
+    const stale = decideDispatch({ ...first, actionableRisk: "ok" });
+    expect(stale.runDraft).toBe(false);
+    expect(stale.reason).toMatch(/grace window/);
+    expect(decideDispatch({ ...first, actionableRisk: "breached" }).runDraft).toBe(true);
+    expect(decideDispatch({ ...first, nextRisk: "at_risk", actionableRisk: "at_risk" }).runDraft).toBe(true);
+    // Once seen, a later crossing dispatches normally.
+    expect(decideDispatch({ ...first, prevRisk: "warning", actionableRisk: "ok" }).runDraft).toBe(true);
+  });
+});
+
 describe("channelsToNotify", () => {
   it("notifies each enabled channel once when its minimum is crossed", () => {
     const chans = [
@@ -119,8 +184,18 @@ describe("channelsToNotify", () => {
       { id: "b", minRisk: "breached" as const, enabled: true },
       { id: "c", minRisk: "warning" as const, enabled: false },
     ];
-    expect(channelsToNotify(chans, "ok", "at_risk").map((c) => c.id)).toEqual(["a"]);
-    expect(channelsToNotify(chans, "at_risk", "breached").map((c) => c.id)).toEqual(["b"]);
+    expect(channelsToNotify(chans, "ok", "at_risk", "at_risk").map((c) => c.id)).toEqual(["a"]);
+    expect(channelsToNotify(chans, "at_risk", "breached", "breached").map((c) => c.id)).toEqual(["b"]);
+  });
+  it("on a first evaluation, notifies only for the actionable risk", () => {
+    const chans = [
+      { id: "warn", minRisk: "warning" as const, enabled: true },
+      { id: "breach", minRisk: "breached" as const, enabled: true },
+    ];
+    // Long breached, but a live metric is at warning: only the warning channel hears about it.
+    expect(channelsToNotify(chans, null, "breached", "warning").map((c) => c.id)).toEqual(["warn"]);
+    expect(channelsToNotify(chans, null, "breached", "ok")).toEqual([]);
+    expect(channelsToNotify(chans, null, "breached", "breached").map((c) => c.id)).toEqual(["warn", "breach"]);
   });
 });
 
@@ -129,5 +204,59 @@ describe("spendState", () => {
     expect(spendState(999_999, 100)).toBe("ok");
     expect(spendState(1_000_000, 100)).toBe("over_cap");
     expect(spendState(10 ** 12, null)).toBe("ok");
+  });
+});
+
+describe("idempotent writes (T-49)", () => {
+  const now = new Date("2026-09-30T12:00:00Z");
+  const minAgo = (m: number) => new Date(now.getTime() - m * 60_000);
+
+  it("decideSendStep claims approved, waits on a fresh claim, reconciles a stale one", () => {
+    expect(decideSendStep({ status: "approved", sendingAt: null }, now)).toBe("claim");
+    expect(decideSendStep({ status: "sending", sendingAt: minAgo(1) }, now)).toBe("wait");
+    expect(decideSendStep({ status: "sending", sendingAt: minAgo(5) }, now)).toBe("reconcile");
+    expect(decideSendStep({ status: "sending", sendingAt: null }, now)).toBe("reconcile");
+    for (const status of ["sent", "failed", "rejected", "proposed", "blocked"]) {
+      expect(decideSendStep({ status, sendingAt: minAgo(60) }, now)).toBe("done");
+    }
+  });
+
+  it("normalizes whitespace, case and unicode forms", () => {
+    expect(normalizeBody("  Hello,\n\n  World !  ")).toBe("hello, world !");
+  });
+
+  describe("findSentComment", () => {
+    const reply = { kind: "public_reply", body: "Thanks!\n\nWe are on it.", sendingAt: minAgo(10) };
+    const c = (o: Partial<Parameters<typeof findSentComment>[1][number]>) => ({
+      sourceId: "c1",
+      at: minAgo(9),
+      public: true,
+      authorRole: "agent",
+      bodyText: "Thanks! We are on it.",
+      ...o,
+    });
+    it("finds our reply by normalized body after the claim", () => {
+      expect(findSentComment(reply, [c({})])).toBe("c1");
+      expect(findSentComment(reply, [c({ at: minAgo(11) })])).toBe("c1"); // within clock skew
+    });
+    it("ignores other visibility, requester text, older comments and other bodies", () => {
+      expect(findSentComment(reply, [c({ public: false })])).toBeNull();
+      expect(findSentComment(reply, [c({ authorRole: "requester" })])).toBeNull();
+      expect(findSentComment(reply, [c({ at: minAgo(30) })])).toBeNull();
+      expect(findSentComment(reply, [c({ bodyText: "Thanks! We are on it. Also…" })])).toBeNull();
+      expect(findSentComment({ ...reply, kind: "internal_note" }, [c({})])).toBeNull();
+      expect(findSentComment({ ...reply, kind: "set_priority" }, [c({})])).toBeNull();
+    });
+    it("skips comments already recorded for another action", () => {
+      expect(findSentComment(reply, [c({ sourceId: "c1" })], { knownRefs: ["c1"] })).toBeNull();
+      expect(
+        findSentComment(reply, [c({ sourceId: "c1" }), c({ sourceId: "c2", at: minAgo(8) })], { knownRefs: ["c1"] }),
+      ).toBe("c2");
+    });
+    it("matches a help desk's truncated copy of a long body", () => {
+      const long = "x".repeat(300);
+      expect(findSentComment({ ...reply, body: long }, [c({ bodyText: `${"x".repeat(250)}…` })])).toBe("c1");
+      expect(findSentComment({ ...reply, body: long }, [c({ bodyText: `${"x".repeat(50)}…` })])).toBeNull();
+    });
   });
 });

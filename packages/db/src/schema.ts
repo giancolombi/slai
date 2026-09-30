@@ -76,6 +76,8 @@ export const actionKindEnum = pgEnum("action_kind", ["internal_note", "public_re
 export const actionStatusEnum = pgEnum("action_status", [
   "proposed",
   "approved",
+  /** Claimed by a worker; the help-desk write may or may not have happened (T-49). */
+  "sending",
   "sent",
   "rejected",
   "failed",
@@ -554,6 +556,10 @@ export const agentActions = pgTable(
     decidedAt: ts("decided_at"),
     externalRef: text("external_ref"),
     error: text("error"),
+    /** The current send claim: set on approved → sending, so a retry can tell an in-flight write from a lost one. */
+    sendAttemptId: uuid("send_attempt_id"),
+    sendingAt: ts("sending_at"),
+    sendAttempts: integer("send_attempts").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

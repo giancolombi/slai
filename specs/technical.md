@@ -44,7 +44,8 @@
    and re-evaluates them.
 5. On a risk crossing, `decideDispatch` and `channelsToNotify` decide the outcome:
    notify, run triage and draft in a sandbox, then queue for approval or autopilot
-   send (after `decideAutopilot` guardrails).
+   send (after `decideAutopilot` guardrails). On a ticket's first evaluation only
+   a still-actionable crossing counts (TR-21f).
 6. Every model call and sandbox second is written to `usage_ledger`. Over the spend
    cap, autonomy degrades to observe.
 
@@ -221,7 +222,8 @@
     Triage priority and assignee suggestions are always proposals.
   - Every help-desk write is audited as `action.sent` or `action.failed`, with actor
     `agent` or the approving `user`. The ticket is then re-ingested, so slai's own
-    reply stops the clock.
+    reply stops the clock. Each write is claimed first and sent at most once
+    (TR-21g).
 - **TR-21d** Metering: model calls go to `usage_ledger` as `model_call` rows (tokens,
   micro-dollars), plus `sandbox_seconds` rows. Credits are on the first row of a
   successful run: triage 3, draft 20. An autopilot send adds an `autopilot_reply`
@@ -234,6 +236,45 @@
   The lead is `breachAt` minus the first at_risk instant, found by stepping the
   engine through event times and `nextTransitionAt`. Policy preview runs inline
   in the API.
+
+- **TR-21f** First-connect guard. A ticket's first evaluation (no stored risk:
+  first connect, a full backfill) reacts only to a crossing that is still
+  actionable:
+  - `actionableRisk` (pure, `decide.ts`) is the worst risk among **live**
+    metrics (current cycle not stopped). A stopped cycle's breach is history,
+    and a live metric that breached more than the grace window ago
+    (`firstSeenGraceMs`, default 60 minutes; per-org later) counts as nothing.
+  - Dispatch and every alert channel need the usual crossing **and** a crossing
+    on the actionable risk. So a connect with many long-overdue tickets sends no
+    alerts and runs no agents for them; a ticket at risk, or breached within the
+    window, reacts as usual.
+  - From then on the stored risk is the baseline, so a later crossing (a new
+    cycle, a re-crossing after recovery) reacts normally. A ticket skipped this
+    way stays visible on the dashboard; a human can still run the agents on it.
+- **TR-21g** Help-desk writes happen at most once per action, even across
+  crashes, pg-boss retries and concurrent jobs (the write and its DB record
+  cannot share a transaction):
+  - Claim: in one transaction, lock the action, move `approved` → `sending`
+    (`sending_at`, a fresh `send_attempt_id`, `send_attempts + 1`), and enqueue a
+    reconcile `execute-action` job due `sendReconcileMs` later (default 5 min).
+    Only the holder of the current attempt id may record `sent`/`failed`.
+  - Outcome of the write: success records `sent`; a clear refusal (`auth`,
+    `not_found`, `invalid`, `unsupported`) records `failed`; `rate_limited`
+    releases the claim back to `approved` and retries after `Retry-After`.
+    Anything else (a crash, timeout, 5xx) is ambiguous: the claim stays.
+  - A job that finds a claim younger than the interval does nothing (another
+    worker may be mid-write). An older claim is reconciled: fetch the ticket
+    with `getTicketWithHistory` and look for our comment (`findSentComment`:
+    same visibility, not from the requester, no earlier than `sending_at` minus
+    2 minutes of skew, same normalized body or a long truncated prefix of it,
+    and not already recorded for another action). Found: record `sent` with
+    that comment's id (audited with `reconciled: true`). Absent: take a new
+    attempt id and write again. Priority and assignee updates are idempotent,
+    so they are simply rewritten.
+  - The autopilot send and assist internal note use the same path, so a crash
+    after a run's send is finished by the reconcile job, not lost or repeated.
+  - Known limit: no connector takes an idempotency key or hidden marker yet, so
+    matching is by body within the window.
 
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
