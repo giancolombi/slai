@@ -149,3 +149,125 @@ async function toError(method: string, url: string, res: Response, now: number):
   if (res.status === 400 || res.status === 409 || res.status === 422) return new ConnectorError(msg, "invalid");
   return new ConnectorError(msg, "upstream");
 }
+
+// ---------------------------------------------------------------- shared auth and rate-limit plumbing (T-26)
+
+export interface TokenRequestOptions {
+  fetch: typeof fetch;
+  /** The OAuth token endpoint. */
+  url: string;
+  /** Grant parameters (grant_type, client_id, client_secret, refresh_token, code, ...). */
+  params: Record<string, string>;
+  signal?: AbortSignal;
+  /**
+   * Where the parameters go: a form-encoded body (RFC 6749, the default) or the
+   * query string (Zoho documents its token endpoint that way).
+   */
+  paramsIn?: "body" | "query";
+  /** Prefix for error messages. Defaults to `POST <url without query>`. */
+  label?: string;
+  /** Message for a rejected grant (400/401/403). Defaults to `<label> → <status>[: <oauth error code>]`. */
+  authMessage?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * POSTs an OAuth token request and returns the parsed JSON body. HttpClient is
+ * JSON-only, so this is a minimal form POST with matching error mapping:
+ * 429/503 → rate_limited (Retry-After honored), 400/401/403 → auth (a bad
+ * client or grant), anything else → upstream. Only the OAuth `error` code is
+ * echoed, never the request (it carries the client secret).
+ */
+export async function requestToken(o: TokenRequestOptions): Promise<unknown> {
+  const inQuery = o.paramsIn === "query";
+  const form = new URLSearchParams(o.params);
+  const url = inQuery ? buildUrl(o.url, "", Object.fromEntries(form)) : o.url;
+  const label = o.label ?? `POST ${redact(o.url)}`;
+  const timeout = AbortSignal.timeout(o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (!inQuery) headers["Content-Type"] = "application/x-www-form-urlencoded";
+  let res: Response;
+  try {
+    res = await o.fetch(url, {
+      method: "POST",
+      headers,
+      body: inQuery ? undefined : form,
+      signal: o.signal ? AbortSignal.any([o.signal, timeout]) : timeout,
+    });
+  } catch (err) {
+    throw new ConnectorError(`${label} failed: ${(err as Error)?.message ?? err}`, "upstream");
+  }
+  const text = await res.text().catch(() => "");
+  if (!res.ok) {
+    const code = (text.match(/"error"\s*:\s*"([^"]+)"/)?.[1] ?? "").slice(0, 60);
+    const msg = `${label} → ${res.status}${code ? `: ${code}` : ""}`;
+    if (res.status === 429 || res.status === 503) {
+      throw new ConnectorError(msg, "rate_limited", parseRetryAfter(res.headers.get("retry-after")));
+    }
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      throw new ConnectorError(o.authMessage ?? msg, "auth");
+    }
+    throw new ConnectorError(msg, "upstream");
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new ConnectorError(`${label} returned non-JSON`, "upstream");
+  }
+}
+
+export interface RateLimitRule {
+  /** Which non-2xx statuses to inspect, e.g. 403 (GitHub, Salesforce) or 400 (Linear). */
+  statuses: readonly number[] | ((status: number) => boolean);
+  /** Read the body before testing (it is re-attached to the response either way). */
+  readBody?: boolean;
+  /** True when this response is really a rate limit. `body` is "" unless `readBody`. */
+  test: (res: Response, body: string) => boolean;
+  /** Delay to advertise when the vendor sends no Retry-After (e.g. from its reset headers). */
+  retryAfterMs?: (headers: Headers) => number | null;
+}
+
+/**
+ * Some vendors signal rate limits with a status HttpClient maps elsewhere
+ * (GitHub and Salesforce: 403 → auth; Linear: 400 → invalid). This fetch
+ * wrapper rewrites such responses to 429, adding Retry-After when the rule can
+ * compute one, so HttpClient's own mapping yields `rate_limited` with a delay.
+ */
+export function detectRateLimits(inner: typeof fetch, rule: RateLimitRule): typeof fetch {
+  const inspects = (s: number) => (typeof rule.statuses === "function" ? rule.statuses(s) : rule.statuses.includes(s));
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const res = await inner(input, init);
+    if (res.ok || !inspects(res.status)) return res;
+    const body = rule.readBody ? await res.text() : "";
+    const rebuild = (status: number, statusText: string, headers: Headers) =>
+      new Response(rule.readBody ? body : res.body, { status, statusText, headers });
+    if (!rule.test(res, body)) return rule.readBody ? rebuild(res.status, res.statusText, res.headers) : res;
+    const headers = new Headers(res.headers);
+    const ms = rule.retryAfterMs?.(res.headers) ?? null;
+    if (!headers.has("retry-after") && ms !== null) headers.set("retry-after", String(Math.ceil(ms / 1000)));
+    return rebuild(429, "Too Many Requests", headers);
+  }) as typeof fetch;
+}
+
+/** An HTTP 401 surfaced by HttpClient (as opposed to a 403 or a rejected grant). */
+export function isUnauthorized(err: unknown): err is ConnectorError {
+  return err instanceof ConnectorError && err.kind === "auth" && / → 401\b/.test(err.message);
+}
+
+/**
+ * Runs `run`; when it fails with an expired or revoked token (`when`, by
+ * default an HTTP 401), calls `onAuthFailure` (drop or refetch the token) and
+ * runs it exactly once more. Auth plumbing only; the worker owns retries.
+ */
+export async function retryOnceOnAuth<T>(
+  run: () => Promise<T>,
+  o: { onAuthFailure: () => void | Promise<void>; when?: (err: ConnectorError) => boolean },
+): Promise<T> {
+  try {
+    return await run();
+  } catch (err) {
+    if (!(err instanceof ConnectorError) || !(o.when ? o.when(err) : isUnauthorized(err))) throw err;
+    await o.onAuthFailure();
+    return run();
+  }
+}

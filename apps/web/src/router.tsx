@@ -187,13 +187,31 @@ const customersRoute = createRoute({
 const connectionsRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/connections",
+  // Set by the OAuth callback when a "Continue with <Provider>" flow fails.
+  validateSearch: (s: Record<string, unknown>): { oauth_error?: string } => ({ oauth_error: str(s.oauth_error) }),
   component: lazyRouteComponent(() => import("./pages/connections/connections"), "ConnectionsPage"),
+});
+
+const connectionRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/connections/$connectionId",
+  // `connected=1` right after connecting: show the webhook setup once.
+  validateSearch: (s: Record<string, unknown>): { connected?: boolean } => ({
+    connected: s.connected === 1 || s.connected === "1" || s.connected === true ? true : undefined,
+  }),
+  component: lazyRouteComponent(() => import("./pages/connections/connection-detail"), "ConnectionDetailPage"),
 });
 
 const autonomyRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/autonomy",
   component: lazyRouteComponent(() => import("./pages/autonomy/autonomy"), "AutonomyPage"),
+});
+
+const knowledgeRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/knowledge",
+  component: lazyRouteComponent(() => import("./pages/knowledge/knowledge"), "KnowledgePage"),
 });
 
 const replaysRoute = createRoute({
@@ -208,10 +226,32 @@ const replayRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/replay/replay-report"), "ReplayReportPage"),
 });
 
+/** Where Stripe Checkout and the Customer Portal send the browser back (`?checkout=success|canceled`). */
+export interface BillingSearch {
+  checkout?: "success" | "canceled";
+  credits?: "success" | "canceled";
+  portal?: "return";
+}
+const outcome = (v: unknown) => (v === "success" || v === "canceled" ? v : undefined);
+
+const billingRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/billing",
+  validateSearch: (s: Record<string, unknown>): BillingSearch => ({
+    checkout: outcome(s.checkout),
+    credits: outcome(s.credits),
+    portal: s.portal === "return" ? "return" : undefined,
+  }),
+  component: lazyRouteComponent(() => import("./pages/usage/usage"), "BillingPage"),
+});
+
+/** The page used to be "Usage & billing" at /usage. */
 const usageRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/usage",
-  component: lazyRouteComponent(() => import("./pages/usage/usage"), "UsagePage"),
+  beforeLoad: () => {
+    throw redirect({ to: "/billing", replace: true });
+  },
 });
 
 const auditRoute = createRoute({
@@ -246,9 +286,12 @@ const routeTree = rootRoute.addChildren([
     policiesRoute,
     customersRoute,
     connectionsRoute,
+    connectionRoute,
     autonomyRoute,
+    knowledgeRoute,
     replaysRoute,
     replayRoute,
+    billingRoute,
     usageRoute,
     auditRoute,
     teamRoute,

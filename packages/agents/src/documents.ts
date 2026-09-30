@@ -2,6 +2,8 @@ import mammoth from "mammoth";
 import { extractText, getDocumentProxy } from "unpdf";
 import type { ContractDocument } from "./types.js";
 
+export type { ContractDocument };
+
 export interface LoadedDocument {
   filename: string;
   mediaType: ContractDocument["mediaType"];

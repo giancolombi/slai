@@ -20,5 +20,18 @@ export default defineConfig({
   build: {
     target: "es2023",
     sourcemap: true,
+    rolldownOptions: {
+      output: {
+        // Routes are lazy (router.tsx); vendors get stable, separately cached chunks so a
+        // deploy that only changes app code doesn't invalidate React or the router.
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 40 },
+            { name: "tanstack", test: /node_modules[\\/]@tanstack[\\/]/, priority: 30 },
+            { name: "zod", test: /node_modules[\\/]zod[\\/]/, priority: 20 },
+          ],
+        },
+      },
+    },
   },
 });

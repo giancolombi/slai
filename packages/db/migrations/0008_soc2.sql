@@ -20,6 +20,8 @@ CREATE TABLE "rate_limit_buckets" (
 --> statement-breakpoint
 ALTER TABLE "audit_events" DROP CONSTRAINT "audit_events_org_id_organizations_id_fk";
 --> statement-breakpoint
+ALTER TABLE "credit_grants" DROP CONSTRAINT "credit_grants_org_id_organizations_id_fk";
+--> statement-breakpoint
 ALTER TABLE "usage_ledger" DROP CONSTRAINT "usage_ledger_org_id_organizations_id_fk";
 --> statement-breakpoint
 ALTER TABLE "contracts" ADD COLUMN "archived_at" timestamp with time zone;--> statement-breakpoint
@@ -52,7 +54,7 @@ CREATE POLICY org_isolation ON org_exports
 -- Hard delete of an organization after its grace period. The database enforces
 -- the grace: only an org whose deletion_scheduled_for has passed is deleted,
 -- whoever calls. Every org table cascades from organizations; the append-only
--- audit_events and usage_ledger have no foreign key to it, so the audit trail and
+-- audit_events, usage_ledger and credit_grants have no foreign key to it, so the audit trail and
 -- billing records survive. SECURITY DEFINER so slai_worker, which holds no
 -- DELETE grant on org data, can run exactly this and nothing more.
 CREATE OR REPLACE FUNCTION slai_delete_org(p_org uuid) RETURNS boolean

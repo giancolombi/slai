@@ -1,6 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { audit, invitations, memberships, organizations, type Tx, users } from "@slai/db";
-import { inviteBody, type Member, type OrgSettings, updateMemberBody, updateOrgBody } from "@slai/shared";
+import {
+  type Invitation,
+  inviteBody,
+  type Member,
+  type OrgSettings,
+  updateMemberBody,
+  updateOrgBody,
+} from "@slai/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AppDeps, type AppEnv, auditBase, auth, ROLE_RANK } from "../context.js";
@@ -100,8 +107,9 @@ export function orgRoutes(deps: AppDeps) {
       });
       return row!;
     });
-    // TODO(email): send `${APP_URL}/invite/${token}` via SMTP; acceptance endpoint is not in the contract yet.
-    return c.json({ id: inv.id, email: inv.email, role: inv.role, expiresAt: inv.expiresAt.toISOString() }, 201);
+    // TODO(email): send `${APP_URL}/invite/${token}` via SMTP; the email and accept endpoint follow the auth merge (T-59).
+    const dto: Invitation = { id: inv.id, email: inv.email, role: inv.role, expiresAt: inv.expiresAt.toISOString() };
+    return c.json(dto, 201);
   });
 
   app.patch("/members/:userId", requireRole("owner"), async (c) => {

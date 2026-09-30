@@ -1,8 +1,10 @@
 import {
   agentActions,
   connections,
+  countTrackedTickets,
+  creditState,
   customerAccounts,
-  organizations,
+  loadOrgBilling,
   slaOutcomes,
   slaPolicies,
   type Tx,
@@ -243,19 +245,23 @@ export function dashboardRoutes(deps: AppDeps) {
         .from(usageLedger)
         .where(and(gte(usageLedger.createdAt, start), lt(usageLedger.createdAt, end)))
         .groupBy(usageLedger.kind);
-      const [org] = await tx.select({ cap: organizations.monthlySpendCapCents }).from(organizations);
-      const [tracked] = await tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(tickets)
-        .where(and(gte(tickets.lastEvaluatedAt, start), lt(tickets.lastEvaluatedAt, end)));
+      // The same tracked-ticket count and spend cap as billing (T-65).
+      const org = await loadOrgBilling(tx);
+      const credit = org ? await creditState(tx, org, deps.now(), { start, end }) : null;
+      const tracked = await countTrackedTickets(tx, { start, end });
       const totalMicros = rows.reduce((s, r) => s + Number(r.micros), 0);
       return {
         period: { start: start.toISOString(), end: end.toISOString() },
         creditsUsed: rows.reduce((s, r) => s + r.credits, 0),
         costCents: Math.round(totalMicros / 10_000),
-        spendCapCents: org?.cap ?? null,
-        byKind: rows.map((r) => ({ kind: r.kind, count: r.count, costCents: Math.round(Number(r.micros) / 10_000) })),
-        trackedTickets: tracked?.n ?? 0,
+        spendCapCents: credit?.balance.cap ?? null,
+        byKind: rows.map((r) => ({
+          kind: r.kind,
+          count: r.count,
+          credits: r.credits,
+          costCents: Math.round(Number(r.micros) / 10_000),
+        })),
+        trackedTickets: tracked,
       };
     });
     return c.json(usage);

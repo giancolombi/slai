@@ -43,7 +43,16 @@ describe("policies", () => {
     expect((await member.client.post(`/policies/${v1.id}/approve`)).status).toBe(403);
     const a1 = await owner.client.post<Policy>(`/policies/${v1.id}/approve`);
     expect(a1.status).toBe(200);
-    expect(a1.body).toMatchObject({ status: "active", isDefault: true, approvedBy: owner.userId });
+    expect(a1.body).toMatchObject({
+      status: "active",
+      isDefault: true,
+      approvedBy: owner.userId,
+      approvedByName: "Ada",
+    });
+    expect(v1).toMatchObject({ approvedBy: null, approvedByName: null });
+    const listed = await owner.client.get<{ items: Policy[] }>("/policies");
+    expect(listed.body.items.find((p) => p.id === v1.id)).toMatchObject({ approvedByName: "Ada" });
+    expect((await member.client.get<Policy>(`/policies/${v1.id}`)).body).toMatchObject({ approvedByName: "Ada" });
     expect((await owner.client.post(`/policies/${v1.id}/approve`)).status).toBe(409);
     expect((await owner.client.patch(`/policies/${v1.id}`, { name: "edit active" })).status).toBe(409);
 

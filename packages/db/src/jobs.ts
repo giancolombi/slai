@@ -29,6 +29,12 @@ export const JOB_PAYLOADS = {
   "export-org": z.object({ orgId: uuid, exportId: uuid }),
   /** Hard-deletes an org whose deletion grace period has passed (T-64); a no-op if cancelled. */
   "delete-org": z.object({ orgId: uuid }),
+  /** The connection's status/priority mapping changed: re-ingest its open tickets so clocks recompute (T-25). */
+  "remap-connection": z.object({ orgId: uuid, connectionId: uuid }),
+  /** Page through one knowledge source's articles and upsert them (T-47). */
+  "sync-knowledge": z.object({ orgId: uuid, sourceId: uuid }),
+  /** Refresh the org's billing period snapshot, close the previous one, send billing notices (T-65). */
+  "billing-snapshot": z.object({ orgId: uuid }),
 } as const;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -47,6 +53,9 @@ export const QUEUE = {
   runRetention: "run-retention",
   exportOrg: "export-org",
   deleteOrg: "delete-org",
+  remapConnection: "remap-connection",
+  syncKnowledge: "sync-knowledge",
+  billingSnapshot: "billing-snapshot",
 } as const satisfies Record<string, JobName>;
 
 /** Parses a job's data in the worker (trust boundary). */

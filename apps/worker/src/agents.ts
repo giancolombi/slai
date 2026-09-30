@@ -28,10 +28,10 @@ import {
 import type { Priority } from "@slai/sla-engine";
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { clientFor, connectorFor, loadConnection, markConnectionError } from "./connection.js";
-import { type Autonomy, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
+import { type Autonomy, decideRunLevel, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
-import { CREDITS, currentSpend, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
+import { CREDITS, currentBilling, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
 import { loadRules } from "./react.js";
 import { notifyCapThresholds } from "./spend.js";
 
@@ -41,8 +41,25 @@ type ActionInsert = typeof agentActions.$inferInsert;
 export const THREAD_LIMIT = 20;
 export const MESSAGE_CHARS = 4000;
 
+/** An article a draft relied on, as recorded on the run output and the reply action (T-47). */
+export interface UsedArticle {
+  id: string | null;
+  title: string;
+  url: string | null;
+}
+
 /** Bounded, oldest-first thread plus the SLA state the engine computed. */
 export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: TicketRow): Promise<TicketContext> {
+  return (await buildContextWithRefs(tx, deps, orgId, t)).ctx;
+}
+
+/** The context, plus the article id behind each knowledge item (to record what a draft used). */
+export async function buildContextWithRefs(
+  tx: Tx,
+  deps: WorkerDeps,
+  orgId: string,
+  t: TicketRow,
+): Promise<{ ctx: TicketContext; knowledgeIds: (string | null)[] }> {
   const recent = await tx
     .select()
     .from(ticketComments)
@@ -56,8 +73,14 @@ export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: T
         .where(eq(customerAccounts.id, t.customerAccountId))
     : [];
   const ev = t.evaluation ? fromStoredEvaluation(t.evaluation as StoredEvaluation) : null;
-  const res = await deps.resources(orgId, { id: t.id, connectionId: t.connectionId, subject: t.subject });
-  return {
+  const lastAsk = recent.find((c) => c.authorRole === "requester" && c.public)?.body ?? null;
+  const res = await deps.resources(orgId, {
+    id: t.id,
+    connectionId: t.connectionId,
+    subject: t.subject,
+    lastRequesterMessage: lastAsk ? lastAsk.slice(0, MESSAGE_CHARS) : null,
+  });
+  const ctx: TicketContext = {
     ticketKey: t.displayKey,
     subject: t.subject,
     priority: t.priority,
@@ -85,6 +108,18 @@ export async function buildContext(tx: Tx, deps: WorkerDeps, orgId: string, t: T
     knowledge: res.knowledge,
     assignees: res.assignees,
   };
+  return { ctx, knowledgeIds: res.knowledge.map((_, i) => res.knowledgeIds?.[i] ?? null) };
+}
+
+/** Resolves a draft's `usedKnowledge` indexes to the articles behind them. */
+export function usedArticles(
+  ctx: TicketContext,
+  knowledgeIds: (string | null)[],
+  draft: DraftReplyResult,
+): UsedArticle[] {
+  return [...new Set(draft.usedKnowledge)]
+    .filter((i) => Number.isInteger(i) && i >= 0 && i < ctx.knowledge.length)
+    .map((i) => ({ id: knowledgeIds[i] ?? null, title: ctx.knowledge[i]!.title, url: ctx.knowledge[i]!.url }));
 }
 
 /** Records a finished run (usage summed over its model calls) and meters it. Returns cap thresholds newly reached. */
@@ -121,13 +156,18 @@ async function finishRun<T>(
     ticketId: run.ticketId,
     agentRunId: run.id,
   });
+  await notifyEvent(tx, { orgId, type: "ticket.updated", id: run.ticketId });
   return reachedCapThresholds(tx, orgId, now);
 }
 
-async function failRun(deps: WorkerDeps, orgId: string, runId: string, error: string) {
-  await deps.orgDb.withOrg(orgId, (tx) =>
-    tx.update(agentRuns).set({ status: "failed", error, finishedAt: deps.clock.now() }).where(eq(agentRuns.id, runId)),
-  );
+async function failRun(deps: WorkerDeps, orgId: string, runId: string, error: string, ticketId: string) {
+  await deps.orgDb.withOrg(orgId, async (tx) => {
+    await tx
+      .update(agentRuns)
+      .set({ status: "failed", error, finishedAt: deps.clock.now() })
+      .where(eq(agentRuns.id, runId));
+    await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticketId });
+  });
 }
 
 function internalNoteBody(triage: TriageResult | null, draft: DraftReplyResult, blockedReason: string | null) {
@@ -163,22 +203,28 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
       customerAccountId: ticket.customerAccountId,
       priority: ticket.priority as Priority | null,
     });
-    const manual = run.requestedBy !== null;
-    let level: Autonomy = manual && rule.level === "observe" ? "assist" : rule.level;
-    let reason = "";
-    if ((await currentSpend(tx, now)) === "over_cap") {
-      level = "observe";
-      reason = "spend cap reached: observe only";
-    } else if (level === "observe") reason = "autonomy is observe";
-    if (level === "observe") {
+    const billing = await currentBilling(tx, now);
+    const decided = decideRunLevel({
+      kind: run.kind === "triage" ? "triage" : "draft_reply",
+      ruleLevel: rule.level,
+      manual: run.requestedBy !== null,
+      ceiling: billing.ceiling,
+      spend: billing.spend,
+    });
+    if (decided.level === "observe") {
       await tx
         .update(agentRuns)
-        .set({ status: "failed", error: reason, finishedAt: now })
+        .set({ status: "failed", error: decided.reason ?? "autonomy is observe", finishedAt: now })
         .where(eq(agentRuns.id, runId));
+      await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
       return null;
     }
+    // "triage" only reaches here for a triage run, which never drafts or sends.
+    const level: Autonomy = decided.level === "triage" ? "assist" : decided.level;
     await tx.update(agentRuns).set({ status: "running", startedAt: now }).where(eq(agentRuns.id, runId));
-    const ctx = await buildContext(tx, deps, orgId, ticket);
+    // The ticket page lists its runs: show this one as running now, not at the next refetch.
+    await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
+    const { ctx, knowledgeIds } = await buildContextWithRefs(tx, deps, orgId, ticket);
     let triageRunId: string | null = null;
     if (run.kind === "draft_reply") {
       const [tr] = await tx
@@ -195,12 +241,12 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
         .returning({ id: agentRuns.id });
       triageRunId = tr!.id;
     }
-    return { run, ticket, rule, level, ctx, triageRunId };
+    return { run, ticket, rule, level, ctx, knowledgeIds, triageRunId };
   });
   if (!prep) return;
-  const { run, ticket, rule, level, ctx } = prep;
+  const { run, ticket, rule, level, ctx, knowledgeIds } = prep;
   if (run.kind !== "triage" && run.kind !== "draft_reply") {
-    await failRun(deps, orgId, runId, `unsupported run kind ${run.kind}`);
+    await failRun(deps, orgId, runId, `unsupported run kind ${run.kind}`, ticket.id);
     return;
   }
 
@@ -222,7 +268,10 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
     }
 
     // ---- draft ----
-    const dr = await deps.agents.draftReply(ctx, triage);
+    const drafted = await deps.agents.draftReply(ctx, triage);
+    // The run output records which articles the draft relied on (T-47).
+    const used = drafted.ok ? usedArticles(ctx, knowledgeIds, drafted.output) : [];
+    const dr = drafted.ok ? { ...drafted, output: { ...drafted.output, usedArticles: used } } : drafted;
     const conn = await deps.orgDb.withOrg(orgId, (tx) => loadConnection(tx, ticket.connectionId));
     const canNote = conn ? connectorFor(deps, conn).write.internalNote : false;
     const toSend: string[] = [];
@@ -239,7 +288,13 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
         kind: "public_reply",
         body: draft.body,
         confidence: draft.confidence,
-        payload: { flags: draft.flags, usedKnowledge: draft.usedKnowledge, triage: triage ?? null, level },
+        payload: {
+          flags: draft.flags,
+          usedKnowledge: draft.usedKnowledge,
+          usedArticles: used,
+          triage: triage ?? null,
+          level,
+        },
         createdAt: now,
       };
       let blockedReason: string | null = null;
@@ -290,7 +345,7 @@ export async function runAgent(deps: WorkerDeps, payload: { orgId: string; runId
     }
     await notifyCapThresholds(deps, orgId, thresholds);
   } catch (e) {
-    await failRun(deps, orgId, runId, errorMessage(e));
+    await failRun(deps, orgId, runId, errorMessage(e), ticket.id);
     if (prep.triageRunId) {
       await deps.orgDb.withOrg(orgId, (tx) =>
         tx
@@ -389,6 +444,7 @@ async function claimSend(tx: Tx, deps: WorkerDeps, orgId: string, a: ActionRow, 
     )
     .returning();
   if (!claimed) return null;
+  await notifyEvent(tx, { orgId, type: "action.updated", id: a.id });
   await deps.queue.send(
     "execute-action",
     { orgId, actionId: a.id },
@@ -488,9 +544,10 @@ export async function performAction(deps: WorkerDeps, orgId: string, actionId: s
     if (e instanceof ConnectorError && e.kind === "rate_limited") {
       // Nothing was written: release the claim, and the job retries after Retry-After.
       const held = action;
-      await deps.orgDb.withOrg(orgId, (tx) =>
-        tx.update(agentActions).set({ status: "approved", sendingAt: null }).where(holdsClaim(held)),
-      );
+      await deps.orgDb.withOrg(orgId, async (tx) => {
+        await tx.update(agentActions).set({ status: "approved", sendingAt: null }).where(holdsClaim(held));
+        await notifyEvent(tx, { orgId, type: "action.updated", id: held.id });
+      });
       throw e;
     }
     // Anything but a clear refusal may have landed (a timeout, a 5xx, a crash): keep the claim; reconcile decides.
@@ -542,7 +599,7 @@ async function recordWrite(
       await meterAction(tx, orgId, now, "autopilot_reply", { ticketId: ticket.id, agentRunId: action.agentRunId });
       reached = await reachedCapThresholds(tx, orgId, now);
     }
-    await notifyEvent(tx, { orgId, type: "action.created", id: action.id });
+    await notifyEvent(tx, { orgId, type: "action.updated", id: action.id });
     await notifyEvent(tx, { orgId, type: "ticket.updated", id: ticket.id });
     if (!error) {
       await deps.queue.send(

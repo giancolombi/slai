@@ -2,7 +2,7 @@ import { AAD, connections, decrypt } from "@slai/db";
 import type { Connection } from "@slai/shared";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { type FakeCalls, fakeConnector, sign } from "./fixtures.js";
+import { type FakeCalls, fakeConnector, seedTicket, sign } from "./fixtures.js";
 import { API_URL, fakeRegistry, setupApp, signup } from "./harness.js";
 
 const calls: FakeCalls = { created: [] };
@@ -62,6 +62,15 @@ describe("connectors and connections", () => {
     expect((await owner.client.post("/connections", { provider: "nope", name: "x", credentials: {} })).status).toBe(
       400,
     );
+  });
+
+  it("counts each connection's tracked tickets in list and detail", async () => {
+    await seedTicket(ctx, owner.orgId, { connectionId: conn.id });
+    await seedTicket(ctx, owner.orgId, { connectionId: conn.id });
+    const detail = await owner.client.get<Connection>(`/connections/${conn.id}`);
+    expect(detail.body.ticketCount).toBe(2);
+    const list = await owner.client.get<{ items: Connection[] }>("/connections");
+    expect(list.body.items.find((c) => c.id === conn.id)?.ticketCount).toBe(2);
   });
 
   it("tests a connection with decrypted credentials", async () => {

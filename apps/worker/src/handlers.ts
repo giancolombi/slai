@@ -2,12 +2,14 @@ import { ConnectorError } from "@slai/connectors";
 import { JOB_NAMES, type JOB_PAYLOADS, type JobName, parseJob } from "@slai/db";
 import type { z } from "zod";
 import { executeAction, runAgent } from "./agents.js";
+import { billingSnapshotJob } from "./billing.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
+import { syncKnowledge } from "./knowledge.js";
 import { deleteOrgIfDue, exportOrg } from "./offboarding.js";
 import { runReplay } from "./replay.js";
 import { runRetention } from "./retention.js";
-import { evaluateTicketJob, ingestTicket, processWebhook, syncConnection } from "./sync.js";
+import { evaluateTicketJob, ingestTicket, processWebhook, remapConnection, syncConnection } from "./sync.js";
 
 type Data<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>;
 export type Handlers = { [N in JobName]: (payload: Data<N>) => Promise<void> };
@@ -17,6 +19,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "sync-connection": (p) => syncConnection(deps, p),
     "process-webhook": (p) => processWebhook(deps, p),
     "ingest-ticket": (p) => ingestTicket(deps, p),
+    "remap-connection": (p) => remapConnection(deps, p),
     "evaluate-ticket": (p) => evaluateTicketJob(deps, p),
     "run-agent": (p) => runAgent(deps, p),
     "execute-action": (p) => executeAction(deps, p),
@@ -29,6 +32,8 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "delete-org": async (p) => {
       await deleteOrgIfDue(deps, p.orgId);
     },
+    "sync-knowledge": (p) => syncKnowledge(deps, p),
+    "billing-snapshot": (p) => billingSnapshotJob(deps, p),
   };
 }
 

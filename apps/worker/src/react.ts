@@ -12,7 +12,7 @@ import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { type AutonomyRuleLike, actionableRisk, channelsToNotify, decideDispatch, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import type { Evaluated } from "./ingest.js";
-import { currentSpend } from "./metering.js";
+import { currentBilling } from "./metering.js";
 import { type Channel, enabledChannels, sendNotifications } from "./notify.js";
 
 export interface Reaction {
@@ -103,19 +103,24 @@ export async function planReaction(tx: Tx, deps: WorkerDeps, orgId: string, ev: 
     customerAccountId: t.customerAccountId,
     priority: t.priority as Priority | null,
   });
+  // The plan's ceiling and the spend cap limit agents only; alerts above are never throttled (T-65).
+  const billing = await currentBilling(tx, now);
   const decision = decideDispatch({
     prevRisk: ev.prevRisk,
     nextRisk: ev.risk,
     actionableRisk: actionable,
     ticketOpen: ev.open,
     rule,
-    spend: await currentSpend(tx, now),
+    ceiling: billing.ceiling,
+    spend: billing.spend,
     alreadyHandled: await alreadyHandled(tx, t.id),
   });
-  if (decision.runDraft) {
+  if (decision.runTriage) {
+    // A triage-only plan (Starter) queues a triage run; otherwise the draft run triages first.
+    const kind = decision.runDraft ? "draft_reply" : "triage";
     const [run] = await tx
       .insert(agentRuns)
-      .values({ orgId, kind: "draft_reply", status: "queued", ticketId: t.id, createdAt: now })
+      .values({ orgId, kind, status: "queued", ticketId: t.id, createdAt: now })
       .returning({ id: agentRuns.id });
     await deps.queue.send("run-agent", { orgId, runId: run!.id }, { tx });
   }

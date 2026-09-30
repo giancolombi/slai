@@ -33,7 +33,17 @@ export const knowledgeFor = (subject: string) => [
   { title: subject, url: null, body: `${subject}: open Settings, then follow the guided steps for this issue.` },
 ];
 
-function contextAt(h: TicketWithHistory, at: Date): TicketContext {
+/** Knowledge for a ticket, given its subject and the customer's latest public message. */
+export type KnowledgeFinder = (q: {
+  subject: string;
+  lastRequesterMessage: string | null;
+}) => Promise<TicketContext["knowledge"]>;
+
+const subjectKnowledge: KnowledgeFinder = async (q) => knowledgeFor(q.subject);
+
+async function contextAt(h: TicketWithHistory, at: Date, knowledge: KnowledgeFinder): Promise<TicketContext> {
+  const lastAsk =
+    h.comments.filter((c) => c.at <= at && c.public && c.authorRole === "requester").at(-1)?.bodyText ?? null;
   return {
     ticketKey: h.ticket.ref.displayKey,
     subject: h.ticket.subject,
@@ -50,12 +60,12 @@ function contextAt(h: TicketWithHistory, at: Date): TicketContext {
         body: c.bodyText,
       })),
     sla: { risk: "at_risk", mostUrgent: null, metrics: ["first_response"] },
-    knowledge: knowledgeFor(h.ticket.subject),
+    knowledge: await knowledge({ subject: h.ticket.subject, lastRequesterMessage: lastAsk }),
     assignees: [],
   };
 }
 
-export async function findScenario(around: Date): Promise<Scenario> {
+export async function findScenario(around: Date, knowledge: KnowledgeFinder = subjectKnowledge): Promise<Scenario> {
   const def = getConnector("demo")!;
   const far = new Date(around.getTime() + 3 * 86_400_000);
   const probe = def.create({
@@ -98,7 +108,7 @@ export async function findScenario(around: Date): Promise<Scenario> {
         if (b === a || b.ticket.requester.orgSourceId === a.ticket.requester.orgSourceId) continue;
         const pairT1 = Math.max(aC, bC) + AT_RISK + MIN;
         if (!(firstReply(a) > pairT1 && firstReply(b) > pairT1 && pairT1 < Math.min(aC, bC) + TARGET)) continue;
-        const ctx = contextAt(a, new Date(pairT1));
+        const ctx = await contextAt(a, new Date(pairT1), knowledge);
         const tri = await agents.triage(ctx);
         if (!tri.ok) continue;
         const dr = await agents.draftReply(ctx, tri.output);

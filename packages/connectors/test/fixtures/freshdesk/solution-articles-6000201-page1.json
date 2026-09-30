@@ -1,0 +1,16 @@
+[
+  {
+    "id": 7000401,
+    "type": 1,
+    "category_id": 5000100,
+    "folder_id": 6000201,
+    "title": "Update your billing contact",
+    "description": "<p>Settings &rarr; Billing &rarr; Contacts.</p>",
+    "description_text": "Settings → Billing → Contacts.",
+    "status": 2,
+    "agent_id": 8000001,
+    "tags": [],
+    "created_at": "2026-02-01T00:00:00Z",
+    "updated_at": "2026-07-01T00:00:00Z"
+  }
+]

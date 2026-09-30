@@ -9,6 +9,7 @@ import {
   auditEvents,
   contracts,
   createLocalStorage,
+  creditGrants,
   organizations,
   orgExports,
   ticketComments,
@@ -72,6 +73,8 @@ async function seedOrg() {
   await owner.db
     .insert(auditEvents)
     .values({ orgId, actorType: "user", action: "policy.approved", targetType: "policy" });
+  // Append-only like the ledger (trigger-enforced): the org delete must not cascade into it.
+  await owner.db.insert(creditGrants).values({ orgId, credits: 500, source: "manual" });
   return { orgId, connectionId, ticketId: t!.id, contractId, storageKey, pdf };
 }
 
@@ -96,7 +99,13 @@ describe("export-org", () => {
 
     const manifest = JSON.parse(files.get("manifest.json")!.toString());
     expect(manifest).toMatchObject({ format: EXPORT_FORMAT, orgId: s.orgId, exportId });
-    expect(manifest.tables).toMatchObject({ tickets: 1, ticket_comments: 1, contracts: 1, connections: 1 });
+    expect(manifest.tables).toMatchObject({
+      tickets: 1,
+      ticket_comments: 1,
+      contracts: 1,
+      connections: 1,
+      credit_grants: 1,
+    });
     expect(manifest.tables.audit_events).toBeGreaterThanOrEqual(1);
 
     const ticketsJson = JSON.parse(files.get("data/tickets.json")!.toString());
@@ -168,6 +177,7 @@ describe("delete-org", () => {
     expect(deleted.actorType).toBe("system");
     expect(deleted.metadata).toMatchObject({ filesDeleted: 1 });
     expect(await owner.db.select().from(usageLedger).where(eq(usageLedger.orgId, s.orgId))).toHaveLength(1);
+    expect(await owner.db.select().from(creditGrants).where(eq(creditGrants.orgId, s.orgId))).toHaveLength(1);
   });
 
   it("never deletes a cancelled deletion, even when the job fires", async () => {

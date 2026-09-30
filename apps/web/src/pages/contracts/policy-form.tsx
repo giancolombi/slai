@@ -230,7 +230,7 @@ function BasicsSection({ value, update }: { value: SlaPolicy; update: Update }) 
                   })
                 }
                 trailing="%"
-                className="w-24"
+                className="w-28"
               />
             ))}
             <span className="text-xs text-ink-muted">warning, then at risk</span>

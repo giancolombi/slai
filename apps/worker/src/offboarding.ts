@@ -19,11 +19,16 @@ import {
   audit,
   auditEvents,
   autonomyRules,
+  billingEvents,
+  billingPeriods,
   connections,
   contracts,
+  creditGrants,
   customerAccounts,
   exportStorageKey,
   invitations,
+  knowledgeArticles,
+  knowledgeSources,
   memberships,
   notificationChannels,
   organizations,
@@ -139,6 +144,18 @@ const TABLES: Table[] = [
         ),
   ],
   ["replays", (tx) => tx.select().from(replays)],
+  ["knowledge_sources", (tx) => tx.select().from(knowledgeSources)],
+  [
+    "knowledge_articles",
+    (tx) =>
+      tx
+        .select()
+        .from(knowledgeArticles)
+        .then((rows) => rows.map(({ search: _s, ...r }) => r)),
+  ],
+  ["billing_periods", (tx) => tx.select().from(billingPeriods)],
+  ["credit_grants", (tx) => tx.select().from(creditGrants)],
+  ["billing_events", (tx) => tx.select().from(billingEvents)],
   ["usage_ledger", (tx) => tx.select().from(usageLedger)],
   ["audit_events", (tx) => tx.select().from(auditEvents)],
 ];

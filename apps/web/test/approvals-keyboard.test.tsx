@@ -19,6 +19,7 @@ function draft(n: number, extra: Partial<AgentAction> = {}): AgentAction {
     blockedReason: null,
     createdAt: new Date(Date.now() - n * 60_000).toISOString(),
     decidedBy: null,
+    decidedByName: null,
     decidedAt: null,
     ...extra,
   };

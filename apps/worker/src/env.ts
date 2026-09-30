@@ -47,6 +47,11 @@ export const envSchema = z.object({
   RETENTION_INTERVAL_SECONDS: seconds(3600),
   /** GET /healthz on this port (default $PORT, else 8788) answers 200 while the sweep loop is healthy. 0 disables. */
   HEALTH_PORT: z.coerce.number().int().nonnegative().default(8788),
+  /** Stripe (T-65). Without a key, billing runs in manual mode and no usage is reported. */
+  STRIPE_SECRET_KEY: z.string().startsWith("sk_").optional(),
+  STRIPE_METER_TRACKED_TICKETS: z.string().min(1).default("slai_tracked_ticket_overage"),
+  STRIPE_METER_CREDITS: z.string().min(1).default("slai_credit_overage"),
+  BILLING_INTERVAL_SECONDS: seconds(3600),
 });
 
 export type Env = z.infer<typeof envSchema>;

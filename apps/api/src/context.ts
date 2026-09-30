@@ -3,6 +3,7 @@ import type { AuditEntry, Database, JobSender, Keyring, OrgDatabase, StorageDriv
 import type { AuthMethod, MfaState, Role } from "@slai/shared";
 import type { Context } from "hono";
 import type { Logger } from "pino";
+import type { BillingGateway } from "./billing/stripe.js";
 import type { Env } from "./env.js";
 import { unauthorized } from "./errors.js";
 import type { EventHub } from "./events-hub.js";
@@ -38,6 +39,8 @@ export interface AppDeps {
   sharedRateLimit?: SharedRateLimiter;
   events: EventHub;
   now: () => Date;
+  /** Stripe billing (T-65); absent or null in manual mode (no STRIPE_SECRET_KEY). */
+  billing?: BillingGateway | null;
   /** Checks the database for /readyz. */
   ready?: () => Promise<boolean>;
 }

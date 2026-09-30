@@ -12,6 +12,7 @@ import {
   s3OptionsFromEnv,
 } from "@slai/db";
 import { createApp } from "./app.js";
+import { createStripeGateway } from "./billing/stripe.js";
 import { loadEnv } from "./env.js";
 import { createEventHub } from "./events-hub.js";
 import { createLogger } from "./logger.js";
@@ -50,6 +51,16 @@ const app = createApp({
   ...(env.RATE_LIMIT_STORE === "postgres" && { sharedRateLimit: postgresRateLimiter(orgDb.client) }),
   events: createEventHub(systemDb.client),
   now: () => new Date(),
+  billing: env.STRIPE_SECRET_KEY
+    ? createStripeGateway({
+        secretKey: env.STRIPE_SECRET_KEY,
+        webhookSecret: env.STRIPE_WEBHOOK_SECRET ?? null,
+        prices: { starter: env.STRIPE_PRICE_STARTER, growth: env.STRIPE_PRICE_GROWTH, scale: env.STRIPE_PRICE_SCALE },
+        overagePrices: [env.STRIPE_PRICE_TICKET_OVERAGE, env.STRIPE_PRICE_CREDIT_OVERAGE].filter((p): p is string =>
+          Boolean(p),
+        ),
+      })
+    : null,
   ready: async () => {
     await orgDb.client`select 1`;
     return true;

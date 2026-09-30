@@ -10,6 +10,9 @@ import type {
   Connection,
   ConnectorInfo,
   Contract,
+  KnowledgeArticle,
+  KnowledgeRef,
+  KnowledgeSource,
   Me,
   Member,
   Metric,
@@ -22,6 +25,7 @@ import type {
   Replay,
   TicketStatus,
 } from "@slai/shared";
+import { type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
 import {
   KESTREL_DOC,
   kestrelAmbiguities,
@@ -179,6 +183,20 @@ export const AGENTS = [
   "Arjun Patel",
 ] as const;
 
+/** Mock user ids follow the member list: "Maya Okafor" → "u_maya". */
+export function userIdFor(name: string): string {
+  return `u_${name
+    .split(" ")[0]!
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[^a-z]/g, "")}`;
+}
+
+/** The decider fields of an action; null means slai decided (autopilot). */
+function decider(name: string | null) {
+  return { decidedBy: name ? userIdFor(name) : null, decidedByName: name };
+}
+
 export function buildMembers(now: number): Member[] {
   const roles: Member["role"][] = ["admin", "admin", "member", "member", "member", "member", "viewer", "member"];
   return [
@@ -235,6 +253,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developer.zendesk.com/api-reference/",
+    supportsKnowledge: true,
   },
   {
     provider: "jira_sm",
@@ -264,6 +283,9 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.intercom.com/docs",
+    supportsKnowledge: true,
+    // Mock mode can't follow a real provider redirect, so the button shows its "not set up" state.
+    oauth: { configured: false, params: [] },
   },
   {
     provider: "freshdesk",
@@ -276,6 +298,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.freshdesk.com/api/",
+    supportsKnowledge: true,
   },
   {
     provider: "hubspot",
@@ -285,6 +308,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: false },
     docsUrl: "https://developers.hubspot.com/docs/api/crm/tickets",
+    oauth: { configured: false, params: [] },
   },
   {
     provider: "zammad",
@@ -326,6 +350,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: false,
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://slai.example/docs/demo",
+    supportsKnowledge: true,
   },
 ];
 
@@ -342,7 +367,7 @@ export function buildConnections(now: number): Connection[] {
       status: "active",
       lastSyncAt: new Date(now - 2 * MIN).toISOString(),
       lastError: null,
-      mappingIssues: [],
+      mappingIssues: [{ field: "status", raw: "Waiting on engineering" }],
       webhookUrl: `https://hooks.slai.example/v1/webhooks/${CONN_ZENDESK}`,
       ticketCount: 4_812,
       createdAt: new Date(now - 142 * DAY).toISOString(),
@@ -447,7 +472,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.northwind,
       isDefault: false,
       definition: { ...premierDefinition, id: POLICY_PREMIER },
-      approvedBy: "Maya Okafor",
+      approvedBy: userIdFor("Maya Okafor"),
+      approvedByName: "Maya Okafor",
       approvedAt: new Date(now - 38 * DAY).toISOString(),
       createdAt: new Date(now - 39 * DAY).toISOString(),
     },
@@ -459,7 +485,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.standard,
       isDefault: true,
       definition: { ...standardDefinition, id: POLICY_STANDARD },
-      approvedBy: "Priya Raman",
+      approvedBy: userIdFor("Priya Raman"),
+      approvedByName: "Priya Raman",
       approvedAt: new Date(now - 97 * DAY).toISOString(),
       createdAt: new Date(now - 98 * DAY).toISOString(),
     },
@@ -472,6 +499,7 @@ export function buildPolicies(now: number): Policy[] {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: POLICY_KESTREL },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(now - 22 * MIN).toISOString(),
     },
@@ -483,7 +511,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.northwind,
       isDefault: false,
       definition: { ...premierDefinition, id: POLICY_PREMIER_V2 },
-      approvedBy: "Maya Okafor",
+      approvedBy: userIdFor("Maya Okafor"),
+      approvedByName: "Maya Okafor",
       approvedAt: new Date(now - 131 * DAY).toISOString(),
       createdAt: new Date(now - 132 * DAY).toISOString(),
     },
@@ -498,7 +527,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.kestrel,
       status: "needs_review",
       uploadedAt: new Date(now - 24 * MIN).toISOString(),
-      uploadedBy: "Maya Okafor",
+      uploadedBy: userIdFor("Maya Okafor"),
+      uploadedByName: "Maya Okafor",
       error: null,
       extraction: {
         summary:
@@ -514,7 +544,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.halcyon,
       status: "extracting",
       uploadedAt: new Date(now - 90_000).toISOString(),
-      uploadedBy: "Priya Raman",
+      uploadedBy: userIdFor("Priya Raman"),
+      uploadedByName: "Priya Raman",
       error: null,
       extraction: null,
     },
@@ -524,7 +555,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.northwind,
       status: "approved",
       uploadedAt: new Date(now - 39 * DAY).toISOString(),
-      uploadedBy: "Maya Okafor",
+      uploadedBy: userIdFor("Maya Okafor"),
+      uploadedByName: "Maya Okafor",
       error: null,
       extraction: {
         summary:
@@ -547,7 +579,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: null,
       status: "approved",
       uploadedAt: new Date(now - 98 * DAY).toISOString(),
-      uploadedBy: "Priya Raman",
+      uploadedBy: userIdFor("Priya Raman"),
+      uploadedByName: "Priya Raman",
       error: null,
       extraction: {
         summary: "Default support terms for all customers without a negotiated SLA.",
@@ -562,7 +595,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.parcelhub,
       status: "failed",
       uploadedAt: new Date(now - 3 * DAY).toISOString(),
-      uploadedBy: "Kofi Mensah",
+      uploadedBy: userIdFor("Kofi Mensah"),
+      uploadedByName: "Kofi Mensah",
       error:
         "No SLA schedule found. The document looks like a scanned image without a text layer; upload a text PDF or DOCX.",
       extraction: null,
@@ -1043,11 +1077,13 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
           "{time}",
           new Date(now + 2 * HOUR).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
         ),
-      payload: { tone: "reassuring", references: [`kb-${1200 + i}`] },
+      payload: { tone: "reassuring" },
+      usedKnowledge: blocked || i === 5 ? [] : knowledgeRefsFor(t.subject),
       confidence: blocked ? 0.91 : Number((0.71 + r.next() * 0.25).toFixed(2)),
       blockedReason: blocked ? "Guardrail: mentions a credit amount (pricing/legal commitment). Needs a human." : null,
       createdAt: new Date(now - (i * 7 + 3) * MIN).toISOString(),
       decidedBy: null,
+      decidedByName: null,
       decidedAt: null,
     };
   });
@@ -1066,10 +1102,11 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
         .replace("{agent}", t.assigneeName ?? "Acme Cloud support")
         .replace("{time}", "3:00 PM"),
       payload: {},
+      usedKnowledge: knowledgeRefsFor(t.subject),
       confidence: Number((0.78 + r.next() * 0.2).toFixed(2)),
       blockedReason: null,
       createdAt: new Date(now - (i + 2) * 5 * HOUR).toISOString(),
-      decidedBy: sent ? (i % 2 ? "autopilot" : r.pick(AGENTS)) : r.pick(AGENTS),
+      ...decider(sent ? (i % 2 ? null : r.pick(AGENTS)) : r.pick(AGENTS)),
       decidedAt: new Date(now - (i + 2) * 5 * HOUR + 4 * MIN).toISOString(),
     });
   });
@@ -1289,10 +1326,216 @@ export function buildAudit(now: number): AuditEvent[] {
   return events;
 }
 
-export const PLAN_LIMITS: Record<string, number> = {
-  replay: 0,
-  starter: 1_500,
-  growth: 7_500,
-  scale: 25_000,
-  enterprise: 100_000,
-};
+// ---------------------------------------------------------------- billing (T-65)
+
+/** The stored billing facts for a mock org; `billing()` in db.ts derives the BillingSummary. */
+export interface MockBilling {
+  mode: "stripe" | "manual";
+  plan: PlanId;
+  status: BillingStatus;
+  trialEndsAt: string | null;
+  pastDueSince: string | null;
+  /** Credit packs bought and not yet used. */
+  purchasedCredits: number;
+  hasCustomer: boolean;
+  hasSubscription: boolean;
+  invoices: BillingInvoice[];
+}
+
+/** A new org: the 14-day Growth trial, `daysLeft` from now (Acme starts with 9). */
+export function buildTrialBilling(now: number, daysLeft: number = TRIAL.days): MockBilling {
+  return {
+    mode: "stripe",
+    plan: TRIAL.plan,
+    status: "trialing",
+    // A little under the whole days, so "days left" reads exactly `daysLeft`.
+    trialEndsAt: new Date(now + daysLeft * DAY - HOUR).toISOString(),
+    pastDueSince: null,
+    purchasedCredits: 0,
+    hasCustomer: false,
+    hasSubscription: false,
+    invoices: [],
+  };
+}
+
+/** Paid invoices for a subscription started this month (and one the month before). */
+export function buildInvoices(now: number, priceCents: number): BillingInvoice[] {
+  return [0, 1].map((monthsAgo) => {
+    const at = new Date(now);
+    at.setUTCDate(1);
+    at.setUTCHours(0, 5, 0, 0);
+    at.setUTCMonth(at.getUTCMonth() - monthsAgo);
+    const n = 1042 - monthsAgo;
+    return {
+      id: `in_mock_${n}`,
+      number: `ACME-${n}`,
+      status: "paid",
+      amountDueCents: priceCents,
+      amountPaidCents: priceCents,
+      createdAt: at.toISOString(),
+      hostedUrl: null,
+      pdfUrl: null,
+    };
+  });
+}
+
+// ---------------------------------------------------------------- knowledge (T-47)
+
+export const KS_HELP_CENTER = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c01";
+export const KS_SAVED_REPLIES = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c02";
+const kb = (n: number) => `8d7c6b5a-4f3e-4d2c-9b1a-0f9e8d7c6b${String(n).padStart(2, "0")}`;
+const HELP = "https://help.acme-cloud.example";
+
+/** A knowledge source as the mock stores it; counts are derived from the articles at read time. */
+export type MockKnowledgeSource = Omit<KnowledgeSource, "articleCount" | "enabledCount">;
+
+const HELP_ARTICLES: [string, string, string][] = [
+  [
+    "Fix “Invalid SAML assertion: audience mismatch”",
+    "sso/saml-audience-mismatch",
+    "This error means the Audience URI (SP Entity ID) your identity provider sends doesn't match your workspace. In Okta or Azure AD, set the Audience URI to https://app.acme-cloud.example/saml/<workspace-id>, then ask affected users to sign in again from a private window.",
+  ],
+  [
+    "Rotate your SSO signing certificate without downtime",
+    "sso/rotate-certificate",
+    "Upload the new certificate under Settings → Security → SSO before you activate it in your IdP. Acme Cloud accepts both certificates for 72 hours, so users are never locked out during the switch.",
+  ],
+  [
+    "Troubleshoot SCIM provisioning with Okta",
+    "sso/scim-okta",
+    "Users are deactivated when the IdP sends a SCIM PATCH with active=false, usually after a group is unassigned. Reassign the group in Okta and the users are reactivated on the next push.",
+  ],
+  [
+    "Two-factor codes not arriving by SMS",
+    "account/2fa-sms",
+    "Some carriers delay short-code SMS. Ask affected users to switch to an authenticator app under Profile → Security, or use a backup code to sign in.",
+  ],
+  [
+    "API error codes and what to do about them",
+    "api/errors",
+    "5xx responses are safe to retry with exponential backoff; include the request ID (req_…) when you contact support. 4xx responses mean the request itself needs to change.",
+  ],
+  [
+    "Rate limits: how they work and how to raise them",
+    "api/rate-limits",
+    "Each API key has a per-minute limit that matches your plan (600 requests/minute on Growth). A 429 response carries a Retry-After header; wait that many seconds before retrying.",
+  ],
+  [
+    "Webhook delivery, retries and ordering",
+    "webhooks/delivery",
+    "Webhooks are delivered at least once, in order per resource. Your endpoint must answer within 10 seconds; slower responses are retried with backoff and can make deliveries look delayed.",
+  ],
+  [
+    "Bulk import limits and batching",
+    "api/bulk-import",
+    "The bulk import endpoint accepts up to 1,000 records per request. For larger imports, send batches sequentially and respect the Retry-After header on 429 responses.",
+  ],
+  [
+    "Export large workspaces with asynchronous exports",
+    "exports/async-exports",
+    "Exports over 5 million rows run in the background. Start the export from Settings → Data → Export and you'll get an email with a download link when the file is ready.",
+  ],
+  [
+    "Export to Amazon S3: required permissions",
+    "exports/s3-permissions",
+    "The export role needs s3:PutObject and s3:PutObjectAcl on the target bucket. AccessDenied errors almost always mean one of these is missing from the bucket policy.",
+  ],
+  [
+    "Understand your invoice and seat count",
+    "billing/invoices",
+    "Invoices count every active seat on the billing date. Deactivated users stop counting on the next invoice. You can download past invoices under Settings → Billing.",
+  ],
+  [
+    "Supported browsers",
+    "general/supported-browsers",
+    "Acme Cloud supports the latest two versions of Chrome, Edge, Firefox and Safari. If charts stay blank in Safari, turn off “Prevent cross-site tracking” for app.acme-cloud.example or update Safari.",
+  ],
+];
+
+const SAVED_REPLIES: [string, string, string | null][] = [
+  [
+    "Ask for a SAML trace",
+    "To see exactly what your identity provider sends, please capture a SAML trace with the SAML-tracer browser extension while an affected user signs in, and attach it here. Please also confirm your IdP entity ID.",
+    `${HELP}/sso/saml-tracer`,
+  ],
+  [
+    "Where to find past invoices",
+    "You can download every past invoice as a PDF under Settings → Billing → Invoices. Only workspace owners and billing admins can see this page.",
+    null,
+  ],
+];
+
+export function buildKnowledge(now: number): { sources: MockKnowledgeSource[]; articles: KnowledgeArticle[] } {
+  const sources: MockKnowledgeSource[] = [
+    {
+      id: KS_HELP_CENTER,
+      connectionId: CONN_ZENDESK,
+      kind: "helpdesk_articles",
+      name: "Acme Help Center",
+      status: "idle",
+      lastSyncAt: new Date(now - 5 * HOUR).toISOString(),
+      lastError: null,
+      createdAt: new Date(now - 90 * DAY).toISOString(),
+    },
+    {
+      id: KS_SAVED_REPLIES,
+      connectionId: null,
+      kind: "manual",
+      name: "Saved replies",
+      status: "idle",
+      lastSyncAt: null,
+      lastError: null,
+      createdAt: new Date(now - 40 * DAY).toISOString(),
+    },
+  ];
+  const articles: KnowledgeArticle[] = HELP_ARTICLES.map(([title, path, bodyText], i) => ({
+    id: kb(i + 1),
+    sourceId: KS_HELP_CENTER,
+    sourceKind: "helpdesk_articles",
+    sourceName: "Acme Help Center",
+    externalId: String(360_041_000 + i * 17),
+    title,
+    url: `${HELP}/${path}`,
+    bodyText,
+    locale: "en-us",
+    // The browser-support article is switched off to show the toggle.
+    enabled: path !== "general/supported-browsers",
+    updatedAt: new Date(now - (i * 3 + 2) * DAY).toISOString(),
+  }));
+  SAVED_REPLIES.forEach(([title, bodyText, url], i) => {
+    articles.push({
+      id: kb(50 + i),
+      sourceId: KS_SAVED_REPLIES,
+      sourceKind: "manual",
+      sourceName: "Saved replies",
+      externalId: null,
+      title,
+      url,
+      bodyText,
+      locale: null,
+      enabled: true,
+      updatedAt: new Date(now - (i * 9 + 4) * DAY).toISOString(),
+    });
+  });
+  return { sources, articles };
+}
+
+/** The help-center articles a draft about `subject` would plausibly cite (fixture stand-in for retrieval). */
+export function knowledgeRefsFor(subject: string): KnowledgeRef[] {
+  const rules: [RegExp, number[]][] = [
+    [/SSO|SAML|login|certificate/i, [1, 2]],
+    [/SCIM|provision/i, [3]],
+    [/2FA|two-factor/i, [4]],
+    [/[Rr]ate limit|429|bulk import/i, [6, 8]],
+    [/[Ww]ebhook/i, [7]],
+    [/502|500|API/i, [5]],
+    [/[Ee]xport/i, [9, 10]],
+    [/[Ii]nvoice|seat/i, [11]],
+  ];
+  const hit = rules.find(([re]) => re.test(subject));
+  if (!hit) return [];
+  return hit[1].map((n) => {
+    const [title, path] = HELP_ARTICLES[n - 1]!;
+    return { id: kb(n), title, url: `${HELP}/${path}` };
+  });
+}

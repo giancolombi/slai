@@ -129,6 +129,7 @@ export async function runReplay(deps: WorkerDeps, p: { orgId: string; replayId: 
     if (!r || (r.status !== "queued" && r.status !== "running")) return null;
     const conn = await loadConnection(tx, r.connectionId);
     await tx.update(replays).set({ status: "running", startedAt, error: null }).where(eq(replays.id, replayId));
+    await notifyEvent(tx, { orgId, type: "replay.progress", id: replayId });
     return { replay: r, conn };
   });
   if (!prep) return;

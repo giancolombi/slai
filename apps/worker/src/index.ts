@@ -2,9 +2,11 @@ import { createServer } from "node:http";
 import { createAgentRuntime } from "@slai/agents";
 import { getConnector } from "@slai/connectors";
 import { createKeyring, createOrgDb, createStorage, createSystemDb, s3OptionsFromEnv } from "@slai/db";
+import { stripeUsageReporter } from "./billing-stripe.js";
 import { systemClock } from "./clock.js";
-import { DEFAULT_CONFIG, noResources, type WorkerDeps } from "./deps.js";
+import { DEFAULT_CONFIG, type WorkerDeps } from "./deps.js";
 import { loadEnv } from "./env.js";
+import { knowledgeResources } from "./knowledge.js";
 import { createLogger, errorMessage } from "./logger.js";
 import { smtpMailer } from "./notify.js";
 import { bossQueue } from "./queue.js";
@@ -47,7 +49,8 @@ const deps: WorkerDeps = {
     ...(env.STORAGE_DRIVER === "s3" && { s3: s3OptionsFromEnv() }),
   }),
   logger,
-  resources: noResources,
+  resources: knowledgeResources({ orgDb }),
+  usageReporter: env.STRIPE_SECRET_KEY ? stripeUsageReporter(env.STRIPE_SECRET_KEY) : null,
   config: {
     ...DEFAULT_CONFIG,
     sweepBatch: env.SWEEP_BATCH,
@@ -59,13 +62,20 @@ const deps: WorkerDeps = {
       archivedContractDays: env.RETENTION_ARCHIVED_CONTRACT_DAYS,
     },
     retentionIntervalMs: env.RETENTION_INTERVAL_SECONDS * 1000,
+    meters: { trackedTickets: env.STRIPE_METER_TRACKED_TICKETS, credits: env.STRIPE_METER_CREDITS },
+    billingIntervalMs: env.BILLING_INTERVAL_SECONDS * 1000,
   },
 };
 
 await registerHandlers(boss, deps, env.WORKER_CONCURRENCY);
 const sweep = startSweep(deps, env.SWEEP_INTERVAL_SECONDS * 1000);
 logger.info(
-  { runtime: env.AGENT_RUNTIME, provider: env.MODEL_PROVIDER, sweepSeconds: env.SWEEP_INTERVAL_SECONDS },
+  {
+    runtime: env.AGENT_RUNTIME,
+    provider: env.MODEL_PROVIDER,
+    sweepSeconds: env.SWEEP_INTERVAL_SECONDS,
+    billing: env.STRIPE_SECRET_KEY ? "stripe" : "manual",
+  },
   "slai worker started",
 );
 
