@@ -123,6 +123,12 @@ export interface ConnectorContext<Credentials> {
   fetch: typeof fetch;
   /** Used to cap retries/backoff; connectors must honor Retry-After. */
   signal?: AbortSignal;
+  /**
+   * Called when the connector refreshed an OAuth access token (and possibly
+   * rotated the refresh token), with the full new credentials. The caller
+   * re-encrypts and stores them; the connector itself persists nothing.
+   */
+  onCredentialsRefreshed?: (credentials: Credentials) => void | Promise<void>;
 }
 
 export type WebhookResult =
@@ -194,6 +200,59 @@ export interface KnowledgeArticle {
   updatedAt: Date;
 }
 
+/** A value the user supplies before the OAuth redirect (e.g. the Zendesk subdomain). */
+export interface OAuthParam {
+  key: string;
+  label: string;
+  placeholder?: string;
+  help?: string;
+  /** Anchored regex source the value must match; it is interpolated into provider URLs. */
+  pattern: string;
+  /** Fixed choices (rendered as a select). */
+  options?: readonly string[];
+}
+
+/**
+ * OAuth2 authorization-code metadata (T-57). URLs may contain `{key}`
+ * placeholders filled from validated `params`. The API owns the client id and
+ * secret (from env) and the redirect; the connector only describes the provider.
+ */
+export interface OAuthMetadata {
+  /** A template with `{key}` placeholders, or a function of the validated params. */
+  authorizeUrl: string | ((params: Record<string, string>) => string);
+  tokenUrl: string | ((params: Record<string, string>) => string);
+  scopes: readonly string[];
+  /** How scopes are joined in the authorize URL (Zoho uses commas). */
+  scopeSeparator?: " " | ",";
+  /** Whether the provider supports PKCE (S256). */
+  pkce: boolean;
+  params?: readonly OAuthParam[];
+  /** Extra authorize-URL parameters, e.g. Zoho's access_type=offline. */
+  extraAuthorizeParams?: Readonly<Record<string, string>>;
+  /**
+   * Builds this connector's credentials from the code-exchange response. The
+   * result is validated with `credentialsSchema` before it is stored.
+   */
+  toCredentials(input: {
+    token: Record<string, unknown>;
+    clientId: string;
+    clientSecret: string;
+    params: Record<string, string>;
+    now: number;
+  }): unknown;
+}
+
+/** How the customer wires the provider's webhook to slai (shown after connect and on reveal). */
+export interface WebhookSetup {
+  /**
+   * "slai": the customer pastes slai's generated secret into the provider.
+   * "provider": the provider generates the signing secret; the customer pastes it into slai.
+   */
+  secret: "slai" | "provider";
+  /** Plain-language steps. `{url}` and `{secret}` are replaced in the UI. */
+  steps: readonly string[];
+}
+
 export interface ConnectorDefinition<Credentials = unknown> {
   provider: ProviderId;
   displayName: string;
@@ -203,6 +262,10 @@ export interface ConnectorDefinition<Credentials = unknown> {
   /** Fields the connect form should render (derived for UI; secrets masked). */
   credentialFields: { key: string; label: string; secret: boolean; placeholder?: string; help?: string }[];
   supportsWebhooks: boolean;
+  /** Setup steps for webhooks (connectors with `supportsWebhooks`). */
+  webhookSetup?: WebhookSetup;
+  /** Present when the provider supports an OAuth2 authorization-code connect flow. */
+  oauth?: OAuthMetadata;
   write: WriteCapabilities;
   defaultMapping: FieldMapping;
   docsUrl: string;

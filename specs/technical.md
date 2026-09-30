@@ -103,9 +103,41 @@
   (injected `fetch`, no env, no persistence). They must:
   - honor `Retry-After` by raising `ConnectorError('rate_limited')`
   - reject bad webhook signatures
+  - use the shared `lib/http.ts` helpers (T-26): `requestToken` for form-encoded
+    OAuth token requests, `detectRateLimits` for vendors that signal limits with
+    403/400 (GitHub, Salesforce, Linear), and `retryOnceOnAuth` to refetch a token
+    once on a 401
+- **TR-11a** OAuth connect and webhook secrets (T-57):
+  - A definition may carry `oauth` metadata (authorize/token URL, scopes, PKCE,
+    validated user params such as the Zendesk subdomain, and a credentials
+    builder). Today: Zendesk, Intercom, HubSpot, Salesforce, Zoho Desk, Help Scout.
+  - The API owns the OAuth apps (`OAUTH_<PROVIDER>_CLIENT_ID/SECRET`; redirect URI
+    `${API_URL}/api/v1/connections/oauth/<provider>/callback`). `start` needs an
+    MFA-complete admin and redirects with a keyring-encrypted state (org, user,
+    nonce, PKCE verifier, params, 10-minute expiry) plus an httpOnly SameSite=Lax
+    nonce cookie. `callback` rejects a tampered, expired, cross-provider or
+    other-browser state and a different user or org, exchanges the code, stores
+    the tokens (with the app's client id/secret, for refresh) encrypted, audits
+    `connection.created` with `via: oauth`, and redirects to the web app. Tokens
+    are never returned or logged.
+  - Expiring tokens refresh inside the connector (`lib/oauth.ts` token session);
+    rotated credentials go back through `onCredentialsRefreshed`, which the worker
+    re-encrypts and stores.
+  - `webhookSetup` says who owns the signing secret. `slai`: generated at connect
+    and pasted into the help desk. `provider` (Zendesk, Intercom, HubSpot, Front,
+    Linear, Zoho): the admin pastes the help desk's secret into slai
+    (`PUT /connections/:id/webhook-secret`, audited). The secret never appears in
+    list or detail DTOs; `POST /connections/:id/webhook-secret/reveal` is
+    admin-only and audited (`connection.webhook_secret_revealed`).
 - **TR-12** The canonical status categories are new, open, pending (waiting on the
   requester), on_hold (third party), solved, and closed.
   - Each connector ships a default mapping that the customer can override.
+    `connections.mapping` stores only the overrides; the worker layers them over
+    the default. `GET/PUT /connections/:id/mapping` (PUT admin-only, zod-validated
+    against the canonical values, audited) also reports unmapped and observed raw
+    values. A change enqueues `remap-connection`, which re-ingests open tickets and
+    closed ones whose raw values now map differently; a re-ingest rewrites a stored
+    event's mapped payload under the same idempotency key, so clocks recompute (T-25).
   - The first public agent reply is derived by slai from comments, never trusted
     from the vendor.
 - **TR-13** Ingestion:

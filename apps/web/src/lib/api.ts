@@ -24,8 +24,10 @@ import type {
   policyPreviewBody,
   rejectActionBody,
   savedReplyBody,
+  setWebhookSecretBody,
   signupBody,
   switchOrgBody,
+  updateMappingBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
@@ -45,6 +47,7 @@ import {
   type BillingRedirect,
   type BillingSummary,
   type Connection,
+  type ConnectionMapping,
   type ConnectorInfo,
   type Contract,
   type ContractText,
@@ -73,6 +76,7 @@ import {
   type TicketSummary,
   type TotpEnrollment,
   type UsageSummary,
+  type WebhookSecretReveal,
 } from "@slai/shared";
 import type { z } from "zod";
 
@@ -326,6 +330,19 @@ export const api = {
     remove: (connectionId: string) => del(`/connections/${id(connectionId)}`),
     test: (connectionId: string) => post<{ ok: boolean; accountName: string }>(`/connections/${id(connectionId)}/test`),
     sync: (connectionId: string) => post<void>(`/connections/${id(connectionId)}/sync`),
+    mapping: (connectionId: string) => get<ConnectionMapping>(`/connections/${id(connectionId)}/mapping`),
+    updateMapping: (connectionId: string, body: In<typeof updateMappingBody>) =>
+      put<ConnectionMapping>(`/connections/${id(connectionId)}/mapping`, body),
+    /** Admin-only and audited: the webhook URL, secret (when slai owns it) and setup steps. */
+    revealWebhookSecret: (connectionId: string) =>
+      post<WebhookSecretReveal>(`/connections/${id(connectionId)}/webhook-secret/reveal`),
+    setWebhookSecret: (connectionId: string, secret: string) =>
+      put<void>(`/connections/${id(connectionId)}/webhook-secret`, {
+        secret,
+      } satisfies In<typeof setWebhookSecretBody>),
+    /** A top-level navigation (not fetch): the API redirects to the provider's consent screen. */
+    oauthStartUrl: (provider: string, query: Record<string, string>) =>
+      buildUrl(`/connections/oauth/${id(provider)}/start`, query),
   },
   customers: {
     list: () => get<List<CustomerAccount>>("/customers"),

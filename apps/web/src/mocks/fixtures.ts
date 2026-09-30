@@ -284,6 +284,8 @@ export const CONNECTORS: ConnectorInfo[] = [
     write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
     docsUrl: "https://developers.intercom.com/docs",
     supportsKnowledge: true,
+    // Mock mode can't follow a real provider redirect, so the button shows its "not set up" state.
+    oauth: { configured: false, params: [] },
   },
   {
     provider: "freshdesk",
@@ -306,6 +308,7 @@ export const CONNECTORS: ConnectorInfo[] = [
     supportsWebhooks: true,
     write: { internalNote: true, publicReply: false, assign: true, priority: true, tags: false },
     docsUrl: "https://developers.hubspot.com/docs/api/crm/tickets",
+    oauth: { configured: false, params: [] },
   },
   {
     provider: "zammad",
@@ -364,7 +367,7 @@ export function buildConnections(now: number): Connection[] {
       status: "active",
       lastSyncAt: new Date(now - 2 * MIN).toISOString(),
       lastError: null,
-      mappingIssues: [],
+      mappingIssues: [{ field: "status", raw: "Waiting on engineering" }],
       webhookUrl: `https://hooks.slai.example/v1/webhooks/${CONN_ZENDESK}`,
       ticketCount: 4_812,
       createdAt: new Date(now - 142 * DAY).toISOString(),

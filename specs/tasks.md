@@ -43,8 +43,8 @@ Each task references the requirements it serves.
 - [x] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
 - [x] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
 - [x] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
-- [ ] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
-- [ ] T-25 Status/priority mapping override UI and API (PR-8)
+- [x] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
+- [x] T-25 Status/priority mapping override UI and API (PR-8)
 
 ## M3: Agents
 - [x] T-30 Providers: Anthropic, OpenAI, and mock; routing, fallback, retries, usage and cost (TR-16, TR-30)
@@ -86,7 +86,7 @@ Each task references the requirements it serves.
 - [x] T-56 Wire SSE live updates: one EventSource per tab, cache invalidation per event (coalesced),
       jittered backoff reconnect, a top-bar status, polling only as the fallback; every state the UI
       shows is announced (`action.updated`, run start/finish, replay start) (TR-22a)
-- [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
+- [x] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout, Zendesk); show the webhook secret for providers that need it pasted (TR-11a). Real OAuth apps still need registering per provider.
 - [x] T-58 Inline contract text on the review screen (`GET /contracts/:id/text`, document pane with
       citation scroll and highlight); bundle splitting (vendor chunks, zod-free entry: entry chunk
       466.6 → 62 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)

@@ -56,7 +56,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, safeEqual } from "../lib/hmac.js";
-import { HttpClient, type Method, type RequestOptions } from "../lib/http.js";
+import { HttpClient, type Method, type RequestOptions, requestToken } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText, textToHtml } from "../lib/text.js";
@@ -272,6 +272,44 @@ export const zohoDesk: ConnectorDefinition<ZohoDeskCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "provider",
+    steps: [
+      "Zoho Desk → Setup → Developer Space → Webhooks → New Webhook (Professional plan or higher).",
+      "URL {url}; subscribe to Ticket Add, Ticket Update, Ticket Thread Add and Ticket Comment Add.",
+      "Save, then paste the webhook's id below: Zoho signs deliveries with its own key (X-ZDesk-JWT) and slai checks the id.",
+    ],
+  },
+  oauth: {
+    authorizeUrl: (p) => `${hosts(p.dataCenter as DataCenter).accounts}/oauth/v2/auth`,
+    tokenUrl: (p) => `${hosts(p.dataCenter as DataCenter).accounts}/oauth/v2/token`,
+    scopes: ["Desk.tickets.ALL", "Desk.basic.READ", "Desk.settings.READ"],
+    scopeSeparator: ",",
+    pkce: false,
+    extraAuthorizeParams: { access_type: "offline", prompt: "consent" },
+    params: [
+      {
+        key: "dataCenter",
+        label: "Data centre",
+        options: ZOHO_DATA_CENTERS,
+        pattern: ZOHO_DATA_CENTERS.map((d) => d.replace(".", "\\.")).join("|"),
+        help: "The domain your Zoho account lives on",
+      },
+      {
+        key: "orgId",
+        label: "Organization ID",
+        pattern: "\\d{1,20}",
+        help: "Setup → Developer Space → API",
+      },
+    ],
+    toCredentials: ({ token, clientId, clientSecret, params }) => ({
+      dataCenter: params.dataCenter,
+      orgId: params.orgId,
+      clientId,
+      clientSecret,
+      refreshToken: token.refresh_token,
+    }),
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://desk.zoho.com/DeskAPIDocument",
@@ -280,7 +318,6 @@ export const zohoDesk: ConnectorDefinition<ZohoDeskCredentials> = {
     const cfg = configSchema.parse(ctx.config ?? {});
     const { accounts, desk } = hosts(creds.dataCenter);
     const deskHost = new URL(desk).host;
-    const accountsHttp = new HttpClient({ baseUrl: accounts, fetch: ctx.fetch, signal: ctx.signal });
     const deskHttp = new HttpClient({ baseUrl: desk, fetch: ctx.fetch, signal: ctx.signal });
     const http = new HttpClient({
       baseUrl: `${desk}/api/v1`,
@@ -295,8 +332,12 @@ export const zohoDesk: ConnectorDefinition<ZohoDeskCredentials> = {
       if (token && token.expiresAt > Date.now()) return token.value;
       const r = parseAs(
         zToken,
-        await accountsHttp.post("/oauth/v2/token", undefined, {
-          query: {
+        await requestToken({
+          fetch: ctx.fetch,
+          signal: ctx.signal,
+          url: `${accounts}/oauth/v2/token`,
+          paramsIn: "query",
+          params: {
             refresh_token: creds.refreshToken,
             client_id: creds.clientId,
             client_secret: creds.clientSecret,

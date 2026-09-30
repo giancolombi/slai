@@ -38,7 +38,7 @@
 import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
-import { buildUrl, DEFAULT_TIMEOUT_MS, HttpClient, parseRetryAfter } from "../lib/http.js";
+import { buildUrl, detectRateLimits, HttpClient, requestToken, retryOnceOnAuth } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText } from "../lib/text.js";
@@ -231,6 +231,28 @@ export const salesforce: ConnectorDefinition<SalesforceCredentials> = {
   // CDC and Platform Events need a streaming client (CometD or Pub/Sub API over
   // gRPC); a stateless HTTP adapter can't hold that subscription, so the worker polls.
   supportsWebhooks: false,
+  oauth: {
+    authorizeUrl: "https://{environment}.salesforce.com/services/oauth2/authorize",
+    tokenUrl: "https://{environment}.salesforce.com/services/oauth2/token",
+    scopes: ["api", "refresh_token"],
+    pkce: true,
+    params: [
+      {
+        key: "environment",
+        label: "Environment",
+        options: ["login", "test"],
+        pattern: "login|test",
+        help: "login for production and Developer Edition, test for sandboxes",
+      },
+    ],
+    toCredentials: ({ token, clientId, clientSecret }) => {
+      // The refresh token grant is how the connector gets access tokens (the app needs the refresh_token scope).
+      if (typeof token.refresh_token !== "string" || typeof token.instance_url !== "string") {
+        throw new ConnectorError("Salesforce returned no refresh token or instance URL", "auth");
+      }
+      return { instanceUrl: token.instance_url, clientId, clientSecret, refreshToken: token.refresh_token };
+    },
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl: "https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/intro_rest.htm",
@@ -243,13 +265,14 @@ export const salesforce: ConnectorDefinition<SalesforceCredentials> = {
 
     let session: { http: HttpClient; instanceUrl: string } | null = null;
 
-    /**
-     * The OAuth token endpoint takes a form-encoded body, which HttpClient (JSON
-     * only) can't send, so this is a minimal form POST with the same error mapping.
-     */
+    /** Client credentials, or the refresh token grant when the app uses the web-server flow. */
     const fetchToken = async (): Promise<{ http: HttpClient; instanceUrl: string }> => {
-      const form = new URLSearchParams(
-        creds.refreshToken
+      const data = await requestToken({
+        fetch: ctx.fetch,
+        signal: ctx.signal,
+        url: buildUrl(creds.instanceUrl, "/services/oauth2/token"),
+        // Salesforce answers bad client credentials/refresh tokens with 400 invalid_client/invalid_grant.
+        params: creds.refreshToken
           ? {
               grant_type: "refresh_token",
               client_id: creds.clientId,
@@ -257,45 +280,19 @@ export const salesforce: ConnectorDefinition<SalesforceCredentials> = {
               refresh_token: creds.refreshToken,
             }
           : { grant_type: "client_credentials", client_id: creds.clientId, client_secret: creds.clientSecret },
-      );
-      const url = buildUrl(creds.instanceUrl, "/services/oauth2/token");
-      const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
-      let res: Response;
-      try {
-        res = await ctx.fetch(url, {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-          body: form,
-          signal: ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout,
-        });
-      } catch (err) {
-        throw new ConnectorError(`POST ${url} failed: ${(err as Error)?.message ?? err}`, "upstream");
-      }
-      const text = await res.text().catch(() => "");
-      if (!res.ok) {
-        // Only the OAuth error code is echoed (never the request, which holds the secret).
-        const code = (text.match(/"error"\s*:\s*"([^"]+)"/)?.[1] ?? "").slice(0, 60);
-        const msg = `POST ${url} → ${res.status}${code ? `: ${code}` : ""}`;
-        if (res.status === 429 || res.status === 503) {
-          throw new ConnectorError(msg, "rate_limited", parseRetryAfter(res.headers.get("retry-after")));
-        }
-        // Salesforce answers bad client credentials/refresh tokens with 400 invalid_client/invalid_grant.
-        if (res.status === 400 || res.status === 401 || res.status === 403) throw new ConnectorError(msg, "auth");
-        throw new ConnectorError(msg, "upstream");
-      }
-      let data: unknown;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        throw new ConnectorError(`POST ${url} returned non-JSON`, "upstream");
-      }
+      });
       const tok = parseAs(zToken, data, "oauth token");
       const instanceUrl = new URL(tok.instance_url).origin;
       return {
         instanceUrl,
         http: new HttpClient({
           baseUrl: instanceUrl,
-          fetch: ctx.fetch,
+          // The daily API allocation is a 403 REQUEST_LIMIT_EXCEEDED, not a 429.
+          fetch: detectRateLimits(ctx.fetch, {
+            statuses: [401, 403],
+            readBody: true,
+            test: (_res, body) => body.includes("REQUEST_LIMIT_EXCEEDED"),
+          }),
           signal: ctx.signal,
           headers: { Authorization: `Bearer ${tok.access_token}` },
         }),
@@ -304,23 +301,13 @@ export const salesforce: ConnectorDefinition<SalesforceCredentials> = {
 
     /** Runs a request with the cached token; on a 401 fetches a new token once and retries. */
     const api = async <T>(fn: (http: HttpClient) => Promise<T>): Promise<T> => {
-      for (let attempt = 0; ; attempt++) {
-        session ??= await fetchToken();
-        try {
-          return await fn(session.http);
-        } catch (err) {
-          if (!(err instanceof ConnectorError)) throw err;
-          // The daily API allocation is a 403 REQUEST_LIMIT_EXCEEDED, not a 429.
-          if (err.kind === "auth" && err.message.includes("REQUEST_LIMIT_EXCEEDED")) {
-            throw new ConnectorError(err.message, "rate_limited", null);
-          }
-          if (err.kind === "auth" && / → 401/.test(err.message) && attempt === 0) {
-            session = null;
-            continue;
-          }
-          throw err;
-        }
-      }
+      session ??= await fetchToken();
+      return retryOnceOnAuth(() => fn(session!.http), {
+        onAuthFailure: async () => {
+          session = null;
+          session = await fetchToken();
+        },
+      });
     };
 
     const query = <T extends z.ZodType>(soql: string, record: T, what: string) =>

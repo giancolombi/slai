@@ -15,6 +15,7 @@ import {
   toast,
 } from "@slai/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import {
   Cable,
   CircleAlert,
@@ -24,8 +25,10 @@ import {
   PlugZap,
   Plus,
   RefreshCw,
+  Shuffle,
   Trash2,
   Webhook,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { Page, QueryState } from "../../components/page";
@@ -35,7 +38,10 @@ import { qk, useConnections, useMe } from "../../lib/queries";
 import { ConnectHelpDesk } from "./connector-form";
 import { ProviderMark } from "./provider-mark";
 
-const STATUS: Record<Connection["status"], { label: string; tone: BadgeTone; icon: React.ReactNode }> = {
+export const CONNECTION_STATUS: Record<
+  Connection["status"],
+  { label: string; tone: BadgeTone; icon: React.ReactNode }
+> = {
   active: { label: "Active", tone: "ok", icon: <CircleCheck aria-hidden /> },
   error: { label: "Error", tone: "breached", icon: <CircleAlert aria-hidden /> },
   paused: { label: "Paused", tone: "neutral", icon: <CirclePause aria-hidden /> },
@@ -57,7 +63,7 @@ export async function copyText(text: string, what: string) {
 function ConnectionCard({ connection, canManage }: { connection: Connection; canManage: boolean }) {
   const queryClient = useQueryClient();
   const [confirm, setConfirm] = useState(false);
-  const status = STATUS[connection.status];
+  const status = CONNECTION_STATUS[connection.status];
 
   const test = useMutation({
     mutationFn: () => api.connections.test(connection.id),
@@ -89,7 +95,16 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
         <ProviderMark provider={connection.provider} size="lg" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-md font-semibold text-ink">{connection.name}</h2>
+            <h2 className="truncate text-md font-semibold text-ink">
+              <Link
+                to="/connections/$connectionId"
+                params={{ connectionId: connection.id }}
+                search={{}}
+                className="hover:underline"
+              >
+                {connection.name}
+              </Link>
+            </h2>
             <Badge tone={status.tone} size="sm" icon={status.icon}>
               {status.label}
             </Badge>
@@ -136,6 +151,23 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
           </dd>
         </div>
       </dl>
+
+      {connection.mappingIssues.length > 0 && (
+        <Link
+          to="/connections/$connectionId"
+          params={{ connectionId: connection.id }}
+          search={{}}
+          className="mx-5 mb-4 flex items-start gap-2 rounded-md border border-warning-border bg-warning-subtle px-3 py-2 text-sm text-warning-text hover:underline"
+        >
+          <Shuffle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>
+            {connection.mappingIssues.length === 1
+              ? "1 unmapped status or priority"
+              : `${connection.mappingIssues.length} unmapped statuses or priorities`}
+            . Map them
+          </span>
+        </Link>
+      )}
 
       {connection.status === "error" && connection.lastError && (
         <div
@@ -188,11 +220,67 @@ function ConnectionCard({ connection, canManage }: { connection: Connection; can
   );
 }
 
+/** Why a "Continue with <Provider>" flow came back without a connection. */
+export const OAUTH_ERRORS: Record<string, string> = {
+  denied: "You declined access in the help desk, so nothing was connected.",
+  not_configured: "OAuth isn't set up for this help desk on this slai deployment. Connect with credentials instead.",
+  invalid_params: "The details entered before signing in weren't valid. Check them and try again.",
+  invalid_state: "The sign-in link expired or was used in another browser. Start again from this page.",
+  session_mismatch: "Finish connecting as the admin who started it, in the same organization.",
+  forbidden: "Only admins can connect a help desk.",
+  signed_out: "Sign in again, then connect the help desk.",
+  exchange_failed: "The help desk didn't accept the sign-in. Try again, or connect with credentials.",
+  invalid_credentials: "The help desk returned credentials slai can't use. Check the app's scopes and try again.",
+};
+
+export function oauthErrorMessage(code: string): string {
+  return OAUTH_ERRORS[code] ?? "Connecting with OAuth didn't finish. Try again.";
+}
+
+/** Shown when any connection has raw statuses or priorities nothing maps yet. */
+export function UnmappedBanner({ connections }: { connections: Connection[] }) {
+  const affected = connections.filter((c) => c.mappingIssues.length > 0);
+  if (affected.length === 0) return null;
+  const values = affected.reduce((n, c) => n + c.mappingIssues.length, 0);
+  return (
+    <div
+      role="status"
+      className="mb-6 flex flex-wrap items-start gap-x-3 gap-y-1 rounded-md border border-warning-border bg-warning-subtle px-4 py-3 text-sm text-warning-text"
+    >
+      <Shuffle className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <p className="min-w-0 flex-1">
+        <span className="font-medium">
+          {values === 1 ? "1 help-desk value isn't mapped" : `${values} help-desk values aren't mapped`}
+        </span>{" "}
+        to a slai status or priority, so those tickets count as open with the policy's default priority. Map them in{" "}
+        {affected.map((c, i) => (
+          <span key={c.id}>
+            {i > 0 && ", "}
+            <Link
+              to="/connections/$connectionId"
+              params={{ connectionId: c.id }}
+              search={{}}
+              className="font-medium underline"
+            >
+              {c.name}
+            </Link>
+          </span>
+        ))}
+        .
+      </p>
+    </div>
+  );
+}
+
+const pageRoute = getRouteApi("/_app/connections");
+
 export function ConnectionsPage() {
   const query = useConnections();
   const me = useMe();
   const canManage = me.data ? ["owner", "admin"].includes(me.data.role) : false;
   const [adding, setAdding] = useState(false);
+  const { oauth_error: oauthError } = pageRoute.useSearch();
+  const navigate = useNavigate();
 
   const addButton = canManage ? (
     <Button variant="primary" leadingIcon={<Plus />} onClick={() => setAdding(true)}>
@@ -206,6 +294,22 @@ export function ConnectionsPage() {
       description="Help desks slai reads tickets from and, within your autonomy rules, writes notes and replies back to."
       actions={addButton}
     >
+      {oauthError && (
+        <div
+          role="alert"
+          className="mb-6 flex items-start gap-2 rounded-md border border-breached-border bg-breached-subtle px-3 py-2 text-sm text-breached-text"
+        >
+          <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1">{oauthErrorMessage(oauthError)}</span>
+          <IconButton
+            size="sm"
+            label="Dismiss"
+            icon={<X />}
+            onClick={() => navigate({ to: "/connections", search: {}, replace: true })}
+          />
+        </div>
+      )}
+
       <QueryState
         query={query}
         resource="connections"
@@ -229,11 +333,14 @@ export function ConnectionsPage() {
         }
       >
         {(data) => (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {data.items.map((c) => (
-              <ConnectionCard key={c.id} connection={c} canManage={canManage} />
-            ))}
-          </div>
+          <>
+            <UnmappedBanner connections={data.items} />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {data.items.map((c) => (
+                <ConnectionCard key={c.id} connection={c} canManage={canManage} />
+              ))}
+            </div>
+          </>
         )}
       </QueryState>
 
@@ -244,7 +351,19 @@ export function ConnectionsPage() {
         title="Add a help desk"
         description="Pick your help desk, then paste credentials. slai syncs 90 days of history."
       >
-        {adding && <ConnectHelpDesk onConnected={() => setAdding(false)} />}
+        {adding && (
+          <ConnectHelpDesk
+            onConnected={(c) => {
+              setAdding(false);
+              // The detail page shows the webhook URL, secret and setup steps once.
+              navigate({
+                to: "/connections/$connectionId",
+                params: { connectionId: c.id },
+                search: { connected: true },
+              });
+            }}
+          />
+        )}
       </Sheet>
     </Page>
   );

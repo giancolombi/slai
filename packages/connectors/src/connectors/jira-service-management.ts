@@ -185,6 +185,13 @@ export const jiraServiceManagement: ConnectorDefinition<JsmCredentials> = {
     },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Jira settings → System → WebHooks → Create a WebHook with URL {url} and secret {secret}.",
+      "Events: Issue created, updated and deleted; Comment created and updated. Optionally restrict with JQL to your service project.",
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developer.atlassian.com/cloud/jira/service-desk/rest/",

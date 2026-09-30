@@ -45,8 +45,9 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { DEFAULT_TIMEOUT_MS, HttpClient, parseRetryAfter, type RequestOptions } from "../lib/http.js";
+import { HttpClient, type RequestOptions, requestToken, retryOnceOnAuth } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
+import { oauthTokenFields, readTokens, tokenSession } from "../lib/oauth.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
@@ -68,9 +69,16 @@ const KEY_HOST = "api.helpscout.net";
 /** Refresh the cached token this long before Help Scout says it expires. */
 const TOKEN_SKEW_MS = 60_000;
 
+/**
+ * Client credentials (a private app), or an access and refresh token from the
+ * OAuth authorization-code flow (a public app installed through slai).
+ */
 const credentialsSchema = z.object({
   clientId: z.string().trim().min(1),
   clientSecret: z.string().min(1),
+  accessToken: z.string().min(1).optional(),
+  refreshToken: oauthTokenFields.refreshToken,
+  expiresAt: oauthTokenFields.expiresAt,
 });
 export type HelpScoutCredentials = z.infer<typeof credentialsSchema>;
 
@@ -190,6 +198,21 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
     { key: "clientSecret", label: "App Secret", secret: true },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Help Scout → Manage → Apps → Webhooks → Install (or Your Profile → Webhooks).",
+      "Callback URL {url}; Secret key {secret}.",
+      "Select the conversation events (created, assigned, status, customer reply, agent reply, note, tags) and save.",
+    ],
+  },
+  oauth: {
+    authorizeUrl: "https://secure.helpscout.net/authentication/authorizeClientApplication",
+    tokenUrl: TOKEN_URL,
+    scopes: [],
+    pkce: false,
+    toCredentials: ({ token, clientId, clientSecret, now }) => ({ ...readTokens(token, now), clientId, clientSecret }),
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developer.helpscout.com/mailbox-api/",
@@ -202,40 +225,34 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
     let token: { value: string; expiresAt: number } | null = null;
 
     const fetchToken = async (): Promise<string> => {
-      const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
-      const signal = ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout;
-      let res: Response;
-      try {
-        res = await ctx.fetch(TOKEN_URL, {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type: "client_credentials",
-            client_id: creds.clientId,
-            client_secret: creds.clientSecret,
-          }),
-          signal,
-        });
-      } catch (err) {
-        throw new ConnectorError(`Help Scout token request failed: ${(err as Error)?.message ?? err}`, "upstream");
-      }
-      if (res.status === 429 || res.status === 503) {
-        throw new ConnectorError(
-          `Help Scout token request → ${res.status}`,
-          "rate_limited",
-          parseRetryAfter(res.headers.get("retry-after")),
-        );
-      }
-      if (res.status === 400 || res.status === 401 || res.status === 403) {
-        throw new ConnectorError("Help Scout: invalid App ID or App Secret", "auth");
-      }
-      if (!res.ok) throw new ConnectorError(`Help Scout token request → ${res.status}`, "upstream");
-      const t = parseAs(zToken, tryJson(await res.text()), "oauth2 token");
+      const data = await requestToken({
+        fetch: ctx.fetch,
+        signal: ctx.signal,
+        url: TOKEN_URL,
+        params: { grant_type: "client_credentials", client_id: creds.clientId, client_secret: creds.clientSecret },
+        label: "Help Scout token request",
+        authMessage: "Help Scout: invalid App ID or App Secret",
+      });
+      const t = parseAs(zToken, data, "oauth2 token");
       token = { value: t.access_token, expiresAt: Date.now() + (t.expires_in ?? 7200) * 1000 - TOKEN_SKEW_MS };
       return t.access_token;
     };
 
-    const accessToken = async () => (token && token.expiresAt > Date.now() ? token.value : fetchToken());
+    // Authorization-code installs refresh with their refresh token instead.
+    const session = creds.refreshToken
+      ? tokenSession({
+          fetch: ctx.fetch,
+          signal: ctx.signal,
+          tokenUrl: TOKEN_URL,
+          clientId: creds.clientId,
+          clientSecret: creds.clientSecret,
+          initial: creds,
+          onRefresh: (t) => ctx.onCredentialsRefreshed?.({ ...creds, ...t }),
+        })
+      : null;
+
+    const accessToken = async () =>
+      session ? session.token() : token && token.expiresAt > Date.now() ? token.value : fetchToken();
 
     /**
      * Authenticated request. A 401 on a cached token means it was revoked or
@@ -244,18 +261,20 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
      */
     const call = async <T>(method: "GET" | "POST" | "PUT" | "PATCH", path: string, o: RequestOptions = {}) => {
       const hadToken = token !== null;
-      const run = async () =>
-        http.request<T>(method, path, {
-          ...o,
-          headers: { ...o.headers, Authorization: `Bearer ${await accessToken()}` },
-        });
-      try {
-        return await run();
-      } catch (err) {
-        if (!(hadToken && err instanceof ConnectorError && err.kind === "auth")) throw err;
-        token = null;
-        return run();
-      }
+      return retryOnceOnAuth(
+        async () =>
+          http.request<T>(method, path, {
+            ...o,
+            headers: { ...o.headers, Authorization: `Bearer ${await accessToken()}` },
+          }),
+        {
+          when: (err) => (session ? session.canRefresh() : hadToken) && err.kind === "auth",
+          onAuthFailure: () => {
+            token = null;
+            session?.invalidate();
+          },
+        },
+      );
     };
     const get = async (path: string, query?: RequestOptions["query"]) =>
       (await call<unknown>("GET", path, { query })).data;

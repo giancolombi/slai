@@ -1,6 +1,6 @@
 import type { Connection, ConnectorInfo } from "@slai/shared";
 import { createConnectionBody } from "@slai/shared";
-import { Badge, Button, cn, EmptyState, Field, IconButton, Input, Skeleton, toast } from "@slai/ui";
+import { Badge, Button, cn, EmptyState, Field, IconButton, Input, Select, Skeleton, toast } from "@slai/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   Lock,
+  LogIn,
   Search,
   Webhook,
 } from "lucide-react";
@@ -112,11 +113,13 @@ export function ConnectorCatalog({ onSelect, className }: ConnectorCatalogProps)
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-semibold text-ink">{c.displayName}</span>
                   <span className="block truncate text-xs text-ink-muted">
-                    {c.authKind === "oauth2"
-                      ? "Sign in with OAuth"
-                      : c.authKind === "basic"
-                        ? "Email + API token"
-                        : "API token"}
+                    {c.oauth?.configured
+                      ? `Continue with ${c.displayName}`
+                      : c.authKind === "oauth2"
+                        ? "OAuth app credentials"
+                        : c.authKind === "basic"
+                          ? "Email + API token"
+                          : "API token"}
                     {c.supportsWebhooks ? " · real-time" : " · polling"}
                   </span>
                 </span>
@@ -152,6 +155,87 @@ function SecretInput({ id, ...props }: React.InputHTMLAttributes<HTMLInputElemen
         />
       }
     />
+  );
+}
+
+/**
+ * "Continue with <Provider>": live when this deployment has the provider's OAuth
+ * app, disabled with the reason otherwise. Navigates to the API, which redirects
+ * to the provider and back to the new connection.
+ */
+export function OAuthConnect({
+  connector,
+  name,
+  onStart,
+}: {
+  connector: ConnectorInfo;
+  name: string;
+  /** Defaults to a top-level navigation (tests pass a spy). */
+  onStart?: (url: string) => void;
+}) {
+  const oauth = connector.oauth;
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries((oauth?.params ?? []).filter((p) => p.options?.length).map((p) => [p.key, p.options![0]!])),
+  );
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  if (!oauth) return null;
+  const start = () => {
+    const next: Record<string, string> = {};
+    for (const p of oauth.params) if (!values[p.key]?.trim()) next[p.key] = `${p.label} is required.`;
+    setErrors(next);
+    if (Object.keys(next).length) return;
+    const query = { name: name.trim(), ...Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v.trim()])) };
+    const url = api.connections.oauthStartUrl(connector.provider, query);
+    (onStart ?? ((u: string) => window.location.assign(u)))(url);
+  };
+  return (
+    <section aria-label={`Continue with ${connector.displayName}`} className="flex flex-col gap-3">
+      {oauth.configured &&
+        oauth.params.map((p) => (
+          <Field key={p.key} label={p.label} hint={p.help} error={errors[p.key]} required>
+            {p.options?.length ? (
+              <Select
+                value={values[p.key]}
+                onValueChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))}
+                options={p.options.map((o) => ({ value: o, label: o }))}
+              />
+            ) : (
+              <Input
+                placeholder={p.placeholder}
+                value={values[p.key] ?? ""}
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(e) => setValues((s) => ({ ...s, [p.key]: e.target.value }))}
+              />
+            )}
+          </Field>
+        ))}
+      <Button
+        type="button"
+        variant="primary"
+        leadingIcon={<LogIn />}
+        disabled={!oauth.configured}
+        aria-describedby={oauth.configured ? undefined : `oauth-off-${connector.provider}`}
+        onClick={start}
+      >
+        Continue with {connector.displayName}
+      </Button>
+      {oauth.configured ? (
+        <p className="text-xs text-ink-muted">
+          You'll approve access in {connector.displayName}, then come back here. Tokens are encrypted and never shown.
+        </p>
+      ) : (
+        <p id={`oauth-off-${connector.provider}`} className="text-xs text-ink-muted">
+          Sign-in with {connector.displayName} isn't set up on this slai deployment yet (an operator adds its OAuth
+          app). Connect with credentials below instead.
+        </p>
+      )}
+      <div className="flex items-center gap-3 text-2xs font-medium uppercase tracking-wide text-ink-subtle">
+        <span className="h-px flex-1 bg-line" />
+        or use credentials
+        <span className="h-px flex-1 bg-line" />
+      </div>
+    </section>
   );
 }
 
@@ -258,6 +342,8 @@ export function ConnectForm({ connector, onConnected, onBack }: ConnectFormProps
         <Input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" />
       </Field>
 
+      <OAuthConnect connector={connector} name={name || connector.displayName} />
+
       {connector.fields.map((f) => (
         <Field
           key={f.key}
@@ -306,7 +392,7 @@ export function ConnectForm({ connector, onConnected, onBack }: ConnectFormProps
           </Button>
         )}
         <Button type="submit" variant="primary" loading={create.isPending}>
-          {oauth ? `Continue with ${connector.displayName}` : "Connect"}
+          Connect
         </Button>
       </div>
     </form>

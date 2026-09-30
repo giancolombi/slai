@@ -82,7 +82,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor } from "../lib/events.js";
 import { header, safeEqual } from "../lib/hmac.js";
-import { basicAuth, DEFAULT_TIMEOUT_MS, HttpClient, parseRetryAfter } from "../lib/http.js";
+import { basicAuth, HttpClient, requestToken } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { plainText } from "../lib/text.js";
@@ -285,6 +285,13 @@ export const servicenow: ConnectorDefinition<ServiceNowCredentials> = {
     { key: "accessToken", label: "OAuth access token (optional)", secret: true },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "System Web Services → Outbound → REST Message: new message with endpoint {url}, POST method, header X-Slai-Webhook-Secret: {secret}.",
+      "System Definition → Business Rules: new rule on Incident, after insert and update, that sends the message with a JSON body whose sys_id is current.sys_id.",
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: false },
   defaultMapping,
   docsUrl:
@@ -309,35 +316,18 @@ export const servicenow: ConnectorDefinition<ServiceNowCredentials> = {
 
     /** Exchanges client credentials (or the password grant) at /oauth_token.do. */
     const fetchToken = async (): Promise<{ token: string; expiresAt: number }> => {
-      const form = new URLSearchParams({
+      const params: Record<string, string> = {
         grant_type: creds.username ? "password" : "client_credentials",
         client_id: creds.clientId ?? "",
         client_secret: creds.clientSecret ?? "",
-      });
+      };
       if (creds.username && creds.password) {
-        form.set("username", creds.username);
-        form.set("password", creds.password);
-      }
-      const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
-      let res: Response;
-      try {
-        res = await ctx.fetch(`${base}/oauth_token.do`, {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-          body: form,
-          signal: ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout,
-        });
-      } catch (err) {
-        throw new ConnectorError(`POST ${base}/oauth_token.do failed: ${(err as Error)?.message ?? err}`, "upstream");
-      }
-      const what = `POST ${base}/oauth_token.do → ${res.status}`;
-      if (res.status === 429 || res.status === 503) {
-        throw new ConnectorError(what, "rate_limited", parseRetryAfter(res.headers.get("retry-after")));
+        params.username = creds.username;
+        params.password = creds.password;
       }
       // ServiceNow answers bad client credentials with 401 (and some grant errors with 400).
-      if (res.status === 400 || res.status === 401 || res.status === 403) throw new ConnectorError(what, "auth");
-      if (!res.ok) throw new ConnectorError(what, "upstream");
-      const t = parseAs(zToken, tryJson(await res.text()), "oauth token");
+      const data = await requestToken({ fetch: ctx.fetch, signal: ctx.signal, url: `${base}/oauth_token.do`, params });
+      const t = parseAs(zToken, data, "oauth token");
       return { token: t.access_token, expiresAt: Date.now() + (t.expires_in ?? 1800) * 1000 };
     };
 

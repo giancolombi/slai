@@ -7,7 +7,7 @@ import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
 import { syncKnowledge } from "./knowledge.js";
 import { runReplay } from "./replay.js";
-import { evaluateTicketJob, ingestTicket, processWebhook, syncConnection } from "./sync.js";
+import { evaluateTicketJob, ingestTicket, processWebhook, remapConnection, syncConnection } from "./sync.js";
 
 type Data<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>;
 export type Handlers = { [N in JobName]: (payload: Data<N>) => Promise<void> };
@@ -17,6 +17,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "sync-connection": (p) => syncConnection(deps, p),
     "process-webhook": (p) => processWebhook(deps, p),
     "ingest-ticket": (p) => ingestTicket(deps, p),
+    "remap-connection": (p) => remapConnection(deps, p),
     "evaluate-ticket": (p) => evaluateTicketJob(deps, p),
     "run-agent": (p) => runAgent(deps, p),
     "execute-action": (p) => executeAction(deps, p),

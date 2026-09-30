@@ -148,6 +148,15 @@ export const freshdesk: ConnectorDefinition<FreshdeskCredentials> = {
     { key: "apiKey", label: "API key", secret: true, help: "Profile settings → View API key" },
   ],
   supportsWebhooks: true,
+  webhookSetup: {
+    secret: "slai",
+    steps: [
+      "Admin → Workflows → Automations → Ticket updates → New rule (add a second rule under Ticket creation).",
+      "Action: Trigger webhook, POST, JSON, URL {url}.",
+      "Add a custom header X-Slai-Webhook-Token: {secret}.",
+      'Content: {"freshdesk_webhook": {"ticket_id": "{{ticket.id}}"}}.',
+    ],
+  },
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://developers.freshdesk.com/api/",

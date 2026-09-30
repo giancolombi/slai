@@ -2,9 +2,11 @@ import type {
   AgentAction,
   AutonomyRule,
   Connection,
+  ConnectionMapping,
   Contract,
   ContractText,
   CustomerAccount,
+  FieldMappingTable,
   KnowledgeArticle,
   KnowledgeSource,
   List,
@@ -45,6 +47,7 @@ import {
   switchOrgBody,
   TRIAL,
   updateKnowledgeArticleBody,
+  updateMappingBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
@@ -83,6 +86,21 @@ import {
 import { kestrelAmbiguities, kestrelCitations, kestrelDraftDefinition } from "./policies";
 
 const url = (path: string) => `${API_BASE}${path}`;
+
+/** Mapping mock (T-25): one shared default, per-connection overrides in memory. */
+const MOCK_DEFAULT_MAPPING: FieldMappingTable = {
+  status: { new: "new", open: "open", pending: "pending", hold: "on_hold", solved: "solved", closed: "closed" },
+  priority: { urgent: "urgent", high: "high", normal: "normal", low: "low" },
+};
+const MOCK_OVERRIDES = new Map<string, FieldMappingTable>();
+function mockMapping(c: Connection): ConnectionMapping {
+  return {
+    defaults: MOCK_DEFAULT_MAPPING,
+    overrides: MOCK_OVERRIDES.get(c.id) ?? { status: {}, priority: {} },
+    unmapped: c.mappingIssues,
+    observed: { status: ["open", "pending", "solved", "Waiting on engineering"], priority: ["high", "normal"] },
+  };
+}
 
 function fail(status: number, code: string, message: string, details?: unknown) {
   return HttpResponse.json({ error: { code, message, details } }, { status });
@@ -837,6 +855,53 @@ export const handlers = [
       c.lastSyncAt = new Date().toISOString();
       return new HttpResponse(null, { status: 202 });
     }),
+  ),
+
+  http.get(
+    url("/connections/:id/mapping"),
+    guarded(({ params }) => {
+      const c = org().connections.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Connection not found.");
+      return HttpResponse.json(mockMapping(c));
+    }),
+  ),
+  http.put(
+    url("/connections/:id/mapping"),
+    guarded(
+      async ({ request, params }) => {
+        const c = org().connections.find((x) => x.id === params.id);
+        if (!c) return fail(404, "not_found", "Connection not found.");
+        const body = await parse(request, updateMappingBody);
+        if (body instanceof Response) return body;
+        MOCK_OVERRIDES.set(c.id, body);
+        const m = { status: { ...MOCK_DEFAULT_MAPPING.status, ...body.status }, priority: { ...body.priority } };
+        c.mappingIssues = c.mappingIssues.filter((i) => !(i.raw in m[i.field]));
+        audit(actor(), "connection.mapping_updated", { type: "connection", id: c.id });
+        return HttpResponse.json(mockMapping(c));
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/connections/:id/webhook-secret/reveal"),
+    guarded(
+      ({ params }) => {
+        const c = org().connections.find((x) => x.id === params.id);
+        if (!c?.webhookUrl) return fail(404, "not_found", "Connection not found.");
+        audit(actor(), "connection.webhook_secret_revealed", { type: "connection", id: c.id });
+        return HttpResponse.json({
+          webhookUrl: c.webhookUrl,
+          secretSource: "slai",
+          secret: `whsec_mock_${c.id.slice(0, 8)}`,
+          configured: true,
+          steps: [
+            "In your help desk, create a webhook that POSTs JSON to {url}.",
+            "Add the header X-Slai-Webhook-Secret: {secret}, then trigger it on ticket create and update.",
+          ],
+        });
+      },
+      { admin: true },
+    ),
   ),
 
   // ------------------------------------------------ customers

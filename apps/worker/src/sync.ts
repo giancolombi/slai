@@ -2,10 +2,19 @@
  * Keeping tickets current (T-41): the reconciliation poll, webhooks, and the
  * per-ticket ingest and re-evaluation jobs.
  */
-import { ConnectorError, type MappingIssue } from "@slai/connectors";
-import { connections } from "@slai/db";
+import { ConnectorError, type MappingIssue, mapPriority, mapStatus } from "@slai/connectors";
+import { connections, tickets } from "@slai/db";
+import { CLOSED_STATUSES } from "@slai/sla-engine";
 import { eq } from "drizzle-orm";
-import { clientFor, guardAuth, loadConnection, mergeIssues, recordMappingIssues } from "./connection.js";
+import {
+  clientFor,
+  connectorFor,
+  guardAuth,
+  loadConnection,
+  mappingFor,
+  mergeIssues,
+  recordMappingIssues,
+} from "./connection.js";
 import type { WorkerDeps } from "./deps.js";
 import { evaluateStored, knownUpdates, persistTicket } from "./ingest.js";
 import { performReaction, planReaction } from "./react.js";
@@ -105,6 +114,40 @@ export async function ingestTicket(
     });
     await performReaction(deps, reaction);
   });
+}
+
+/**
+ * The connection's status/priority mapping changed (T-25): re-ingest its open
+ * tickets, plus closed ones whose current raw status or priority now maps
+ * differently, so their events are re-mapped and their clocks recomputed.
+ */
+export async function remapConnection(deps: WorkerDeps, p: { orgId: string; connectionId: string }): Promise<void> {
+  const { orgId, connectionId } = p;
+  const rows = await deps.orgDb.withOrg(orgId, async (tx) => {
+    const conn = await loadConnection(tx, connectionId);
+    if (!conn || conn.status === "paused") return [];
+    const mapping = mappingFor(connectorFor(deps, conn), conn);
+    const all = await tx
+      .select({
+        externalId: tickets.externalId,
+        status: tickets.status,
+        priority: tickets.priority,
+        rawStatus: tickets.rawStatus,
+        rawPriority: tickets.rawPriority,
+      })
+      .from(tickets)
+      .where(eq(tickets.connectionId, connectionId));
+    return all.filter(
+      (t) =>
+        !CLOSED_STATUSES.includes(t.status) ||
+        (t.rawStatus !== null && mapStatus(mapping, t.rawStatus).value !== t.status) ||
+        mapPriority(mapping, t.rawPriority).value !== t.priority,
+    );
+  });
+  for (const r of rows) {
+    await deps.queue.send("ingest-ticket", { orgId, connectionId, ticketSourceId: r.externalId });
+  }
+  deps.logger.info({ orgId, connectionId, tickets: rows.length }, "re-ingesting after a mapping change");
 }
 
 /** The timer path: re-evaluate from stored events (no help-desk call). */
