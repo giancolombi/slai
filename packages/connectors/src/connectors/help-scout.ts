@@ -19,6 +19,11 @@
  * - Webhooks (`X-HelpScout-Signature` = base64 HMAC-SHA1 of the raw body,
  *   `X-HelpScout-Event`, payload = the v2 conversation object):
  *   https://developer.helpscout.com/webhooks/
+ * - List mailboxes (HAL `_embedded.mailboxes`, `page`): https://developer.helpscout.com/mailbox-api/endpoints/inboxes/list/
+ * - Saved replies (list: id/name/preview, no text, unpaginated; get: id/name/text HTML, no timestamps):
+ *   https://developer.helpscout.com/mailbox-api/endpoints/inboxes/saved_Replies/saved-replies-list/
+ *   https://developer.helpscout.com/mailbox-api/endpoints/inboxes/saved_Replies/saved-replies-get/
+ * - Variables (`{%customer.firstName,fallback=there%}`): https://docs.helpscout.com/article/468-work-with-variables
  *
  * HISTORY — every thread carries the conversation's `status` and `assignedTo`
  * as of that thread, so status and assignee transitions are derived by diffing
@@ -45,11 +50,11 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { HttpClient, type RequestOptions, requestToken, retryOnceOnAuth } from "../lib/http.js";
+import { forbiddenAsUnsupported, HttpClient, type RequestOptions, requestToken, retryOnceOnAuth } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { oauthTokenFields, readTokens, tokenSession } from "../lib/oauth.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
-import { htmlToText, textToHtml } from "../lib/text.js";
+import { htmlToText, savedReplyText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
 import {
   type CanonicalComment,
@@ -60,6 +65,7 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
 const API = "https://api.helpscout.net";
@@ -151,6 +157,18 @@ const zThreads = z.object({
   _embedded: z.object({ threads: z.array(zThread) }).nullish(),
   page: zPage.nullish(),
 });
+const zMailboxes = z.object({
+  _embedded: z.object({ mailboxes: z.array(z.object({ id }).loose()) }).nullish(),
+  page: zPage.nullish(),
+});
+const zSavedReplyRef = z.object({ id }).loose();
+const zSavedReply = z.object({ id, name: z.string().nullish(), text: z.string().nullish() }).loose();
+/** Mailbox pages we read at most, and saved replies fetched per page (one GET each). */
+const MAX_MAILBOX_PAGES = 50;
+const SAVED_REPLIES_PER_PAGE = 50;
+/** Help Scout saved replies carry no timestamps; they get a fixed, deterministic one. */
+const NO_TIMESTAMP = new Date(0);
+
 const zToken = z.object({ access_token: z.string().min(1), expires_in: z.number().nullish() });
 const zWebhook = z.object({ id }).loose();
 
@@ -206,6 +224,7 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
       "Select the conversation events (created, assigned, status, customer reply, agent reply, note, tags) and save.",
     ],
   },
+  supportsSavedReplies: true,
   oauth: {
     authorizeUrl: "https://secure.helpscout.net/authentication/authorizeClientApplication",
     tokenUrl: TOKEN_URL,
@@ -408,6 +427,62 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
         );
         const account = me.companyId ?? me.id;
         return { accountName: `Help Scout company ${account}`, accountId: account };
+      },
+
+      async listSavedReplies(cursor) {
+        return forbiddenAsUnsupported("Help Scout saved replies", async () => {
+          // Traversal state: mailbox ids (found on the first call), which mailbox, and the offset in its replies.
+          const isState = (v: unknown): v is { m: string[]; i: number; o: number } =>
+            Array.isArray((v as { m?: unknown })?.m) &&
+            (v as { m: unknown[] }).m.every((x) => typeof x === "string") &&
+            Number.isInteger((v as { i?: unknown })?.i) &&
+            Number.isInteger((v as { o?: unknown })?.o);
+          let state = decodeCursor(cursor, isState);
+          if (!state) {
+            const mailboxes: string[] = [];
+            for (let page = 1; page <= MAX_MAILBOX_PAGES; page++) {
+              const data = parseAs(zMailboxes, await get("/v2/mailboxes", { page }), "mailboxes");
+              mailboxes.push(...(data._embedded?.mailboxes ?? []).map((m) => m.id));
+              if (page >= (data.page?.totalPages ?? page)) break;
+            }
+            state = { m: mailboxes, i: 0, o: 0 };
+          }
+          const mailbox = state.m[state.i];
+          if (mailbox === undefined) return { items: [], nextCursor: null };
+          const mid = encodeURIComponent(mailbox);
+          const refs = parseAs(
+            z.array(zSavedReplyRef),
+            await get(`/v2/mailboxes/${mid}/saved-replies`),
+            "saved replies",
+          );
+          const batch = refs.slice(state.o, state.o + SAVED_REPLIES_PER_PAGE);
+          const items: KnowledgeArticle[] = [];
+          for (const ref of batch) {
+            const r = parseAs(
+              zSavedReply,
+              await get(`/v2/mailboxes/${mid}/saved-replies/${encodeURIComponent(ref.id)}`),
+              "saved reply",
+            );
+            const bodyText = savedReplyText(r.text, "html");
+            if (!bodyText) continue;
+            items.push({
+              // Scoped by mailbox, so the same reply id in two mailboxes never collides.
+              sourceId: `${mailbox}:${r.id}`,
+              title: r.name ?? "",
+              url: null,
+              bodyText,
+              locale: null,
+              updatedAt: NO_TIMESTAMP,
+            });
+          }
+          const next =
+            state.o + SAVED_REPLIES_PER_PAGE < refs.length
+              ? { ...state, o: state.o + SAVED_REPLIES_PER_PAGE }
+              : state.i + 1 < state.m.length
+                ? { ...state, i: state.i + 1, o: 0 }
+                : null;
+          return { items, nextCursor: next ? encodeCursor(next) : null };
+        });
       },
 
       async listUpdatedTickets(since, cursor) {

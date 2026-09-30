@@ -1,0 +1,28 @@
+{
+  "_pagination": { "next": "https://api2.frontapp.com/message_templates?limit=100&page_token=tpl_p2" },
+  "_links": { "self": "https://api2.frontapp.com/message_templates" },
+  "_results": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/message_templates/rsp_16yc",
+        "related": { "owner": "https://api2.frontapp.com/teams/tim_s47", "parent_folder": null }
+      },
+      "id": "rsp_16yc",
+      "name": "Webhook retries",
+      "subject": "Re: webhooks",
+      "body": "<div>Hi {{recipient.first_name}},</div><div><br></div><div>Webhook deliveries are retried for 24 hours &amp; you can replay them.</div>",
+      "is_available_for_all_inboxes": true,
+      "inbox_ids": null,
+      "attachments": []
+    },
+    {
+      "id": "rsp_16yd",
+      "name": "Signature only",
+      "subject": null,
+      "body": "<div>{{user.signature}}</div>",
+      "is_available_for_all_inboxes": true,
+      "inbox_ids": null,
+      "attachments": []
+    }
+  ]
+}

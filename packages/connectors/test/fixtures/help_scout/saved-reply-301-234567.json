@@ -1,0 +1,6 @@
+{
+  "id": 234567,
+  "name": "Resetting two-factor authentication",
+  "text": "Hi {%customer.firstName,fallback=there%},<br /><br />An admin can reset your second factor from Settings &gt; Members.<br /><br />Thanks, {%user.firstName%}",
+  "chatText": "Hi there,\nAn admin can reset your second factor from Settings → Members."
+}

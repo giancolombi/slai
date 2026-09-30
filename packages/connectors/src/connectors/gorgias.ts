@@ -20,6 +20,9 @@
  * - HTTP integrations (triggers, headers, {{ticket.id}} templates):
  *   https://docs.gorgias.com/en-US/connect-external-apps-to-gorgias-and-create-sidebar-widgets-81822
  * - Snoozing sets status to closed with snooze_datetime: https://docs.gorgias.com/en-US/snooze-tickets-404911
+ * - Macros (saved replies; cursor, limit ≤ 100, meta.next_cursor; `archived_datetime`; the reply is the
+ *   `setResponseText` action's arguments.body_html / body_text): https://developers.gorgias.com/reference/list-macros
+ *   and https://developers.gorgias.com/reference/the-macro-object
  *
  * TIMESTAMPS — Gorgias returns naive ISO datetimes ("2019-11-16T15:59:41.966927")
  * that are UTC. JS would parse those as local time, so `utc()` appends "Z".
@@ -59,10 +62,10 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, safeEqual } from "../lib/hmac.js";
-import { basicAuth, HttpClient } from "../lib/http.js";
+import { basicAuth, forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
-import { htmlToText, plainText, textToHtml } from "../lib/text.js";
+import { htmlToText, plainText, savedReplyText, textToHtml } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
 import {
   type CanonicalComment,
@@ -73,6 +76,7 @@ import {
   type ConnectorDefinition,
   ConnectorError,
   type FieldMapping,
+  type KnowledgeArticle,
 } from "../types.js";
 
 const credentialsSchema = z.object({
@@ -112,6 +116,26 @@ const zTicket = z.object({
 });
 type GTicket = z.infer<typeof zTicket>;
 
+const zMacro = z
+  .object({
+    id,
+    name: z.string().nullish(),
+    language: z.string().nullish(),
+    archived_datetime: z.string().nullish(),
+    created_datetime: z.string().nullish(),
+    updated_datetime: z.string().nullish(),
+    actions: z
+      .array(
+        z
+          .object({
+            name: z.string().nullish(),
+            arguments: z.object({ body_text: z.string().nullish(), body_html: z.string().nullish() }).loose().nullish(),
+          })
+          .loose(),
+      )
+      .nullish(),
+  })
+  .loose();
 const zMeta = z.object({ next_cursor: z.string().nullish() }).nullish();
 const zAddress = z.object({ address: z.string().nullish(), name: z.string().nullish() });
 const zMessage = z.object({
@@ -199,6 +223,7 @@ export const gorgias: ConnectorDefinition<GorgiasCredentials> = {
     { key: "apiKey", label: "API key", secret: true, help: "Settings → REST API (private app key)" },
   ],
   supportsWebhooks: true,
+  supportsSavedReplies: true,
   webhookSetup: {
     secret: "slai",
     steps: [
@@ -401,6 +426,39 @@ export const gorgias: ConnectorDefinition<GorgiasCredentials> = {
         );
         const d = acct.domain ?? domain;
         return { accountName: `${d}.gorgias.com`, accountId: d };
+      },
+
+      async listSavedReplies(cursor) {
+        return forbiddenAsUnsupported("Gorgias macros", async () => {
+          const isState = (v: unknown): v is { cursor: string } =>
+            typeof (v as { cursor?: unknown })?.cursor === "string";
+          const state = decodeCursor(cursor, isState);
+          const r = parseAs(
+            page(zMacro),
+            await http.get("/api/macros", { query: { limit: PAGE_LIMIT, cursor: state?.cursor } }),
+            "macros",
+          );
+          const items: KnowledgeArticle[] = [];
+          for (const m of r.data) {
+            if (m.archived_datetime) continue;
+            // Only macros that write a reply; tag-only or assignment macros say nothing to the customer.
+            const reply = m.actions?.find((a) => a.name === "setResponseText")?.arguments;
+            const bodyText = reply?.body_html
+              ? savedReplyText(reply.body_html, "html")
+              : savedReplyText(reply?.body_text, "text");
+            if (!bodyText) continue;
+            items.push({
+              sourceId: m.id,
+              title: m.name ?? "",
+              url: null,
+              bodyText,
+              locale: m.language ?? null,
+              updatedAt: time(m.updated_datetime ?? m.created_datetime, `macro ${m.id}.updated_datetime`),
+            });
+          }
+          const next = r.meta?.next_cursor;
+          return { items, nextCursor: next ? encodeCursor({ cursor: next }) : null };
+        });
       },
 
       async listUpdatedTickets(since, cursor) {
