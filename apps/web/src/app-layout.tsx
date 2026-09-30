@@ -36,7 +36,6 @@ import {
   Inbox,
   KeyRound,
   LogOut,
-  Palette,
   Receipt,
   RotateCcw,
   ScrollText,
@@ -81,11 +80,6 @@ function Nav() {
           <li>
             <Link to="/help" className={sidebarItemClass}>
               <SidebarItemContent icon={<CircleHelp />} label="Help" />
-            </Link>
-          </li>
-          <li>
-            <Link to="/design" className={sidebarItemClass}>
-              <SidebarItemContent icon={<Palette />} label="Design system" />
             </Link>
           </li>
         </ul>
