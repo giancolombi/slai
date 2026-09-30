@@ -30,6 +30,7 @@ Each task references the requirements it serves.
 - [x] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
 - [x] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
 - [x] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
+- [ ] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
 - [ ] T-25 Status/priority mapping override UI and API (PR-8)
 
 ## M3: Agents
