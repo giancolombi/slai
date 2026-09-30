@@ -45,7 +45,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { DEFAULT_TIMEOUT_MS, HttpClient, parseRetryAfter, type RequestOptions } from "../lib/http.js";
+import { HttpClient, type RequestOptions, requestToken, retryOnceOnAuth } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, textToHtml } from "../lib/text.js";
@@ -202,35 +202,15 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
     let token: { value: string; expiresAt: number } | null = null;
 
     const fetchToken = async (): Promise<string> => {
-      const timeout = AbortSignal.timeout(DEFAULT_TIMEOUT_MS);
-      const signal = ctx.signal ? AbortSignal.any([ctx.signal, timeout]) : timeout;
-      let res: Response;
-      try {
-        res = await ctx.fetch(TOKEN_URL, {
-          method: "POST",
-          headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            grant_type: "client_credentials",
-            client_id: creds.clientId,
-            client_secret: creds.clientSecret,
-          }),
-          signal,
-        });
-      } catch (err) {
-        throw new ConnectorError(`Help Scout token request failed: ${(err as Error)?.message ?? err}`, "upstream");
-      }
-      if (res.status === 429 || res.status === 503) {
-        throw new ConnectorError(
-          `Help Scout token request → ${res.status}`,
-          "rate_limited",
-          parseRetryAfter(res.headers.get("retry-after")),
-        );
-      }
-      if (res.status === 400 || res.status === 401 || res.status === 403) {
-        throw new ConnectorError("Help Scout: invalid App ID or App Secret", "auth");
-      }
-      if (!res.ok) throw new ConnectorError(`Help Scout token request → ${res.status}`, "upstream");
-      const t = parseAs(zToken, tryJson(await res.text()), "oauth2 token");
+      const data = await requestToken({
+        fetch: ctx.fetch,
+        signal: ctx.signal,
+        url: TOKEN_URL,
+        params: { grant_type: "client_credentials", client_id: creds.clientId, client_secret: creds.clientSecret },
+        label: "Help Scout token request",
+        authMessage: "Help Scout: invalid App ID or App Secret",
+      });
+      const t = parseAs(zToken, data, "oauth2 token");
       token = { value: t.access_token, expiresAt: Date.now() + (t.expires_in ?? 7200) * 1000 - TOKEN_SKEW_MS };
       return t.access_token;
     };
@@ -244,18 +224,19 @@ export const helpScout: ConnectorDefinition<HelpScoutCredentials> = {
      */
     const call = async <T>(method: "GET" | "POST" | "PUT" | "PATCH", path: string, o: RequestOptions = {}) => {
       const hadToken = token !== null;
-      const run = async () =>
-        http.request<T>(method, path, {
-          ...o,
-          headers: { ...o.headers, Authorization: `Bearer ${await accessToken()}` },
-        });
-      try {
-        return await run();
-      } catch (err) {
-        if (!(hadToken && err instanceof ConnectorError && err.kind === "auth")) throw err;
-        token = null;
-        return run();
-      }
+      return retryOnceOnAuth(
+        async () =>
+          http.request<T>(method, path, {
+            ...o,
+            headers: { ...o.headers, Authorization: `Bearer ${await accessToken()}` },
+          }),
+        {
+          when: (err) => hadToken && err.kind === "auth",
+          onAuthFailure: () => {
+            token = null;
+          },
+        },
+      );
     };
     const get = async (path: string, query?: RequestOptions["query"]) =>
       (await call<unknown>("GET", path, { query })).data;

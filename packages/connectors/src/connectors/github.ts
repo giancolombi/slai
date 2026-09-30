@@ -56,7 +56,7 @@ import type { AuthorRole, Priority } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { HttpClient } from "../lib/http.js";
+import { detectRateLimits, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor, nextLink } from "../lib/paginate.js";
 import { plainText } from "../lib/text.js";
@@ -197,22 +197,14 @@ function deriveRawPriority(mapping: FieldMapping, labels: string[]): string | nu
 
 /**
  * GitHub signals rate limits as 403 (primary: x-ratelimit-remaining 0; secondary:
- * retry-after) as well as 429. HttpClient maps 403 to `auth`, so we turn those
- * 403s into 429s here; HttpClient then reads Retry-After or x-ratelimit-reset.
- * (A shared helper option would be cleaner; kept local to stay in bounds.)
+ * retry-after) as well as 429. HttpClient maps 403 to `auth`, so those 403s are
+ * rewritten to 429s; HttpClient then reads Retry-After or x-ratelimit-reset.
  */
-function rateLimitAware(f: typeof fetch): typeof fetch {
-  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
-    const res = await f(input, init);
-    if (
-      res.status === 403 &&
-      (res.headers.get("retry-after") !== null || res.headers.get("x-ratelimit-remaining") === "0")
-    ) {
-      return new Response(res.body, { status: 429, statusText: "Too Many Requests", headers: res.headers });
-    }
-    return res;
-  }) as typeof fetch;
-}
+const rateLimitAware = (f: typeof fetch) =>
+  detectRateLimits(f, {
+    statuses: [403],
+    test: (res) => res.headers.get("retry-after") !== null || res.headers.get("x-ratelimit-remaining") === "0",
+  });
 
 export const github: ConnectorDefinition<GithubCredentials> = {
   provider: "github",

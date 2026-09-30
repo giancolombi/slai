@@ -56,7 +56,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, safeEqual } from "../lib/hmac.js";
-import { HttpClient, type Method, type RequestOptions } from "../lib/http.js";
+import { HttpClient, type Method, type RequestOptions, requestToken } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { htmlToText, plainText, textToHtml } from "../lib/text.js";
@@ -280,7 +280,6 @@ export const zohoDesk: ConnectorDefinition<ZohoDeskCredentials> = {
     const cfg = configSchema.parse(ctx.config ?? {});
     const { accounts, desk } = hosts(creds.dataCenter);
     const deskHost = new URL(desk).host;
-    const accountsHttp = new HttpClient({ baseUrl: accounts, fetch: ctx.fetch, signal: ctx.signal });
     const deskHttp = new HttpClient({ baseUrl: desk, fetch: ctx.fetch, signal: ctx.signal });
     const http = new HttpClient({
       baseUrl: `${desk}/api/v1`,
@@ -295,8 +294,12 @@ export const zohoDesk: ConnectorDefinition<ZohoDeskCredentials> = {
       if (token && token.expiresAt > Date.now()) return token.value;
       const r = parseAs(
         zToken,
-        await accountsHttp.post("/oauth/v2/token", undefined, {
-          query: {
+        await requestToken({
+          fetch: ctx.fetch,
+          signal: ctx.signal,
+          url: `${accounts}/oauth/v2/token`,
+          paramsIn: "query",
+          params: {
             refresh_token: creds.refreshToken,
             client_id: creds.clientId,
             client_secret: creds.clientSecret,

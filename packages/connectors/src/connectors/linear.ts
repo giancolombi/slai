@@ -46,7 +46,7 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { HttpClient } from "../lib/http.js";
+import { detectRateLimits, HttpClient } from "../lib/http.js";
 import { mapPriority, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
 import { plainText } from "../lib/text.js";
@@ -276,27 +276,25 @@ function toConnectorError(e: { code: string; message: string }, retryAfterMs: nu
 
 /**
  * Linear reports rate limits as HTTP 400 with a RATELIMITED error, which the
- * shared HttpClient would map to "invalid". This wrapper rewrites such
- * responses to 429 with a Retry-After computed from the reset headers (and
- * auth errors to 401) so HttpClient's own mapping applies. Kept local to this
- * connector rather than changing lib/http.
+ * shared HttpClient would map to "invalid". The shared rate-limit detector
+ * rewrites those to 429 with a Retry-After computed from the reset headers;
+ * auth errors are rewritten to 401 here, so HttpClient's own mapping applies.
  */
 function linearFetch(inner: typeof fetch): typeof fetch {
+  const inspected = (s: number) => s !== 429 && s !== 401 && s !== 403;
+  const limited = detectRateLimits(inner, {
+    statuses: inspected,
+    readBody: true,
+    test: (_res, body) => errorCode(tryJson(body))?.code === "RATELIMITED",
+    retryAfterMs: retryAfterFromReset,
+  });
   return (async (input: string | URL | Request, init?: RequestInit) => {
-    const res = await inner(input, init);
-    if (res.ok || res.status === 429 || res.status === 401 || res.status === 403) return res;
+    const res = await limited(input, init);
+    if (res.ok || !inspected(res.status)) return res;
     const text = await res.text();
-    const err = errorCode(tryJson(text));
-    const headers = new Headers(res.headers);
-    let status = res.status;
-    if (err?.code === "RATELIMITED") {
-      status = 429;
-      const ms = retryAfterFromReset(res.headers);
-      if (!headers.has("retry-after") && ms !== null) headers.set("retry-after", String(Math.ceil(ms / 1000)));
-    } else if (err?.code === "AUTHENTICATION_ERROR" || err?.code === "FORBIDDEN") {
-      status = 401;
-    }
-    return new Response(text, { status, statusText: res.statusText, headers });
+    const code = errorCode(tryJson(text))?.code;
+    const status = code === "AUTHENTICATION_ERROR" || code === "FORBIDDEN" ? 401 : res.status;
+    return new Response(text, { status, statusText: res.statusText, headers: res.headers });
   }) as typeof fetch;
 }
 
