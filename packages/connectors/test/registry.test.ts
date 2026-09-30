@@ -21,6 +21,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
     clientSecret: "s",
     refreshToken: "1000.r.t",
   },
+  front: { apiToken: "t" },
   demo: {},
 };
 
@@ -33,6 +34,7 @@ describe("registry", () => {
     ).toEqual([
       "demo",
       "freshdesk",
+      "front",
       "hubspot",
       "intercom",
       "jira_service_management",

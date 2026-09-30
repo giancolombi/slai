@@ -1,0 +1,168 @@
+{
+  "_pagination": {
+    "next": null
+  },
+  "_links": {
+    "self": "https://api2.frontapp.com/conversations/cnv_7h2k4/events"
+  },
+  "_results": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_104"
+      },
+      "id": "evt_104",
+      "type": "reminder",
+      "emitted_at": 1790592060,
+      "source": null,
+      "target": null
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_103"
+      },
+      "id": "evt_103",
+      "type": "archive",
+      "emitted_at": 1790584860,
+      "source": {
+        "_meta": {
+          "type": "teammate"
+        },
+        "data": {
+          "_links": {
+            "self": "https://api2.frontapp.com/teammates/tea_dana"
+          },
+          "id": "tea_dana",
+          "email": "dana.whitfield@acmesupport.example",
+          "username": "dana",
+          "first_name": "Dana",
+          "last_name": "Whitfield",
+          "is_admin": false,
+          "is_available": true,
+          "is_blocked": false,
+          "type": "user",
+          "custom_fields": {}
+        }
+      },
+      "target": null
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_102"
+      },
+      "id": "evt_102",
+      "type": "assign",
+      "emitted_at": 1790583300,
+      "source": {
+        "_meta": {
+          "type": "teammate"
+        },
+        "data": {
+          "_links": {
+            "self": "https://api2.frontapp.com/teammates/tea_dana"
+          },
+          "id": "tea_dana",
+          "email": "dana.whitfield@acmesupport.example",
+          "username": "dana",
+          "first_name": "Dana",
+          "last_name": "Whitfield",
+          "is_admin": false,
+          "is_available": true,
+          "is_blocked": false,
+          "type": "user",
+          "custom_fields": {}
+        }
+      },
+      "target": {
+        "_meta": {
+          "type": "teammate"
+        },
+        "data": {
+          "_links": {
+            "self": "https://api2.frontapp.com/teammates/tea_dana"
+          },
+          "id": "tea_dana",
+          "email": "dana.whitfield@acmesupport.example",
+          "username": "dana",
+          "first_name": "Dana",
+          "last_name": "Whitfield",
+          "is_admin": false,
+          "is_available": true,
+          "is_blocked": false,
+          "type": "user",
+          "custom_fields": {}
+        }
+      }
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_101"
+      },
+      "id": "evt_101",
+      "type": "comment",
+      "emitted_at": 1790583000,
+      "source": {
+        "_meta": {
+          "type": "teammate"
+        },
+        "data": {
+          "_links": {
+            "self": "https://api2.frontapp.com/teammates/tea_dana"
+          },
+          "id": "tea_dana",
+          "email": "dana.whitfield@acmesupport.example",
+          "username": "dana",
+          "first_name": "Dana",
+          "last_name": "Whitfield",
+          "is_admin": false,
+          "is_available": true,
+          "is_blocked": false,
+          "type": "user",
+          "custom_fields": {}
+        }
+      },
+      "target": {
+        "_meta": {
+          "type": "comment"
+        },
+        "data": {
+          "id": "com_1"
+        }
+      }
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_100"
+      },
+      "id": "evt_100",
+      "type": "tag",
+      "emitted_at": 1790582405.25,
+      "source": {
+        "_meta": {
+          "type": "rule"
+        },
+        "data": {
+          "id": "rul_triage",
+          "name": "Tag enterprise SSO"
+        }
+      },
+      "target": {
+        "_meta": {
+          "type": "tag"
+        },
+        "data": {
+          "_links": {
+            "self": "https://api2.frontapp.com/tags/tag_ph"
+          },
+          "id": "tag_ph",
+          "name": "priority: high",
+          "description": null,
+          "highlight": null,
+          "is_private": false,
+          "is_visible_in_conversation_lists": true,
+          "created_at": 1768003200,
+          "updated_at": 1768003200
+        }
+      }
+    }
+  ]
+}

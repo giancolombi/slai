@@ -1,0 +1,65 @@
+{
+  "_links": {
+    "self": "https://api2.frontapp.com/conversations/cnv_7h2k4",
+    "related": {
+      "events": "https://api2.frontapp.com/conversations/cnv_7h2k4/events",
+      "messages": "https://api2.frontapp.com/conversations/cnv_7h2k4/messages",
+      "comments": "https://api2.frontapp.com/conversations/cnv_7h2k4/comments",
+      "inboxes": "https://api2.frontapp.com/conversations/cnv_7h2k4/inboxes"
+    }
+  },
+  "id": "cnv_7h2k4",
+  "subject": "SSO login fails with audience mismatch",
+  "status": "assigned",
+  "status_id": null,
+  "status_category": null,
+  "ticket_ids": [],
+  "assignee": {
+    "_links": {
+      "self": "https://api2.frontapp.com/teammates/tea_dana"
+    },
+    "id": "tea_dana",
+    "email": "dana.whitfield@acmesupport.example",
+    "username": "dana",
+    "first_name": "Dana",
+    "last_name": "Whitfield",
+    "is_admin": false,
+    "is_available": true,
+    "is_blocked": false,
+    "type": "user",
+    "custom_fields": {}
+  },
+  "recipient": {
+    "_links": {
+      "related": {
+        "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+      }
+    },
+    "name": "Maya Chen",
+    "handle": "maya.chen@northwind.example",
+    "role": "from"
+  },
+  "tags": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/tags/tag_urg"
+      },
+      "id": "tag_urg",
+      "name": "urgent",
+      "description": null,
+      "highlight": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "created_at": 1768003200,
+      "updated_at": 1768003200
+    }
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1790582400,
+  "updated_at": 1790600760,
+  "waiting_since": 1790600400,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {}
+}

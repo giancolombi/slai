@@ -1,5 +1,6 @@
 import { demo } from "./connectors/demo/index.js";
 import { freshdesk } from "./connectors/freshdesk.js";
+import { front } from "./connectors/front.js";
 import { hubspot } from "./connectors/hubspot.js";
 import { intercom } from "./connectors/intercom.js";
 import { jiraServiceManagement } from "./connectors/jira-service-management.js";
@@ -22,6 +23,7 @@ const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   salesforce,
   servicenow,
   zoho_desk: zohoDesk,
+  front,
   demo,
 };
 

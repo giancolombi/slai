@@ -1,0 +1,49 @@
+{
+  "_pagination": {
+    "next": null
+  },
+  "_links": {
+    "self": "https://api2.frontapp.com/tags"
+  },
+  "_results": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/tags/tag_ph"
+      },
+      "id": "tag_ph",
+      "name": "priority: high",
+      "description": null,
+      "highlight": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "created_at": 1768003200,
+      "updated_at": 1768003200
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/tags/tag_urg"
+      },
+      "id": "tag_urg",
+      "name": "urgent",
+      "description": null,
+      "highlight": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "created_at": 1768003200,
+      "updated_at": 1768003200
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/tags/tag_pu"
+      },
+      "id": "tag_pu",
+      "name": "priority: urgent",
+      "description": null,
+      "highlight": null,
+      "is_private": false,
+      "is_visible_in_conversation_lists": true,
+      "created_at": 1768003200,
+      "updated_at": 1768003200
+    }
+  ]
+}

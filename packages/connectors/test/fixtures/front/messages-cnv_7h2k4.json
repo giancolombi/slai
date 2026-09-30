@@ -1,0 +1,346 @@
+{
+  "_pagination": {
+    "next": null
+  },
+  "_links": {
+    "self": "https://api2.frontapp.com/conversations/cnv_7h2k4/messages"
+  },
+  "_results": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_1",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_1",
+      "type": "email",
+      "is_inbound": true,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790582400,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "Since this morning about a dozen of our ",
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "from"
+        },
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>Since this morning about a dozen of our users get an <b>audience mismatch</b> error.</p>",
+      "text": "Since this morning about a dozen of our users get an audience mismatch error.",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_2",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_2",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790582460,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "Thanks, we got your message and will rep",
+      "author": {
+        "_links": {
+          "self": "https://api2.frontapp.com/teammates/tea_rule1"
+        },
+        "id": "tea_rule1",
+        "email": "rule@acmesupport.example",
+        "username": "auto-ack",
+        "first_name": "Auto-ack",
+        "last_name": "rule",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "rule",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>Thanks, we got your message and will reply shortly.</p>",
+      "text": "Thanks, we got your message and will reply shortly.",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_3",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_3",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790584800,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "Hi Maya, can you send the SAML response?",
+      "author": {
+        "_links": {
+          "self": "https://api2.frontapp.com/teammates/tea_dana"
+        },
+        "id": "tea_dana",
+        "email": "dana.whitfield@acmesupport.example",
+        "username": "dana",
+        "first_name": "Dana",
+        "last_name": "Whitfield",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>Hi Maya, can you send the SAML response?</p>",
+      "text": "Hi Maya, can you send the SAML response?",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_4",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_4",
+      "type": "email",
+      "is_inbound": true,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790593200,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "Attached, see below.",
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "from"
+        },
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>Attached, see below.</p>",
+      "text": "Attached, see below.",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_5",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_5",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790595000,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "Fixed the audience URI on our side.",
+      "author": {
+        "_links": {
+          "self": "https://api2.frontapp.com/teammates/tea_dana"
+        },
+        "id": "tea_dana",
+        "email": "dana.whitfield@acmesupport.example",
+        "username": "dana",
+        "first_name": "Dana",
+        "last_name": "Whitfield",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>Fixed the audience URI on our side.</p>",
+      "text": "Fixed the audience URI on our side.",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_draft",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_draft",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": "private",
+      "error_type": null,
+      "version": null,
+      "created_at": 1790596800,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "draft",
+      "author": {
+        "_links": {
+          "self": "https://api2.frontapp.com/teammates/tea_dana"
+        },
+        "id": "tea_dana",
+        "email": "dana.whitfield@acmesupport.example",
+        "username": "dana",
+        "first_name": "Dana",
+        "last_name": "Whitfield",
+        "is_admin": false,
+        "is_available": true,
+        "is_blocked": false,
+        "type": "user",
+        "custom_fields": {}
+      },
+      "recipients": [
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "from"
+        },
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>draft</p>",
+      "text": "draft",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    },
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/messages/msg_6",
+        "related": {
+          "conversation": "https://api2.frontapp.com/conversations/cnv_7h2k4"
+        }
+      },
+      "id": "msg_6",
+      "type": "email",
+      "is_inbound": true,
+      "draft_mode": null,
+      "error_type": null,
+      "version": null,
+      "created_at": 1790600400,
+      "subject": "SSO login fails with audience mismatch",
+      "blurb": "",
+      "author": null,
+      "recipients": [
+        {
+          "_links": {
+            "related": {
+              "contact": "https://api2.frontapp.com/contacts/crd_maya01"
+            }
+          },
+          "name": "Maya Chen",
+          "handle": "maya.chen@northwind.example",
+          "role": "from"
+        },
+        {
+          "name": "Acme Support",
+          "handle": "support@acmesupport.example",
+          "role": "to"
+        }
+      ],
+      "body": "<p>It is failing again for new users.</p>",
+      "text": "",
+      "attachments": [],
+      "signature": null,
+      "metadata": {}
+    }
+  ]
+}
