@@ -1,0 +1,109 @@
+{
+  "history": [
+    {
+      "id": 900,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "created",
+      "created_by_id": 12,
+      "created_at": "2026-09-28T09:00:00.000Z"
+    },
+    {
+      "id": 901,
+      "o_id": 1001,
+      "object": "Ticket::Article",
+      "type": "created",
+      "related_object": "Ticket",
+      "related_o_id": 42,
+      "created_by_id": 12,
+      "created_at": "2026-09-28T09:00:00.000Z"
+    },
+    {
+      "id": 902,
+      "o_id": 1002,
+      "object": "Ticket::Article",
+      "type": "created",
+      "related_object": "Ticket",
+      "related_o_id": 42,
+      "created_by_id": 1,
+      "created_at": "2026-09-28T09:01:00.000Z"
+    },
+    {
+      "id": 903,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "updated",
+      "attribute": "owner",
+      "value_from": "-",
+      "value_to": "Dana Whitfield",
+      "id_from": 1,
+      "id_to": 5,
+      "created_by_id": 5,
+      "created_at": "2026-09-28T09:30:00.000Z"
+    },
+    {
+      "id": 904,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "updated",
+      "attribute": "state",
+      "value_from": "new",
+      "value_to": "pending reminder",
+      "id_from": 1,
+      "id_to": 3,
+      "created_by_id": 5,
+      "created_at": "2026-09-28T10:30:00.000Z"
+    },
+    {
+      "id": 905,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "updated",
+      "attribute": "state",
+      "value_from": "pending reminder",
+      "value_to": "open",
+      "id_from": 3,
+      "id_to": 2,
+      "created_by_id": 12,
+      "created_at": "2026-09-28T14:00:00.000Z"
+    },
+    {
+      "id": 906,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "updated",
+      "attribute": "priority",
+      "value_from": "2 normal",
+      "value_to": "3 high",
+      "id_from": 2,
+      "id_to": 3,
+      "created_by_id": 5,
+      "created_at": "2026-09-28T15:00:00.000Z"
+    },
+    {
+      "id": 907,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "added",
+      "attribute": "tag",
+      "value_to": "vip",
+      "created_by_id": 5,
+      "created_at": "2026-09-28T15:00:00.000Z"
+    },
+    {
+      "id": 908,
+      "o_id": 42,
+      "object": "Ticket",
+      "type": "notification",
+      "value_to": "dana@acme.com(update:online,email)",
+      "created_by_id": 1,
+      "created_at": "2026-09-28T15:00:01.000Z"
+    }
+  ],
+  "assets": {
+    "User": {
+      "5": { "id": 5, "login": "dana@acme.com", "firstname": "Dana", "lastname": "Whitfield" },
+      "12": { "id": 12, "login": "liam.okafor@bluepeak.example", "firstname": "Liam", "lastname": "Okafor" }
+    }
+  }
+}

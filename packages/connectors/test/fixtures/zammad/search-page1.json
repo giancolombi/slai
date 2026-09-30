@@ -1,0 +1,40 @@
+[
+  {
+    "id": 41,
+    "number": "31041",
+    "title": "Invoice shows wrong seat count",
+    "group_id": 1,
+    "state_id": 4,
+    "priority_id": 2,
+    "owner_id": 1,
+    "customer_id": 14,
+    "organization_id": null,
+    "created_at": "2026-09-27T12:00:00.000Z",
+    "updated_at": "2026-09-28T08:00:00.000Z",
+    "create_article_type": "web",
+    "state": "closed",
+    "priority": "2 normal",
+    "owner": "-",
+    "customer": "sofia.garcia@harborfinch.example",
+    "organization": null
+  },
+  {
+    "id": 42,
+    "number": "31042",
+    "title": "Webhook deliveries delayed by 30+ minutes",
+    "group_id": 1,
+    "state_id": 2,
+    "priority_id": 3,
+    "owner_id": 5,
+    "customer_id": 12,
+    "organization_id": 7,
+    "created_at": "2026-09-28T09:00:00.000Z",
+    "updated_at": "2026-09-28T15:00:00.000Z",
+    "create_article_type": "email",
+    "state": "open",
+    "priority": "3 high",
+    "owner": "dana@acme.com",
+    "customer": "liam.okafor@bluepeak.example",
+    "organization": "Bluepeak Logistics"
+  }
+]

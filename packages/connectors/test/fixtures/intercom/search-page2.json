@@ -1,0 +1,39 @@
+{
+  "type": "conversation.list",
+  "conversations": [
+    {
+      "type": "conversation",
+      "id": "557",
+      "title": "Data export failing",
+      "created_at": 1790600400,
+      "updated_at": 1790672400,
+      "state": "open",
+      "open": true,
+      "priority": "medium",
+      "admin_assignee_id": null,
+      "team_assignee_id": "5017691",
+      "tags": { "type": "tag.list", "tags": [] },
+      "source": {
+        "type": "conversation",
+        "id": "403918332",
+        "delivered_as": "customer_initiated",
+        "subject": "",
+        "body": "<p>S3 export fails with AccessDenied.</p>",
+        "author": { "type": "user", "id": "u-9", "name": "Sofia Rossi", "email": "sofia@tessel.example" }
+      },
+      "ticket": {
+        "type": "ticket",
+        "id": "557",
+        "ticket_id": "42",
+        "ticket_state": {
+          "type": "ticket_state",
+          "id": "8",
+          "category": "waiting_on_customer",
+          "internal_label": "Waiting on customer"
+        }
+      }
+    }
+  ],
+  "total_count": 3,
+  "pages": { "type": "pages", "page": 2, "per_page": 150, "total_pages": 2 }
+}

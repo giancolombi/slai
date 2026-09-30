@@ -86,6 +86,17 @@ export interface CanonicalTicket {
   channel: string | null;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Raw values the connection's FieldMapping did not recognise. The ticket
+   * still maps to a safe default (status → open, priority → null); the UI
+   * should prompt the customer to map these. Absent or empty when all mapped.
+   */
+  mappingIssues?: MappingIssue[];
+}
+
+export interface MappingIssue {
+  field: "status" | "priority";
+  raw: string;
 }
 
 /** A ticket with its full history, as needed for SLA evaluation and agents. */

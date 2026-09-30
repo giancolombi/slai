@@ -1,0 +1,21 @@
+[
+  {
+    "id": 43,
+    "number": "31043",
+    "title": "Escalated to vendor",
+    "group_id": 2,
+    "state_id": 7,
+    "priority_id": 2,
+    "owner_id": 5,
+    "customer_id": 15,
+    "organization_id": null,
+    "created_at": "2026-09-28T16:00:00.000Z",
+    "updated_at": "2026-09-28T17:00:00.000Z",
+    "create_article_type": "phone",
+    "state": "waiting for vendor",
+    "priority": "2 normal",
+    "owner": "dana@acme.com",
+    "customer": "ines.costa@oakridge.example",
+    "organization": null
+  }
+]
