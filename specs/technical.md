@@ -27,7 +27,7 @@
 | `packages/agents` | Contract extraction, triage, drafts; provider routing; metering; guardrails; local and E2B runtimes | model and E2B APIs |
 | `packages/db` | Drizzle schema, migrations, RLS, `withOrg`, crypto, job names | Postgres |
 | `packages/shared` | API contract: DTOs, zod bodies, route table | none |
-| `packages/ui` | slai design system (tokens and components); living style guide at `/design` | none |
+| `packages/ui` | slai design system (tokens and components); living style guide at `/design` in development builds only | none |
 | `apps/api` | HTTP API, auth, RBAC, CSRF, audit, uploads, webhook intake, SSE | Postgres, storage |
 | `apps/worker` | Sync, ingest, evaluation, timer sweep, agent dispatch, write-back, replay, metering | everything |
 | `apps/web` | Product UI; a mock API mode (MSW) for demos | API |
@@ -439,6 +439,36 @@
     call it (the one write `writesNeedMember` allows them); it is not audited
     (personal UI state). Migration 0010 marks every existing membership's welcome
     as seen. The MSW mock derives the same steps from the mock org.
+- **TR-22e** User-relevant information only (PR-28):
+  - **Guard test.** `apps/web/test/implementation-terms.test.tsx` renders every
+    main page, detail page and help guide against the MSW mock API (whose agent
+    runs carry model names, costs and sandbox seconds) and fails when the visible
+    text matches a denylist: model/vendor ids (`claude-`, `gpt-`, `qwen`,
+    `ollama`), E2B and sandbox terms, token counts, micro-dollars, RLS, pg-boss,
+    NOTIFY, spec codes (TR-/PR-/T-nn), JSON paths, raw enums (`first_response`,
+    `on_hold`, `model_call`…), dotted audit codes, env var names, "deterministic",
+    and UUIDs outside a copyable `<code>` setup value. It also checks that members
+    get no audit log or webhook setup and viewers get no approve/reject/run
+    controls. Add to the denylist rather than loosening it; customer content
+    (ticket subjects, help articles) may legitimately say "API token".
+  - **Errors.** API error bodies are `{ error: { code, message, details?,
+    requestId? } }`. Messages are written for users (what happened, what to do).
+    5xx bodies never contain driver, stack or provider text (tested in
+    `apps/api/test/error-bodies.test.ts`) and carry `requestId`, which the web
+    shows as "Reference: <first block>". Worker failure reasons stored raw in
+    `agent_runs.error`, `contracts.error`, connection and knowledge-source
+    `last_error` are mapped to sentences at the API boundary
+    (`apps/api/src/user-errors.ts`); the raw detail stays in logs and the column.
+    The web never renders a non-API `Error.message`.
+  - **Agent runs** keep `model`, `costCents` and `sandboxSeconds` in the DTO for
+    internal use; the web renders kind, outcome, time and `credits` only.
+    `GET /usage` reports `byKind` by purchased action (`triage`, `draft_reply`,
+    `autopilot_reply`), with `ACTION_CREDITS` in `packages/shared/src/plans.ts`.
+  - **Roles in the UI.** `useAccess()` (`apps/web/src/lib/access.ts`) hides
+    admin-only navigation, setup details and controls rather than disabling them.
+  - **`/design`** (the style guide) is registered only when `import.meta.env.DEV`
+    is true, so production builds drop the route and its chunk
+    (`apps/web/test/design-route.test.ts`); nothing in the app links to it.
 - **TR-23** Auth is **better-auth 1.7** (`better-auth`, with the `twoFactor`
   plugin, `@better-auth/passkey` and `@better-auth/sso`), configured in
   `apps/api/src/auth/better-auth.ts`. slai keeps organizations, memberships,

@@ -106,6 +106,14 @@ Each task references the requirements it serves.
       Help center with searchable guides as TSX modules, About-this-page on every page with a
       route-coverage guard test, What's-this tooltips, role-aware first-run welcome, empty states
       linking the next action and guide, `?` shortcut, MSW mock support (PR-27, TR-22d)
+- [x] T-59c Product content audit (PR-28, TR-22e): the design-system link is gone and `/design`
+      exists only in development builds (tested); agent runs show what the agent did, when, its
+      outcome and credits (no model, cost, sandbox or timings); audit log entries and targets as
+      sentences; usage by triage, drafts and autopilot replies; dev-only billing notes and controls
+      only in development or the demo; plain-language copy across pages, help guides, API errors,
+      worker failure reasons and emails; 5xx bodies sanitized with a `requestId` reference; admin-only
+      navigation, setup details and controls hidden from members and viewers; guard tests for
+      visible text, 5xx bodies and the dev-only route
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
