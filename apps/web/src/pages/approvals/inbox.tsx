@@ -2,7 +2,7 @@ import type { AgentAction } from "@slai/shared";
 import { Button, Card, cn, EmptyState, formatRelative, Kbd, Label, Textarea } from "@slai/ui";
 import { Inbox, PartyPopper, ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog } from "./draft-parts";
+import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog, UsedKnowledge } from "./draft-parts";
 import { useInboxKeys } from "./use-inbox-keys";
 
 export interface ApprovalsInboxProps {
@@ -205,6 +205,7 @@ export function ApprovalsInbox({
               </div>
             )}
             {renderContext?.(selected)}
+            {selected.kind === "public_reply" && <UsedKnowledge refs={selected.usedKnowledge} />}
             <div className="flex flex-1 flex-col gap-1.5">
               <div className="flex items-baseline justify-between">
                 <Label htmlFor={editorId}>

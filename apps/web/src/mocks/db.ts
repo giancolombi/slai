@@ -11,6 +11,7 @@ import type {
   Connection,
   Contract,
   DashboardSummary,
+  KnowledgeArticle,
   Me,
   Member,
   MetricView,
@@ -33,6 +34,7 @@ import {
   buildConnections,
   buildContracts,
   buildCustomers,
+  buildKnowledge,
   buildMe,
   buildMembers,
   buildOrgSettings,
@@ -43,6 +45,7 @@ import {
   DAY,
   HOUR,
   type MockCustomer,
+  type MockKnowledgeSource,
   type MockMetric,
   type MockTicket,
   PLAN_LIMITS,
@@ -62,6 +65,8 @@ export interface OrgData {
   channels: NotificationChannel[];
   replays: Replay[];
   audit: AuditEvent[];
+  knowledgeSources: MockKnowledgeSource[];
+  knowledgeArticles: KnowledgeArticle[];
   /** Extra usage recorded during the demo (cents). */
   usageExtraCents: number;
   /** When the org was created (drives the dashboard period). */
@@ -77,7 +82,7 @@ export interface MockDb {
 }
 
 const STORAGE_KEY = "slai-mock-db";
-const VERSION = 5;
+const VERSION = 6;
 
 function seedAcme(now: number): OrgData {
   const customers = buildCustomers();
@@ -87,6 +92,7 @@ function seedAcme(now: number): OrgData {
     actions.filter((a) => a.status === "proposed" || a.status === "blocked").map((a) => a.ticketId),
   );
   for (const t of tickets) t.agentRuns = buildRuns(now, t, withDraft.has(t.id));
+  const knowledge = buildKnowledge(now);
   return {
     settings: buildOrgSettings(),
     members: buildMembers(now),
@@ -100,6 +106,8 @@ function seedAcme(now: number): OrgData {
     channels: buildChannels(),
     replays: buildReplays(now),
     audit: buildAudit(now),
+    knowledgeSources: knowledge.sources,
+    knowledgeArticles: knowledge.articles,
     usageExtraCents: 0,
     createdAt: now - 142 * DAY,
   };
@@ -128,6 +136,8 @@ export function emptyOrg(id: string, name: string, owner: Member, now: number): 
     channels: [],
     replays: [],
     audit: [],
+    knowledgeSources: [],
+    knowledgeArticles: [],
     usageExtraCents: 0,
     createdAt: now,
   };
