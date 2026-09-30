@@ -174,7 +174,9 @@ describe("text", () => {
     expect(stripPlaceholders("Dear #{ticket.customer.firstname} #{ticket.customer.lastname}.")).toBe("Dear.");
     expect(stripPlaceholders("{{ticket.requester.name}}, your order shipped")).toBe("your order shipped");
     expect(
-      stripPlaceholders("A{% if ticket.priority == 'urgent' %} fast{% endif %} fix{% comment %}secret{% endcomment %}."),
+      stripPlaceholders(
+        "A{% if ticket.priority == 'urgent' %} fast{% endif %} fix{% comment %}secret{% endcomment %}.",
+      ),
     ).toBe("A fast fix.");
     expect(stripPlaceholders("Costs {not a tag} and #hashtag stay")).toBe("Costs {not a tag} and #hashtag stay");
     expect(savedReplyText("<p>Hi {{ticket.requester.first_name}},</p><p>Reset it &amp; retry.</p>", "html")).toBe(

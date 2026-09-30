@@ -99,7 +99,7 @@ const LIQUID_COMMENT = /\{%-?\s*comment\s*-?%\}[\s\S]*?\{%-?\s*endcomment\s*-?%\
 /** `fallback: "x"`, `default: 'x'`, `fallback=x`, or Front's bare `| 'x'`. */
 const FALLBACK = /(?:\b(?:fallback|default)\s*[:=]\s*|\|\s*(?=["']))(?:"([^"]*)"|'([^']*)'|([^,|%}"']+))/i;
 /** Marks where a placeholder was removed, so only the punctuation around it is tidied. */
-const GAP = "\u0000";
+const GAP = "\uE000";
 
 /**
  * Saved-reply text with its placeholders resolved safely: a placeholder
@@ -115,10 +115,10 @@ export function stripPlaceholders(text: string): string {
     return value || GAP;
   });
   return s
-    .replace(/^[ \t]*\u0000(?:[ \t]*\u0000)*[ \t]*[,;:]?[ \t]*/gm, "")
-    .replace(/[ \t]*\u0000(?:[ \t]*\u0000)*[ \t]*(?=[,.!?;:)]|$)/gm, "")
-    .replace(/[ \t]*\u0000(?:[ \t]*\u0000)*[ \t]*/g, (m) => (/[ \t]/.test(m) ? " " : ""))
-    .replace(/\u0000/g, "");
+    .replace(/^[ \t]*\uE000(?:[ \t]*\uE000)*[ \t]*[,;:]?[ \t]*/gm, "")
+    .replace(/[ \t]*\uE000(?:[ \t]*\uE000)*[ \t]*(?=[,.!?;:)]|$)/gm, "")
+    .replace(/[ \t]*\uE000(?:[ \t]*\uE000)*[ \t]*/g, (m) => (/[ \t]/.test(m) ? " " : ""))
+    .replace(/\uE000/g, "");
 }
 
 /** A saved reply's body (HTML or plain text) → bounded plain text without placeholders. */

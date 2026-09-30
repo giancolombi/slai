@@ -64,10 +64,10 @@ describe("sync-knowledge", () => {
 
   it("records an error for a connector without knowledge, and ignores manual sources", async () => {
     const other = await createConnection(h, orgId, {
-      provider: "intercom",
+      provider: "hubspot",
       credentials: { accessToken: "t" },
     });
-    // Intercom has help-center articles, but its public API has no saved replies.
+    // HubSpot has a (beta) knowledge base, but its public API has no saved replies.
     const saved = await addSource(orgId, { connectionId: other, kind: "saved_replies" });
     const manual = await addSource(orgId, { kind: "manual", name: "Saved replies" });
     await h.queue.send("sync-knowledge", { orgId, sourceId: saved.id });

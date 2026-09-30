@@ -86,8 +86,7 @@ describe("autopilot grounded in a help-desk saved reply (T-47b)", () => {
     expect(reply.status).toBe("sent");
     expect(reply.blockedReason).toBeNull();
 
-    const used = (reply.payload as { usedArticles: { id: string; title: string; url: string | null }[] })
-      .usedArticles;
+    const used = (reply.payload as { usedArticles: { id: string; title: string; url: string | null }[] }).usedArticles;
     expect(used).toHaveLength(1);
     const [saved] = await owner.db.select().from(knowledgeArticles).where(eq(knowledgeArticles.id, used[0]!.id));
     expect(saved!.sourceId).toBe(sourceId);
