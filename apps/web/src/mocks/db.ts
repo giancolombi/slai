@@ -77,7 +77,7 @@ export interface MockDb {
 }
 
 const STORAGE_KEY = "slai-mock-db";
-const VERSION = 4;
+const VERSION = 5;
 
 function seedAcme(now: number): OrgData {
   const customers = buildCustomers();

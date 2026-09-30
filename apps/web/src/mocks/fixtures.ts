@@ -961,12 +961,29 @@ const DRAFTS = [
   "Hi {first},\n\nSorry for the trouble. As a goodwill gesture we'll credit 20% of this month's invoice ($1,240) to your account.\n\n{agent}",
 ];
 
+/** A draft that fits the ticket: a specific one for known incidents, otherwise one that names the request. */
+function draftFor(subject: string): string {
+  const specific: [RegExp, number][] = [
+    [/502s/, 0],
+    [/SSO/, 4],
+    [/[Ww]ebhook/, 2],
+    [/export missing|export is empty/, 3],
+    [/[Ll]atency|[Tt]imeouts/, 5],
+  ];
+  const hit = specific.find(([re]) => re.test(subject));
+  if (hit) return DRAFTS[hit[1]]!;
+  if (/^(Feature request|Request|Question|How to|Clarify)/.test(subject)) {
+    return `Hi {first},\n\nThanks for asking about this ("${subject}"). I've shared it with the product team with your use case, and I'll come back to you by {time} with a clear answer on what's possible today and what's planned.\n\n{agent}`;
+  }
+  return `Hi {first},\n\nThanks for reporting "${subject}". We've reproduced it and an engineer is working on a fix now. I'll update you by {time} at the latest, sooner if we have a workaround.\n\n{agent}`;
+}
+
 export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: MockTicket) => string): AgentAction[] {
   const r = rng(7);
   const hot = tickets.filter((t) => ["at_risk", "breached"].includes(riskOf(t)) && t.status !== "solved").slice(0, 8);
   const actions: AgentAction[] = hot.map((t, i) => {
     const first = t.requester.name?.split(" ")[0] ?? "there";
-    const template = DRAFTS[i % DRAFTS.length]!;
+    const template = i === 6 ? DRAFTS[6]! : draftFor(t.subject);
     const blocked = i === 6;
     return {
       id: `act_${String(i + 1).padStart(3, "0")}`,
