@@ -425,4 +425,4 @@ export const notificationChannelBody = z.object({
  *   GET    /events                 Server-Sent Events: `ticket.updated`, `action.created`, `replay.progress`
  *   GET    /healthz, /readyz       (unauthenticated)
  */
-export const API_BASE = "/api/v1";
+export { API_BASE } from "./base.js";
