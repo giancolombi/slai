@@ -25,6 +25,7 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   help_scout: { clientId: "id", clientSecret: "s" },
   gorgias: { domain: "acme", email: "a@acme.com", apiKey: "k" },
   linear: { apiKey: "lin_api_t" },
+  github: { token: "t", owner: "acme", repo: "support" },
   demo: {},
 };
 
@@ -38,6 +39,7 @@ describe("registry", () => {
       "demo",
       "freshdesk",
       "front",
+      "github",
       "gorgias",
       "help_scout",
       "hubspot",

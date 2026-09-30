@@ -1,0 +1,120 @@
+[
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/44",
+    "repository_url": "https://api.github.com/repos/acme-corp/helpdesk",
+    "labels_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/44/labels{/name}",
+    "comments_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/44/comments",
+    "events_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/44/events",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/44",
+    "id": 3300000044,
+    "node_id": "I_kwDO44",
+    "number": 44,
+    "title": "SSO login loops back to the sign-in page",
+    "user": {
+      "login": "priya-nair",
+      "id": 7101005,
+      "node_id": "U_7101005",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101005?v=4",
+      "url": "https://api.github.com/users/priya-nair",
+      "html_url": "https://github.com/priya-nair",
+      "type": "User",
+      "site_admin": false
+    },
+    "labels": [
+      {
+        "id": 805,
+        "node_id": "LA_805",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/status%3A%20on-hold",
+        "name": "status: on-hold",
+        "color": "c5def5",
+        "default": false,
+        "description": null
+      },
+      {
+        "id": 806,
+        "node_id": "LA_806",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/priority%3A%20critical",
+        "name": "priority: critical",
+        "color": "5319e7",
+        "default": false,
+        "description": null
+      }
+    ],
+    "state": "open",
+    "locked": false,
+    "assignees": [
+      {
+        "login": "dana-whitfield",
+        "id": 7101002,
+        "node_id": "U_7101002",
+        "avatar_url": "https://avatars.githubusercontent.com/u/7101002?v=4",
+        "url": "https://api.github.com/users/dana-whitfield",
+        "html_url": "https://github.com/dana-whitfield",
+        "type": "User",
+        "site_admin": false
+      }
+    ],
+    "milestone": null,
+    "comments": 3,
+    "created_at": "2026-09-28T11:00:00Z",
+    "updated_at": "2026-09-28T15:00:00Z",
+    "closed_at": null,
+    "author_association": "NONE",
+    "active_lock_reason": null,
+    "body": "After enabling Okta SSO every login loops.",
+    "state_reason": null,
+    "reactions": {
+      "total_count": 0
+    },
+    "timeline_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/44/timeline"
+  },
+  {
+    "url": "https://api.github.com/repos/acme-corp/helpdesk/issues/45",
+    "repository_url": "https://api.github.com/repos/acme-corp/helpdesk",
+    "labels_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/45/labels{/name}",
+    "comments_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/45/comments",
+    "events_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/45/events",
+    "html_url": "https://github.com/acme-corp/helpdesk/issues/45",
+    "id": 3300000045,
+    "node_id": "I_kwDO45",
+    "number": 45,
+    "title": "Invoices PDF missing VAT number",
+    "user": {
+      "login": "jonas-berg",
+      "id": 7101006,
+      "node_id": "U_7101006",
+      "avatar_url": "https://avatars.githubusercontent.com/u/7101006?v=4",
+      "url": "https://api.github.com/users/jonas-berg",
+      "html_url": "https://github.com/jonas-berg",
+      "type": "User",
+      "site_admin": false
+    },
+    "labels": [
+      {
+        "id": 807,
+        "node_id": "LA_807",
+        "url": "https://api.github.com/repos/acme-corp/helpdesk/labels/P1",
+        "name": "P1",
+        "color": "e99695",
+        "default": false,
+        "description": null
+      }
+    ],
+    "state": "open",
+    "locked": false,
+    "assignees": [],
+    "milestone": null,
+    "comments": 3,
+    "created_at": "2026-09-28T13:00:00Z",
+    "updated_at": "2026-09-28T15:30:00Z",
+    "closed_at": null,
+    "author_association": "CONTRIBUTOR",
+    "active_lock_reason": null,
+    "body": "The VAT number is blank on September invoices.",
+    "state_reason": null,
+    "reactions": {
+      "total_count": 0
+    },
+    "timeline_url": "https://api.github.com/repos/acme-corp/helpdesk/issues/45/timeline"
+  }
+]

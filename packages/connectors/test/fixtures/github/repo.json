@@ -1,0 +1,20 @@
+{
+  "id": 1180501,
+  "node_id": "R_kgDOAcme",
+  "name": "helpdesk",
+  "full_name": "acme-corp/helpdesk",
+  "private": true,
+  "owner": {
+    "login": "acme-corp",
+    "id": 7100001,
+    "node_id": "U_7100001",
+    "avatar_url": "https://avatars.githubusercontent.com/u/7100001?v=4",
+    "url": "https://api.github.com/users/acme-corp",
+    "html_url": "https://github.com/acme-corp",
+    "type": "Organization",
+    "site_admin": false
+  },
+  "html_url": "https://github.com/acme-corp/helpdesk",
+  "has_issues": true,
+  "open_issues_count": 12
+}
