@@ -3,8 +3,13 @@
  *
  * Conventions:
  * - Base path `/api/v1`. JSON everywhere except contract upload (multipart).
- * - Auth: an httpOnly `slai_session` cookie; state-changing requests must send
- *   `X-Requested-With: slai` (CSRF defense alongside SameSite=Lax + Origin check).
+ * - Auth: better-auth, mounted at `/api/v1/auth/*` behind our middleware, with an
+ *   httpOnly `slai_session` cookie. State-changing requests must send
+ *   `X-Requested-With: slai` (CSRF defense alongside SameSite=Lax + Origin check),
+ *   better-auth's endpoints included.
+ * - MFA is mandatory: until a session has a second factor, every route outside
+ *   `/auth/*` answers 403 `mfa_enrollment_required` (no factor yet) or
+ *   `mfa_required` (a factor exists but this session has not used it).
  * - Timestamps are ISO-8601 strings. Money is integer cents. Durations are ms.
  * - Errors: `{ error: { code, message, details? } }` with a matching HTTP status.
  * - Lists: `{ items, nextCursor }`.
@@ -52,28 +57,91 @@ export const signupBody = z.object({
   name: z.string().min(1).max(120),
   organizationName: z.string().min(1).max(120),
 });
+/** Step 1 of sign-in: which method does this email use? (By domain only: no user enumeration.) */
+export const discoverBody = z.object({ email: z.email() });
+export type SignInDiscovery =
+  | { method: "password" }
+  /** A verified SSO domain. `enforced`: password sign-in is disabled for it. */
+  | { method: "sso"; providerId: string; enforced: boolean };
 export const loginBody = z.object({
   email: z.email(),
   password: z.string().min(1).max(200),
-  totp: z
-    .string()
-    .regex(/^\d{6}$/)
-    .optional(),
 });
-export const mfaVerifyBody = z.object({ totp: z.string().regex(/^\d{6}$/) });
+export const verifyTotpBody = z.object({ code: z.string().regex(/^\d{6}$/) });
+export const verifyBackupCodeBody = z.object({ code: z.string().trim().min(6).max(32) });
+export const ssoSignInBody = z
+  .object({
+    email: z.email().optional(),
+    providerId: z.string().min(1).max(100).optional(),
+    /** Where the web app lands after the IdP (a path on APP_URL). */
+    redirect: z
+      .string()
+      .regex(/^\/(?!\/)/)
+      .max(500)
+      .optional(),
+  })
+  .refine((b) => b.email || b.providerId, "email or providerId is required");
 export const switchOrgBody = z.object({ organizationId: z.uuid() });
+
+export type AuthMethod = "password" | "passkey" | "sso";
+export type SecondFactor = "totp" | "backup_code" | "passkey";
+/**
+ * The session's MFA state. Anything but `satisfied` blocks every route outside
+ * `/auth/*` with 403 `mfa_enrollment_required` or `mfa_required`.
+ */
+export type MfaState = "satisfied" | "enrollment_required" | "verification_required";
 
 export interface Me {
   user: { id: string; email: string; name: string; mfaEnabled: boolean };
   organization: { id: string; name: string; slug: string; plan: string };
   role: Role;
   organizations: { id: string; name: string; role: Role }[];
+  security: {
+    authMethod: AuthMethod;
+    mfa: MfaState;
+    /** A verified TOTP authenticator is enrolled. */
+    totp: boolean;
+    passkeys: number;
+    /** The user has a password (SSO-only users do not). */
+    hasPassword: boolean;
+  };
 }
-/** `POST /auth/login` returns 200 Me, or 401 `{error:{code:"mfa_required"}}` when TOTP is needed. */
-export interface MfaSetup {
+
+/**
+ * The outcome of a sign-in step (`/auth/sign-in/email`, `/auth/two-factor/verify-*`,
+ * `/auth/passkey/verify-authentication`). A bad credential or code is a 401
+ * `invalid_credentials` / `invalid_code`; 403 `sso_required` means the email's
+ * domain enforces SSO.
+ */
+export type SignInResult =
+  | { status: "signed_in"; me: Me }
+  /** The password was right; now a second factor (a session exists only after it). */
+  | { status: "mfa_required"; methods: SecondFactor[] }
+  /** Signed in, but only enrollment routes work until a second factor is added. */
+  | { status: "mfa_enrollment_required"; me: Me };
+
+/** `POST /auth/two-factor/enable`: the password is required when the user has one. */
+export const totpEnableBody = z.object({ password: z.string().min(1).max(200).optional() });
+/** Shown once. The secret is confirmed with `POST /auth/two-factor/verify-totp`. */
+export interface TotpEnrollment {
   otpauthUrl: string;
+  /** base32, for manual entry. */
   secret: string;
+  backupCodes: string[];
 }
+export const regenerateBackupCodesBody = totpEnableBody;
+export interface BackupCodes {
+  backupCodes: string[];
+}
+export const disableTotpBody = totpEnableBody;
+export interface Passkey {
+  id: string;
+  name: string | null;
+  deviceType: string;
+  backedUp: boolean;
+  createdAt: string;
+}
+export const deletePasskeyBody = z.object({ id: z.string().min(1).max(100) });
 
 // ---------- organization & members ----------
 
@@ -90,14 +158,82 @@ export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
   monthlySpendCapCents: z.number().int().nonnegative().nullable().optional(),
-  requireMfa: z.boolean().optional(),
 });
 export interface OrgSettings {
   id: string;
   name: string;
   plan: string;
   monthlySpendCapCents: number | null;
-  requireMfa: boolean;
+}
+
+// ---------- SSO (org admins) ----------
+
+export type SsoProtocol = "oidc" | "saml";
+const ssoDomain = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/, "Enter a domain like example.com");
+const ssoCommon = {
+  name: z.string().trim().min(1).max(120),
+  domains: z.array(ssoDomain).min(1).max(10),
+};
+export const createSsoProviderBody = z.discriminatedUnion("protocol", [
+  z.object({
+    protocol: z.literal("oidc"),
+    ...ssoCommon,
+    issuer: z.url(),
+    clientId: z.string().trim().min(1).max(500),
+    /** Stored encrypted; never returned. */
+    clientSecret: z.string().min(1).max(4000),
+  }),
+  z
+    .object({
+      protocol: z.literal("saml"),
+      ...ssoCommon,
+      metadataUrl: z.url().optional(),
+      metadataXml: z.string().min(1).max(100_000).optional(),
+    })
+    .refine((b) => Boolean(b.metadataUrl) !== Boolean(b.metadataXml), "Give a metadata URL or the metadata XML"),
+]);
+export const updateSsoProviderBody = z.object({
+  name: ssoCommon.name.optional(),
+  /** Changing domains resets verification. */
+  domains: ssoCommon.domains.optional(),
+  clientId: z.string().trim().min(1).max(500).optional(),
+  /** Omit to keep the stored secret. */
+  clientSecret: z.string().min(1).max(4000).optional(),
+  metadataUrl: z.url().optional(),
+  metadataXml: z.string().min(1).max(100_000).optional(),
+});
+export interface SsoProvider {
+  id: string;
+  providerId: string;
+  name: string;
+  protocol: SsoProtocol;
+  issuer: string;
+  domains: string[];
+  domainVerified: boolean;
+  /** The DNS TXT record to publish on every domain (null once verified). */
+  domainVerification: { recordName: string; recordValue: string } | null;
+  /** OIDC: the client id only. The client secret is write-only. */
+  clientId: string | null;
+  /** SAML: where the metadata came from (null when XML was pasted). */
+  metadataUrl: string | null;
+  /** Register this at the IdP (OIDC redirect URI or SAML ACS URL). */
+  callbackUrl: string;
+  createdAt: string;
+}
+export const updateOrgSsoBody = z.object({
+  /** Needs at least one verified provider. */
+  enforceSso: z.boolean().optional(),
+  /** Also require slai MFA for SSO sessions (default off: the IdP's MFA is trusted). */
+  requireMfaForSso: z.boolean().optional(),
+});
+export interface OrgSsoSettings {
+  enforceSso: boolean;
+  requireMfaForSso: boolean;
+  providers: SsoProvider[];
 }
 
 // ---------- connections ----------
@@ -450,15 +586,37 @@ export const notificationChannelBody = z.object({
 /**
  * Route table (all under /api/v1):
  *
- *   POST   /auth/signup            signupBody → Me
- *   POST   /auth/login             loginBody → Me | 401 mfa_required
- *   POST   /auth/logout
- *   GET    /auth/me                → Me
- *   POST   /auth/mfa/setup         → MfaSetup
- *   POST   /auth/mfa/verify        mfaVerifyBody → Me
+ * Auth (ours):
+ *   POST   /auth/signup            signupBody → 201 SignInResult (mfa_enrollment_required)
+ *   POST   /auth/discover          discoverBody → SignInDiscovery
+ *   POST   /auth/logout            → 204
+ *   GET    /auth/me                → Me (works while MFA is pending)
  *   POST   /auth/switch-org        { organizationId } → Me
+ * Auth (better-auth, allowlisted; responses normalized to our DTOs and errors):
+ *   POST   /auth/sign-in/email     loginBody → SignInResult | 403 sso_required
+ *   POST   /auth/sign-in/sso       ssoSignInBody → { url } (then the browser goes to the IdP)
+ *   GET    /auth/sso/callback/:providerId        (OIDC redirect URI; sets the session, redirects to the app)
+ *   POST   /auth/sso/saml2/sp/acs/:providerId    (SAML ACS; CSRF-exempt, signature-verified)
+ *   GET    /auth/sso/saml2/sp/metadata?providerId=
+ *   POST   /auth/two-factor/verify-totp          verifyTotpBody → SignInResult (sign-in or enrollment)
+ *   POST   /auth/two-factor/verify-backup-code   verifyBackupCodeBody → SignInResult (single use)
+ *   POST   /auth/two-factor/enable               totpEnableBody → TotpEnrollment
+ *   POST   /auth/two-factor/generate-backup-codes  regenerateBackupCodesBody → BackupCodes (MFA done)
+ *   POST   /auth/two-factor/disable              disableTotpBody → 204 (needs another factor)
+ *   GET    /auth/passkey/generate-register-options   → WebAuthn creation options
+ *   POST   /auth/passkey/verify-registration     { response, name? } → Passkey
+ *   GET    /auth/passkey/generate-authenticate-options → WebAuthn request options
+ *   POST   /auth/passkey/verify-authentication   { response } → SignInResult
+ *   GET    /auth/passkey/list-user-passkeys      → Passkey[] (MFA done)
+ *   POST   /auth/passkey/delete-passkey          deletePasskeyBody → 204 (needs another factor)
+ *   Every other better-auth endpoint is 404.
  *
  *   GET    /org                    → OrgSettings          PATCH /org  updateOrgBody (admin)
+ *   GET    /org/sso                → OrgSsoSettings (admin)   PATCH /org/sso updateOrgSsoBody (admin)
+ *   POST   /org/sso/providers      createSsoProviderBody → SsoProvider (admin)
+ *   PATCH  /org/sso/providers/:id  updateSsoProviderBody → SsoProvider (admin)
+ *   DELETE /org/sso/providers/:id  (admin)
+ *   POST   /org/sso/providers/:id/verify-domain → SsoProvider | 422 domain_not_verified (admin)
  *   GET    /members                → List<Member>         POST /members/invite inviteBody (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
  *
