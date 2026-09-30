@@ -1,2 +1,2 @@
+export { type AgentRuntimeConfig, createAgentRuntime } from "./runtime.js";
 export * from "./types.js";
-export { createAgentRuntime, type AgentRuntimeConfig } from "./runtime.js";
