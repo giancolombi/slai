@@ -109,6 +109,8 @@ export interface Connection {
   status: "active" | "error" | "paused";
   lastSyncAt: string | null;
   lastError: string | null;
+  /** Raw help-desk statuses/priorities the mapping did not recognise (found by sync). */
+  mappingIssues: { field: "status" | "priority"; raw: string }[];
   webhookUrl: string | null;
   ticketCount: number;
   createdAt: string;

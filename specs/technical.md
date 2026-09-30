@@ -191,6 +191,50 @@
     sandbox. Known gap: if a run hits its wall-time limit, the model usage inside
     it is lost.
 
+### Worker (T-40 to T-46)
+- **TR-21b** Jobs and timers:
+  - Queues are the `packages/db` job names; payloads carry ids only. `ingest-ticket`
+    (one ticket's history) is fed by `sync-connection` and `process-webhook`.
+  - Every 15s the sweep (systemDb, `slai_worker`) claims tickets past `next_check_at`
+    with `FOR UPDATE SKIP LOCKED` and leases them (pushes `next_check_at` 2 minutes
+    ahead) in the same statement, then enqueues `evaluate-ticket` with a per-ticket
+    singleton key. The evaluation sets the real timer. The role holds `UPDATE` on
+    `tickets.next_check_at` only.
+  - The same tick enqueues `sync-connection` for active connections whose last sync
+    is older than 60s (demo) or 5 min (others). Incremental syncs read from the
+    stored high-water mark minus a 2-minute overlap and skip unchanged tickets.
+  - A `rate_limited` connector error re-enqueues the job after `Retry-After`. An
+    `auth` error sets the connection to `error` with `last_error` (audited).
+    Unmapped raw values are kept in `connections.mapping_issues`.
+  - Time is injected (`clock`) everywhere, including the demo connector.
+- **TR-21c** Reactions:
+  - The previous-vs-new risk comparison happens under a row lock on the ticket,
+    in the evaluation transaction. Alerts go only for open tickets, once per
+    crossing per channel. Every delivery is audited (`notification.sent` or
+    `notification.failed`).
+  - Dispatch creates a queued `draft_reply` run and enqueues `run-agent`. Autonomy
+    and spend are checked again when the run starts. Manual runs (`requested_by`
+    set) skip the crossing check and run at least at assist.
+  - Assist: a proposed `public_reply`, plus an `internal_note` with the triage and
+    draft, sent at once when the connector supports notes. Autopilot sends only if
+    `decideAutopilot` passes; otherwise the reply is proposed with `blocked_reason`.
+    Triage priority and assignee suggestions are always proposals.
+  - Every help-desk write is audited as `action.sent` or `action.failed`, with actor
+    `agent` or the approving `user`. The ticket is then re-ingested, so slai's own
+    reply stops the clock.
+- **TR-21d** Metering: model calls go to `usage_ledger` as `model_call` rows (tokens,
+  micro-dollars), plus `sandbox_seconds` rows. Credits are on the first row of a
+  successful run: triage 3, draft 20. An autopilot send adds an `autopilot_reply`
+  row at 60. The spend cap compares this month's credits (1 credit = 1 cent) with
+  `monthly_spend_cap_cents`. Reaching 50/80/100% is recorded once per month
+  (`usage.cap_threshold` audit event) and sent to every enabled channel.
+- **TR-21e** Breach Replay stores the replayed tickets through the same idempotent
+  ingest, but sends no alerts and dispatches no agents. Exposure is
+  `computeCredits` per customer per calendar month, using the customer's fee.
+  The lead is `breachAt` minus the first at_risk instant, found by stepping the
+  engine through event times and `nextTransitionAt`. Policy preview runs inline
+  in the API.
+
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
   errors as `{error:{code,message}}`, lists as `{items,nextCursor}`, money in cents,

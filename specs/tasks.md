@@ -40,15 +40,15 @@ Each task references the requirements it serves.
 - [x] T-34 Runtimes: local and E2B (template, runner, bounds, concurrency, always-kill) (PR-19, TR-21)
 
 ## M4: Worker
-- [ ] T-40 pg-boss setup, queues, and the 15s timer sweep with `SKIP LOCKED` (TR-2, PR-12)
-- [ ] T-41 Sync and webhook processing → ingest (idempotent events, comments, customer and
+- [x] T-40 pg-boss setup, queues, and the 15s timer sweep with `SKIP LOCKED` (TR-2, PR-12)
+- [x] T-41 Sync and webhook processing → ingest (idempotent events, comments, customer and
       policy resolution, evaluation, outcomes, `next_check_at`) (PR-7, PR-10, PR-11)
-- [ ] T-42 Risk transitions → notifications (in-app, email, Slack) (PR-14)
-- [ ] T-43 Dispatch → triage and draft runs → actions; autopilot send via connector; approved-action
+- [x] T-42 Risk transitions → notifications (in-app, email, Slack) (PR-14)
+- [x] T-43 Dispatch → triage and draft runs → actions; autopilot send via connector; approved-action
       execution; audit every help-desk write (PR-15 to PR-18)
-- [ ] T-44 Contract extraction job → draft policies with citations and ambiguities (PR-1 to PR-3)
-- [ ] T-45 Breach Replay job (PR-22) and policy preview (PR-5)
-- [ ] T-46 Metering to `usage_ledger`; spend-cap degradation (PR-23, TR-30)
+- [x] T-44 Contract extraction job → draft policies with citations and ambiguities (PR-1 to PR-3)
+- [x] T-45 Breach Replay job (PR-22) and policy preview (PR-5)
+- [x] T-46 Metering to `usage_ledger`; spend-cap degradation (PR-23, TR-30)
 
 ## M5: Web
 - [~] T-50 Design system: tokens (light/dark), components, SlaClock, SlaBar, TicketTimeline,
