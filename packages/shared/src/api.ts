@@ -605,7 +605,7 @@ export interface UsageSummary {
   creditsUsed: number;
   costCents: number;
   spendCapCents: number | null;
-  byKind: { kind: string; count: number; costCents: number }[];
+  byKind: { kind: string; count: number; credits: number; costCents: number }[];
   trackedTickets: number;
 }
 

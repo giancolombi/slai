@@ -417,7 +417,7 @@ export function usage(now: number): UsageSummary {
     { kind: "contract_extraction", count: 1, costCents: 450 },
     { kind: "policy_preview", count: 6, costCents: 180 },
     { kind: "sandbox_seconds", count: 3_120, costCents: 312 + o.usageExtraCents },
-  ];
+  ].map((k) => ({ ...k, credits: k.costCents })); // 1 credit = $0.01
   const costCents = byKind.reduce((s, k) => s + k.costCents, 0);
   return {
     period,

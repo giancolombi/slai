@@ -255,7 +255,12 @@ export function dashboardRoutes(deps: AppDeps) {
         creditsUsed: rows.reduce((s, r) => s + r.credits, 0),
         costCents: Math.round(totalMicros / 10_000),
         spendCapCents: credit?.balance.cap ?? null,
-        byKind: rows.map((r) => ({ kind: r.kind, count: r.count, costCents: Math.round(Number(r.micros) / 10_000) })),
+        byKind: rows.map((r) => ({
+          kind: r.kind,
+          count: r.count,
+          credits: r.credits,
+          costCents: Math.round(Number(r.micros) / 10_000),
+        })),
         trackedTickets: tracked,
       };
     });

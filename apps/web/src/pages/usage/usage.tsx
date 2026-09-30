@@ -451,8 +451,8 @@ function Meters({ billing, canEdit, onEditCap }: { billing: BillingSummary; canE
 // ---------------------------------------------------------------- usage by kind
 
 function ByKind({ usage }: { usage: UsageSummary }) {
-  const total = usage.byKind.reduce((s, k) => s + k.costCents, 0) || 1;
-  const rows = [...usage.byKind].sort((a, b) => b.costCents - a.costCents);
+  const total = usage.byKind.reduce((s, k) => s + k.credits, 0) || 1;
+  const rows = [...usage.byKind].sort((a, b) => b.credits - a.credits);
   return (
     <Card>
       <CardHeader title="Credits by kind" description="Every model call and sandbox second is metered." />
@@ -476,7 +476,7 @@ function ByKind({ usage }: { usage: UsageSummary }) {
           <TBody>
             {rows.map((k) => {
               const meta = kindMeta(k.kind);
-              const share = k.costCents / total;
+              const share = k.credits / total;
               return (
                 <TR key={k.kind}>
                   <TD>
@@ -484,7 +484,7 @@ function ByKind({ usage }: { usage: UsageSummary }) {
                     {meta.help && <div className="text-xs text-ink-muted">{meta.help}</div>}
                   </TD>
                   <TD numeric>{meta.unit === "seconds" ? formatDuration(k.count * 1000) : formatNumber(k.count)}</TD>
-                  <TD numeric>{formatNumber(k.costCents)}</TD>
+                  <TD numeric>{formatNumber(k.credits)}</TD>
                   <TD>
                     <div className="flex items-center gap-3">
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken" aria-hidden>
