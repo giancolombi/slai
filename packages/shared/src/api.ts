@@ -857,6 +857,55 @@ export const notificationChannelBody = z.object({
   enabled: z.boolean().default(true),
 });
 
+// ---------- onboarding and help (in-product) ----------
+
+/**
+ * The getting-started checklist, in order. Every step is derived from real org
+ * state by `GET /onboarding` (never from clicks):
+ * - connect: an active help-desk connection
+ * - contract: a contract uploaded (not archived)
+ * - policy: an active policy approved from a contract, or an active default policy
+ * - assign: a customer with a policy, or an active default policy (unmatched tickets use it)
+ * - autonomy: any autonomy rule
+ * - alerts: an enabled notification channel
+ * - invite (optional): another member, or an invitation that is pending or accepted
+ * - replay (optional): a Breach Replay requested (not failed)
+ */
+export const ONBOARDING_STEPS = [
+  "connect",
+  "contract",
+  "policy",
+  "assign",
+  "autonomy",
+  "alerts",
+  "invite",
+  "replay",
+] as const;
+export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
+export const OPTIONAL_ONBOARDING_STEPS: readonly OnboardingStepId[] = ["invite", "replay"];
+
+export interface OnboardingStepState {
+  id: OnboardingStepId;
+  done: boolean;
+  optional: boolean;
+}
+export interface OnboardingState {
+  steps: OnboardingStepState[];
+  /** Required steps done, out of `requiredTotal`. */
+  requiredDone: number;
+  requiredTotal: number;
+  /** Every step, optional ones included, is done. */
+  allDone: boolean;
+  /** This user hid the checklist in this org (restore it from Help). */
+  checklistDismissed: boolean;
+  /** This user has seen the first-run welcome in this org. */
+  welcomeSeen: boolean;
+}
+/** `PATCH /onboarding`: this user's own preferences in the active org (any role, viewers included). */
+export const updateOnboardingBody = z
+  .object({ checklistDismissed: z.boolean().optional(), welcomeSeen: z.literal(true).optional() })
+  .refine((b) => b.checklistDismissed !== undefined || b.welcomeSeen !== undefined, "Nothing to update.");
+
 // ---------- offboarding (T-64, owner only) ----------
 
 export interface OrgExport {
@@ -996,6 +1045,8 @@ export const scheduleDeletionBody = z.object({ confirmName: z.string().min(1).ma
  *   GET    /notification-channels  → NotificationChannel[]  POST/PATCH/DELETE (admin)
  *
  *   GET    /dashboard              → DashboardSummary
+ *   GET    /onboarding             → OnboardingState (the checklist, derived from org state, plus this user's preferences)
+ *   PATCH  /onboarding             updateOnboardingBody → OnboardingState (this user's own; viewers too)
  *   POST   /replays                createReplayBody → Replay     GET /replays, /replays/:id
  *   GET    /usage                  → UsageSummary
  *   GET    /billing                → BillingSummary

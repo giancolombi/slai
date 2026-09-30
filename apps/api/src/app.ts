@@ -29,6 +29,7 @@ import { mfaResetRoutes } from "./routes/mfa-reset.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { oauthRoutes } from "./routes/oauth.js";
 import { offboardingRoutes } from "./routes/offboarding.js";
+import { onboardingRoutes } from "./routes/onboarding.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
 import { replayRoutes } from "./routes/replays.js";
@@ -129,6 +130,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/", knowledgeRoutes(deps));
   authed.route("/notification-channels", notificationRoutes(deps));
   authed.route("/", dashboardRoutes(deps));
+  authed.route("/", onboardingRoutes(deps));
   authed.route("/replays", replayRoutes(deps));
   authed.route("/audit-events", auditRoutes(deps));
   authed.route("/events", eventRoutes(deps));
