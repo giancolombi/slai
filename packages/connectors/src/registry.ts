@@ -1,10 +1,12 @@
 import { demo } from "./connectors/demo/index.js";
+import { zendesk } from "./connectors/zendesk.js";
 import type { ConnectorDefinition, ProviderId } from "./types.js";
 
 /** Every implemented connector, keyed by provider. Add new connectors here. */
 // biome-ignore lint/suspicious/noExplicitAny: each connector has its own credentials type
 const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   demo,
+  zendesk,
 };
 
 // biome-ignore lint/suspicious/noExplicitAny: see above

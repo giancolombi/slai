@@ -1,0 +1,27 @@
+{
+  "tickets": [
+    {
+      "id": 1003,
+      "via": { "channel": "api" },
+      "created_at": "2026-09-29T09:00:00Z",
+      "updated_at": "2026-09-29T09:30:00Z",
+      "subject": "Invoice shows wrong seat count",
+      "priority": "p2-custom",
+      "status": "hold",
+      "requester_id": 333,
+      "assignee_id": null,
+      "organization_id": null,
+      "group_id": null,
+      "tags": ["billing"]
+    }
+  ],
+  "users": [
+    { "id": 333, "name": "Liam Okafor", "email": "liam@bluepeak.example", "role": "end-user", "organization_id": null }
+  ],
+  "organizations": [],
+  "after_url": null,
+  "after_cursor": "MTU3NjYxMzUzOS4wfHw0Njh8",
+  "before_url": null,
+  "before_cursor": "MTU3NjYxMzUzOS4wfHw0Njd8",
+  "end_of_stream": true
+}
