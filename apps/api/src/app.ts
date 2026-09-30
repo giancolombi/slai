@@ -14,6 +14,7 @@ import { csrf, noStore, requestContext } from "./middleware/security.js";
 import { actionRoutes } from "./routes/actions.js";
 import { auditRoutes } from "./routes/audit.js";
 import { authRoutes } from "./routes/auth.js";
+import { billingRoutes, billingWebhookRoutes } from "./routes/billing.js";
 import { connectionRoutes, webhookRoutes } from "./routes/connections.js";
 import { contractRoutes, MAX_UPLOAD_BYTES } from "./routes/contracts.js";
 import { customerRoutes } from "./routes/customers.js";
@@ -35,7 +36,9 @@ export function createApp(deps: AppDeps) {
   // Webhooks are signature-verified; the SAML ACS is a cross-site POST from the IdP,
   // verified by the assertion signature and InResponseTo. Neither uses cookie auth.
   const isCsrfExempt = (path: string) =>
-    path.startsWith(`${API_BASE}/webhooks/`) || path.startsWith(`${AUTH_BASE}/sso/saml2/sp/acs/`);
+    path.startsWith(`${API_BASE}/webhooks/`) ||
+    path.startsWith(`${AUTH_BASE}/sso/saml2/sp/acs/`) ||
+    path === `${API_BASE}/billing/webhook`;
 
   app.use("*", requestContext({ trustProxy: deps.env.TRUST_PROXY }));
   app.use("*", requestLogger(deps.logger));
@@ -74,6 +77,7 @@ export function createApp(deps: AppDeps) {
   app.route("/", healthRoutes(deps));
   app.route(API_BASE, healthRoutes(deps));
   app.route(`${API_BASE}/webhooks`, webhookRoutes(deps));
+  app.route(`${API_BASE}/billing/webhook`, billingWebhookRoutes(deps));
 
   app.use(`${API_BASE}/*`, loadSession(deps, auth));
   // Our /auth routes, then better-auth's allowlisted endpoints behind the same middleware.
@@ -96,6 +100,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/replays", replayRoutes(deps));
   authed.route("/audit-events", auditRoutes(deps));
   authed.route("/events", eventRoutes(deps));
+  authed.route("/", billingRoutes(deps));
   app.route(API_BASE, authed);
 
   app.notFound((c) => c.json(new ApiError(404, "not_found", "Not found.").body(), 404));
