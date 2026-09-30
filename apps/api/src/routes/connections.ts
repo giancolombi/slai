@@ -26,6 +26,7 @@ export function connectionRoutes(deps: AppDeps) {
     status: row.status,
     lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
     lastError: row.lastError,
+    mappingIssues: row.mappingIssues,
     webhookUrl: webhookUrl(row),
     ticketCount,
     createdAt: row.createdAt.toISOString(),

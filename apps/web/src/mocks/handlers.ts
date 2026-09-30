@@ -447,6 +447,7 @@ export const handlers = [
           status: "active",
           lastSyncAt: new Date().toISOString(),
           lastError: null,
+          mappingIssues: [],
           webhookUrl: info.supportsWebhooks ? `https://hooks.slai.example/v1/webhooks/${id}` : null,
           ticketCount: 0,
           createdAt: new Date().toISOString(),
