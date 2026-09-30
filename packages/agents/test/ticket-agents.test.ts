@@ -113,6 +113,45 @@ describe("draftReply (mock provider)", () => {
     expect(decideAutopilot(r.output, { minConfidence: 0.5, triage: okTriage, ctx: ticket() }).send).toBe(false);
   });
 
+  it("quotes the most relevant knowledge item, links it, and is confident enough for autopilot", async () => {
+    const ctx = ticket({
+      knowledge: [
+        {
+          title: "Connecting Slack notifications",
+          url: "https://help.brightline.example/articles/slack",
+          body: "Post alerts to a Slack channel from Settings → Integrations.",
+        },
+        ...ticket().knowledge,
+      ],
+    });
+    const r = await rt().draftReply(ctx, okTriage);
+    if (!r.ok) throw new Error(r.message);
+    expect(r.output.usedKnowledge).toEqual([1]);
+    expect(r.output.body).toContain("CSV export fails when a report has more than 50,000 rows");
+    expect(r.output.body).toContain("https://help.brightline.example/articles/csv-export");
+    expect(r.output.body).not.toContain("help.brightline.example/articles/slack");
+    expect(r.output.flags.unsureOfFacts).toBe(false);
+    expect(r.output.confidence).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it("stays unsure when the knowledge provided is not about the ticket", async () => {
+    const ctx = ticket({
+      knowledge: [
+        {
+          title: "Connecting Slack notifications",
+          url: "https://help.brightline.example/articles/slack",
+          body: "Post alerts to a Slack channel from Settings → Integrations. Reports can be shared there too.",
+        },
+      ],
+    });
+    const r = await rt().draftReply(ctx, okTriage);
+    if (!r.ok) throw new Error(r.message);
+    expect(r.output.usedKnowledge).toEqual([]);
+    expect(r.output.flags.unsureOfFacts).toBe(true);
+    expect(r.output.body).not.toContain("https://");
+    expect(decideAutopilot(r.output, { minConfidence: 0.5, triage: okTriage, ctx }).send).toBe(false);
+  });
+
   it("flags billing and security replies", async () => {
     const billing = await rt().draftReply(
       ticket({
