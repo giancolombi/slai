@@ -18,6 +18,7 @@ jobs:
       DATABASE_URL: postgres://slai:slai@localhost:5433/slai
       DATABASE_APP_URL: postgres://slai_app:slai_app@localhost:5433/slai
       DATABASE_SYSTEM_URL: postgres://slai_worker:slai_worker@localhost:5433/slai
+      DATABASE_AUTH_URL: postgres://slai_auth:slai_auth@localhost:5433/slai
       APP_URL: http://localhost:5173
       API_URL: http://localhost:8787
       STORAGE_DRIVER: local

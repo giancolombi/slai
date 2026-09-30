@@ -4,6 +4,8 @@ import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
+import { AUTH_BASE, createAuth } from "./auth/better-auth.js";
+import { authHandler } from "./auth/handler.js";
 import type { AppDeps, AppEnv } from "./context.js";
 import { ApiError } from "./errors.js";
 import { requestLogger, safeErrorMessage } from "./logger.js";
@@ -22,13 +24,18 @@ import { notificationRoutes } from "./routes/notifications.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
 import { replayRoutes } from "./routes/replays.js";
+import { ssoRoutes } from "./routes/sso.js";
 import { ticketRoutes } from "./routes/tickets.js";
 
 const JSON_LIMIT = 1024 * 1024;
 
 export function createApp(deps: AppDeps) {
   const app = new Hono<AppEnv>();
-  const isWebhook = (path: string) => path.startsWith(`${API_BASE}/webhooks/`);
+  const auth = createAuth(deps);
+  // Webhooks are signature-verified; the SAML ACS is a cross-site POST from the IdP,
+  // verified by the assertion signature and InResponseTo. Neither uses cookie auth.
+  const isCsrfExempt = (path: string) =>
+    path.startsWith(`${API_BASE}/webhooks/`) || path.startsWith(`${AUTH_BASE}/sso/saml2/sp/acs/`);
 
   app.use("*", requestContext({ trustProxy: deps.env.TRUST_PROXY }));
   app.use("*", requestLogger(deps.logger));
@@ -53,7 +60,7 @@ export function createApp(deps: AppDeps) {
       maxAge: 600,
     }),
   );
-  app.use(`${API_BASE}/*`, csrf({ appUrl: deps.env.APP_URL, exempt: isWebhook }));
+  app.use(`${API_BASE}/*`, csrf({ appUrl: deps.env.APP_URL, exempt: isCsrfExempt }));
   app.use(`${API_BASE}/*`, async (c, next) => {
     const isUpload = c.req.method === "POST" && c.req.path === `${API_BASE}/contracts`;
     return bodyLimit({
@@ -68,13 +75,16 @@ export function createApp(deps: AppDeps) {
   app.route(API_BASE, healthRoutes(deps));
   app.route(`${API_BASE}/webhooks`, webhookRoutes(deps));
 
-  app.use(`${API_BASE}/*`, loadSession(deps));
-  app.route(`${API_BASE}/auth`, authRoutes(deps));
+  app.use(`${API_BASE}/*`, loadSession(deps, auth));
+  // Our /auth routes, then better-auth's allowlisted endpoints behind the same middleware.
+  app.route(AUTH_BASE, authRoutes(deps, auth));
+  app.route(AUTH_BASE, authHandler(deps, auth));
 
-  // Everything below needs a fully signed-in session (MFA done where required).
+  // Everything below needs a signed-in session whose second factor is done (the MFA gate).
   const authed = new Hono<AppEnv>();
   authed.use("*", requireAuth(), writesNeedMember);
   authed.route("/", orgRoutes(deps));
+  authed.route("/", ssoRoutes(deps));
   authed.route("/", connectionRoutes(deps));
   authed.route("/customers", customerRoutes(deps));
   authed.route("/contracts", contractRoutes(deps));

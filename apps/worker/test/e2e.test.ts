@@ -181,9 +181,7 @@ describe("end to end with the demo help desk", () => {
   it("sends a human-approved reply through the connector and audits the user", async () => {
     const b = await ticketBySource(s.assist.sourceId);
     const userId = randomUUID();
-    await owner.db
-      .insert(users)
-      .values({ id: userId, email: `${userId}@example.com`, name: "Approver", passwordHash: "x" });
+    await owner.db.insert(users).values({ id: userId, email: `${userId}@example.com`, name: "Approver" });
     const [reply] = await owner.db
       .update(agentActions)
       .set({ status: "approved", decidedBy: userId, decidedAt: h.clock.now() })

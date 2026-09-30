@@ -13,15 +13,35 @@ export const envSchema = z.object({
   API_URL: z.url(),
   /** RLS-restricted role (slai_app). All org data. */
   DATABASE_APP_URL: z.url(),
-  /** systemDb role (slai_worker): auth lookups and webhook routing only. */
+  /** systemDb role (slai_worker): webhook routing and pre-auth lookups only. */
   DATABASE_SYSTEM_URL: z.url(),
+  /** authDb role (slai_auth): better-auth's identity tables (users, sessions, accounts, 2FA, passkeys, SSO). */
+  DATABASE_AUTH_URL: z.url(),
   ENCRYPTION_KEY: base64Key("ENCRYPTION_KEY", 32),
   ENCRYPTION_KEY_ID: z
     .string()
     .regex(/^[A-Za-z0-9_-]{1,32}$/)
     .default("k1"),
   ENCRYPTION_KEYS_PREVIOUS: z.string().optional(),
+  /** better-auth's secret: signs session cookies and seals TOTP secrets and backup codes. */
   SESSION_SECRET: base64Key("SESSION_SECRET", 32),
+  /** The version of SESSION_SECRET; bump it when rotating and move the old one to SESSION_SECRETS_PREVIOUS. */
+  SESSION_SECRET_VERSION: z.coerce.number().int().nonnegative().default(1),
+  /** Retired secrets still accepted for reading: `version:secret[,version:secret]`. */
+  SESSION_SECRETS_PREVIOUS: z.string().optional(),
+  /**
+   * Origins of internal IdPs (private hosts) that SSO may call, comma-separated.
+   * Public IdPs need no entry. Operator-controlled; never set from the API.
+   */
+  SSO_TRUSTED_IDP_ORIGINS: z
+    .string()
+    .default("")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
   STORAGE_DRIVER: z.enum(["local"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default(".data/uploads"),
   /** Honor X-Forwarded-For for the client IP. Only enable behind a trusted proxy. */

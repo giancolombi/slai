@@ -17,7 +17,8 @@
     "db:up": "docker compose up -d postgres mailpit",
     "db:migrate": "pnpm --filter @slai/db migrate",
     "db:seed": "pnpm --filter @slai/db seed",
-    "setup:env": "tsx packages/db/src/scripts/setup-env.ts"
+    "setup:env": "tsx packages/db/src/scripts/setup-env.ts",
+    "demo:otp": "pnpm --silent --filter @slai/db demo:otp"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

@@ -12,6 +12,7 @@ export interface TestDbUrls {
   owner: string;
   app: string;
   system: string;
+  auth: string;
 }
 
 function withDb(base: string, dbName: string, user?: { name: string; password: string }): string {
@@ -29,6 +30,7 @@ export function testDbUrls(dbName: string, ownerBase = process.env.DATABASE_URL 
     owner: withDb(ownerBase, dbName),
     app: withDb(ownerBase, dbName, { name: "slai_app", password: "slai_app" }),
     system: withDb(ownerBase, dbName, { name: "slai_worker", password: "slai_worker" }),
+    auth: withDb(ownerBase, dbName, { name: "slai_auth", password: "slai_auth" }),
   };
 }
 

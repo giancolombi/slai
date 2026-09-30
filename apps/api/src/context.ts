@@ -1,6 +1,6 @@
 import type { getConnector } from "@slai/connectors";
 import type { AuditEntry, Database, JobSender, Keyring, OrgDatabase, StorageDriver } from "@slai/db";
-import type { Role } from "@slai/shared";
+import type { AuthMethod, MfaState, Role } from "@slai/shared";
 import type { Context } from "hono";
 import type { Logger } from "pino";
 import type { Env } from "./env.js";
@@ -20,8 +20,12 @@ export interface AppDeps {
   env: Env;
   /** slai_app: every org-scoped query goes through `orgDb.withOrg`. */
   orgDb: OrgDatabase;
-  /** slai_worker: auth lookups (users/sessions/memberships) and webhook routing only. */
+  /** slai_worker: webhook routing and the SSE listener only. */
   systemDb: Database;
+  /** slai_auth: better-auth's identity tables, session resolution, signup and SSO JIT. */
+  authDb: Database;
+  /** DNS TXT lookup for SSO domain verification (tests pass a fake). */
+  resolveTxt: (hostname: string) => Promise<string[][]>;
   jobs: JobSender;
   storage: StorageDriver;
   connectors: ConnectorRegistry;
@@ -42,8 +46,10 @@ export interface AuthContext {
   /** The active organization and the user's role in it. */
   orgId: string;
   role: Role;
-  mfaVerified: boolean;
-  orgRequiresMfa: boolean;
+  authMethod: AuthMethod;
+  /** Anything but `satisfied` blocks every route outside /auth (requireAuth). */
+  mfa: MfaState;
+  factors: { totp: boolean; passkeys: number; hasPassword: boolean };
 }
 
 export type AppEnv = {

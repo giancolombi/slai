@@ -1,44 +1,54 @@
-import { auditEvents, sessions, users } from "@slai/db";
-import type { Me, MfaSetup } from "@slai/shared";
-import { and, eq } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
-import { hashToken } from "../src/sessions.js";
-import { totp } from "../src/totp.js";
-import { Client, PASSWORD, setupApp, signup } from "./harness.js";
+import { createHash } from "node:crypto";
+import { accounts, auditEvents, sessions, twoFactors, users } from "@slai/db";
+import type { Me, SignInResult } from "@slai/shared";
+import { and, eq, or } from "drizzle-orm";
+import { describe, expect, it, vi } from "vitest";
+import { Client, enrollTotp, nextCode, PASSWORD, setupApp, signup, signupPending } from "./harness.js";
 
 const ctx = setupApp();
 
-describe("signup, login, logout", () => {
-  it("signs up an owner of a new org and sets a hardened session cookie", async () => {
+const actions = async (userId: string, email?: string) =>
+  (
+    await ctx.owner.db
+      .select()
+      .from(auditEvents)
+      .where(
+        email ? or(eq(auditEvents.actorId, userId), eq(auditEvents.actorName, email)) : eq(auditEvents.actorId, userId),
+      )
+  ).map((e) => e.action);
+
+describe("signup and sessions", () => {
+  it("signs up an owner of a new org with a hardened cookie holding a token stored only as sha256", async () => {
     const client = new Client(ctx);
     const email = `new-${Date.now()}@example.com`;
-    const res = await client.post<Me>("/auth/signup", {
+    const res = await client.post<SignInResult>("/auth/signup", {
       email,
       password: PASSWORD,
       name: "New",
       organizationName: "New Co",
     });
     expect(res.status).toBe(201);
-    expect(res.body.role).toBe("owner");
-    expect(res.body.organization.name).toBe("New Co");
-    const cookie = res.headers.get("set-cookie")!;
-    expect(cookie).toMatch(/slai_session=/);
+    if (res.body.status !== "mfa_enrollment_required") throw new Error("expected enrollment");
+    expect(res.body.me.role).toBe("owner");
+    expect(res.body.me.organization.name).toBe("New Co");
+    expect(res.body.me.security).toMatchObject({ mfa: "enrollment_required", totp: false, passkeys: 0 });
+    const cookie = res.headers.getSetCookie().find((c) => c.startsWith("slai_session="))!;
     expect(cookie).toMatch(/HttpOnly/);
-    expect(cookie).toMatch(/SameSite=Lax/);
-    expect(cookie).toMatch(/Max-Age=604800/);
-    // Only the sha256 of the token is stored.
-    const token = /slai_session=([^;]+)/.exec(cookie)![1]!;
+    expect(cookie).toMatch(/SameSite=Lax/i);
+    expect(cookie).toMatch(/Max-Age=43200/); // 12h idle, refreshed on use
+    const token = decodeURIComponent(/slai_session=([^;]+)/.exec(cookie)![1]!).split(".")[0]!;
     const rows = await ctx.owner.db
       .select()
       .from(sessions)
-      .where(eq(sessions.tokenHash, hashToken(token)));
+      .where(eq(sessions.tokenHash, createHash("sha256").update(token).digest("hex")));
     expect(rows).toHaveLength(1);
     const [u] = await ctx.owner.db.select().from(users).where(eq(users.email, email));
-    expect(u!.passwordHash).toMatch(/^\$argon2id\$/);
+    const [acct] = await ctx.owner.db.select().from(accounts).where(eq(accounts.userId, u!.id));
+    expect(acct!.password).toMatch(/^\$argon2id\$/);
   });
 
   it("rejects a weak password and a duplicate email", async () => {
-    const { email } = await signup(ctx);
+    const { email } = await signupPending(ctx);
     const c = new Client(ctx);
     expect(
       (await c.post("/auth/signup", { email: "x@example.com", password: "short", name: "x", organizationName: "x" }))
@@ -48,27 +58,189 @@ describe("signup, login, logout", () => {
     expect(dup.status).toBe(409);
   });
 
-  it("logs in, returns Me, and logs out (session deleted server-side)", async () => {
-    const { email } = await signup(ctx);
-    const c = new Client(ctx);
-    expect((await c.get("/auth/me")).status).toBe(401);
-    const login = await c.post<Me>("/auth/login", { email: email.toUpperCase(), password: PASSWORD });
-    expect(login.status).toBe(200);
-    expect(login.body.user.email).toBe(email);
-    const stolen = c.cookie;
-    expect((await c.get<Me>("/auth/me")).status).toBe(200);
-    expect((await c.post("/auth/logout")).status).toBe(204);
-    // The old cookie no longer works, even if replayed.
+  it("signs out server-side: a replayed cookie no longer works", async () => {
+    const { client } = await signup(ctx);
+    const stolen = client.cookie;
+    expect((await client.get<Me>("/auth/me")).status).toBe(200);
+    expect((await client.post("/auth/logout")).status).toBe(204);
     const replay = new Client(ctx);
     replay.cookie = stolen;
     expect((await replay.get("/auth/me")).status).toBe(401);
   });
 
-  it("uses one generic error for unknown email and wrong password, and audits both", async () => {
-    const { email, orgId } = await signup(ctx);
+  it("expires sessions after 12h idle and after 7 days absolute", async () => {
+    const idle = await signup(ctx);
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 13 * 60 * 60 * 1000);
+      expect((await idle.client.get("/auth/me")).status).toBe(401);
+    } finally {
+      vi.useRealTimers();
+    }
+    const old = await signup(ctx);
+    ctx.clock.now = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
+    try {
+      expect((await old.client.get("/auth/me")).status).toBe(401);
+    } finally {
+      ctx.clock.now = null;
+    }
+  });
+
+  it("never returns password hashes, secrets or session tokens", async () => {
+    const { client, email, totpSecret } = await signup(ctx);
+    const me = await client.get("/auth/me");
+    expect(JSON.stringify(me.body)).not.toMatch(/argon2|"password":|secret|token/i);
     const c = new Client(ctx);
-    const wrong = await c.post("/auth/login", { email, password: "wrong password!!" });
-    const unknown = await c.post("/auth/login", {
+    await c.post("/auth/sign-in/email", { email, password: PASSWORD });
+    const done = await c.post("/auth/two-factor/verify-totp", { code: nextCode(totpSecret) });
+    expect(done.status).toBe(200);
+    expect(JSON.stringify(done.body)).not.toMatch(/token|secret/i);
+  });
+});
+
+describe("mandatory MFA: the enrollment gate", () => {
+  it("blocks every API route except /auth until a factor is enrolled", async () => {
+    const { client } = await signupPending(ctx);
+    for (const path of ["/org", "/members", "/tickets", "/dashboard", "/connections", "/audit-events", "/org/sso"]) {
+      const res = await client.get(path);
+      expect(res.status, path).toBe(403);
+      expect(res.body.error.code, path).toBe("mfa_enrollment_required");
+    }
+    const write = await client.patch("/org", { name: "x" });
+    expect(write.body.error.code).toBe("mfa_enrollment_required");
+    // /auth still works: me, and the enrollment endpoints.
+    const me = await client.get<Me>("/auth/me");
+    expect(me.status).toBe(200);
+    expect(me.body.security.mfa).toBe("enrollment_required");
+    // Managing factors needs MFA done, not just a session.
+    expect((await client.post("/auth/two-factor/generate-backup-codes", { password: PASSWORD })).status).toBe(403);
+    expect((await client.get("/auth/passkey/list-user-passkeys")).status).toBe(403);
+
+    const { backupCodes } = await enrollTotp(client);
+    expect(backupCodes).toHaveLength(10);
+    expect((await client.get("/org")).status).toBe(200);
+    expect((await client.get<Me>("/auth/me")).body.security).toMatchObject({ mfa: "satisfied", totp: true });
+  });
+
+  it("forces existing users without a factor into enrollment on their next sign-in", async () => {
+    const { email } = await signupPending(ctx);
+    const c = new Client(ctx);
+    const res = await c.post<SignInResult>("/auth/sign-in/email", { email, password: PASSWORD });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("mfa_enrollment_required");
+    expect((await c.get("/tickets")).body.error.code).toBe("mfa_enrollment_required");
+  });
+
+  it("stores the TOTP secret and backup codes sealed, never plaintext", async () => {
+    const { userId, totpSecret, backupCodes } = await signup(ctx);
+    const [tf] = await ctx.owner.db.select().from(twoFactors).where(eq(twoFactors.userId, userId));
+    expect(tf!.secret).toMatch(/^\$ba\$1\$/);
+    expect(tf!.secret).not.toContain(totpSecret);
+    expect(tf!.backupCodes).not.toContain(backupCodes[0]!);
+  });
+
+  it("requires the password to start enrollment", async () => {
+    const { client } = await signupPending(ctx);
+    const res = await client.post("/auth/two-factor/enable", { password: "wrong password!!" });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("invalid_password");
+  });
+});
+
+describe("sign-in requires the second factor", () => {
+  it("asks for TOTP after the password, rejects a bad code, accepts a good one", async () => {
+    const { email, totpSecret, userId } = await signup(ctx);
+    const c = new Client(ctx);
+    // (the failed code has no user yet: the 2FA challenge is anonymous until it passes)
+    const step1 = await c.post<SignInResult>("/auth/sign-in/email", { email, password: PASSWORD });
+    expect(step1.status).toBe(200);
+    expect(step1.body).toEqual({ status: "mfa_required", methods: ["totp", "backup_code"] });
+    // No session yet: the password alone opens nothing.
+    expect(c.cookie).toBeNull();
+    expect((await c.get("/auth/me")).status).toBe(401);
+
+    const bad = await c.post("/auth/two-factor/verify-totp", { code: "000000" });
+    expect(bad.status).toBe(401);
+    expect(bad.body.error.code).toBe("invalid_code");
+    expect(c.cookie).toBeNull();
+
+    const good = await c.post<SignInResult>("/auth/two-factor/verify-totp", { code: nextCode(totpSecret) });
+    expect(good.status).toBe(200);
+    expect(good.body.status).toBe("signed_in");
+    expect((await c.get("/tickets")).status).toBe(200);
+    expect(await actions(userId)).toEqual(
+      expect.arrayContaining(["auth.mfa_enabled", "auth.password_verified", "auth.login"]),
+    );
+  });
+
+  it("refuses a replayed TOTP code", async () => {
+    const { email, totpSecret } = await signup(ctx);
+    const code = nextCode(totpSecret);
+    const a = new Client(ctx);
+    await a.post("/auth/sign-in/email", { email, password: PASSWORD });
+    expect((await a.post("/auth/two-factor/verify-totp", { code })).status).toBe(200);
+    const b = new Client(ctx);
+    await b.post("/auth/sign-in/email", { email, password: PASSWORD });
+    const replay = await b.post("/auth/two-factor/verify-totp", { code });
+    expect(replay.status).toBe(401);
+    expect(b.cookie).toBeNull();
+  });
+
+  it("accepts a backup code exactly once, and audits its use", async () => {
+    const { email, backupCodes, userId } = await signup(ctx);
+    const code = backupCodes[3]!;
+    const a = new Client(ctx);
+    await a.post("/auth/sign-in/email", { email, password: PASSWORD });
+    const first = await a.post<SignInResult>("/auth/two-factor/verify-backup-code", { code });
+    expect(first.status).toBe(200);
+    expect(first.body.status).toBe("signed_in");
+    expect((await a.get("/org")).status).toBe(200);
+
+    const b = new Client(ctx);
+    await b.post("/auth/sign-in/email", { email, password: PASSWORD });
+    const again = await b.post("/auth/two-factor/verify-backup-code", { code });
+    expect(again.status).toBe(401);
+    expect(b.cookie).toBeNull();
+    expect(await actions(userId)).toContain("auth.backup_code_used");
+  });
+
+  it("regenerates backup codes (old ones stop working)", async () => {
+    const { client, email, backupCodes } = await signup(ctx);
+    const res = await client.post("/auth/two-factor/generate-backup-codes", { password: PASSWORD });
+    expect(res.status).toBe(200);
+    expect(res.body.backupCodes).toHaveLength(10);
+    const c = new Client(ctx);
+    await c.post("/auth/sign-in/email", { email, password: PASSWORD });
+    expect((await c.post("/auth/two-factor/verify-backup-code", { code: backupCodes[0] })).status).toBe(401);
+    await c.post("/auth/sign-in/email", { email, password: PASSWORD });
+    expect((await c.post("/auth/two-factor/verify-backup-code", { code: res.body.backupCodes[0] })).status).toBe(200);
+  });
+
+  it("does not allow trusted devices to skip the second factor", async () => {
+    const { email, totpSecret } = await signup(ctx);
+    const c = new Client(ctx);
+    await c.post("/auth/sign-in/email", { email, password: PASSWORD });
+    await c.req("POST", "/auth/two-factor/verify-totp", { json: { code: nextCode(totpSecret), trustDevice: true } });
+    expect([...c.jar.keys()].some((k) => k.includes("trust"))).toBe(false);
+    await c.post("/auth/logout");
+    const again = await c.post<SignInResult>("/auth/sign-in/email", { email, password: PASSWORD });
+    expect(again.body.status).toBe("mfa_required");
+  });
+
+  it("will not remove the last second factor", async () => {
+    const { client } = await signup(ctx);
+    const res = await client.post("/auth/two-factor/disable", { password: PASSWORD });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("last_factor");
+  });
+});
+
+describe("generic errors and rate limits", () => {
+  it("uses one error for unknown email and wrong password, and audits both", async () => {
+    const { email } = await signup(ctx);
+    const c = new Client(ctx);
+    const wrong = await c.post("/auth/sign-in/email", { email, password: "wrong password!!" });
+    const unknown = await c.post("/auth/sign-in/email", {
       email: `nobody-${Date.now()}@example.com`,
       password: "wrong password!!",
     });
@@ -81,12 +253,7 @@ describe("signup, login, logout", () => {
       .from(auditEvents)
       .where(and(eq(auditEvents.action, "auth.login_failed"), eq(auditEvents.actorName, email)));
     expect(failures).toHaveLength(1);
-    expect(failures[0]!.metadata).toEqual({ reason: "bad_password" });
-    const logins = await ctx.owner.db
-      .select()
-      .from(auditEvents)
-      .where(and(eq(auditEvents.orgId, orgId), eq(auditEvents.action, "auth.signup")));
-    expect(logins).toHaveLength(1);
+    expect(failures[0]!.metadata).toMatchObject({ reason: "bad_credentials" });
   });
 
   it("rate-limits repeated attempts on one email", async () => {
@@ -94,83 +261,63 @@ describe("signup, login, logout", () => {
     const statuses: number[] = [];
     for (let i = 0; i < 7; i++) {
       const c = new Client(ctx); // different IPs: the per-email bucket still applies
-      statuses.push((await c.post("/auth/login", { email, password: "wrong password!!" })).status);
+      statuses.push((await c.post("/auth/sign-in/email", { email, password: "wrong password!!" })).status);
     }
     expect(statuses.slice(0, 5)).toEqual([401, 401, 401, 401, 401]);
     expect(statuses.slice(5)).toEqual([429, 429]);
   });
-
-  it("expires sessions after 12h idle", async () => {
-    const { client } = await signup(ctx);
-    ctx.clock.now = new Date(Date.now() + 13 * 60 * 60 * 1000);
-    try {
-      expect((await client.get("/auth/me")).status).toBe(401);
-    } finally {
-      ctx.clock.now = null;
-    }
-  });
 });
 
-describe("MFA", () => {
-  it("sets up TOTP, verifies it, then requires it at login (no code replay)", async () => {
-    const { client, email } = await signup(ctx);
-    const setup = await client.post<MfaSetup>("/auth/mfa/setup");
-    expect(setup.status).toBe(200);
-    expect(setup.body.otpauthUrl).toMatch(/^otpauth:\/\/totp\/slai%3A.+\?secret=[A-Z2-7]+&issuer=slai/);
-    const [u] = await ctx.owner.db.select().from(users).where(eq(users.email, email));
-    expect(u!.mfaSecret).toMatch(/^v1\.k1\./); // encrypted at rest
-    expect(u!.mfaSecret).not.toContain(setup.body.secret);
-
-    expect((await client.post("/auth/mfa/verify", { totp: "000000" })).status).toBe(401);
-    const code = totp(setup.body.secret);
-    const verified = await client.post<Me>("/auth/mfa/verify", { totp: code });
-    expect(verified.status).toBe(200);
-    expect(verified.body.user.mfaEnabled).toBe(true);
-
-    const c = new Client(ctx);
-    const noCode = await c.post("/auth/login", { email, password: PASSWORD });
-    expect(noCode.status).toBe(401);
-    expect(noCode.body.error.code).toBe("mfa_required");
-    // The code just used cannot be replayed.
-    const replayed = await c.post("/auth/login", { email, password: PASSWORD, totp: code });
-    expect(replayed.status).toBe(401);
-    const next = totp(setup.body.secret, new Date(Date.now() + 30_000));
-    expect((await c.post("/auth/login", { email, password: PASSWORD, totp: next })).status).toBe(200);
-    expect((await client.post("/auth/mfa/setup")).status).toBe(409);
+describe("CSRF on auth endpoints (ours and better-auth's)", () => {
+  it.each([
+    "/auth/sign-in/email",
+    "/auth/two-factor/verify-totp",
+    "/auth/two-factor/enable",
+    "/auth/sign-in/sso",
+    "/auth/passkey/verify-authentication",
+    "/auth/signup",
+  ])("rejects %s without X-Requested-With", async (path) => {
+    const res = await new Client(ctx).req("POST", path, { json: { email: "a@b.co", password: "x" }, csrf: false });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("csrf");
   });
 
-  it("enforces the org's require_mfa: only MFA setup is allowed until verified", async () => {
-    const { client } = await signup(ctx);
-    expect((await client.patch("/org", { requireMfa: true })).status).toBe(200);
-    const blocked = await client.get("/org");
-    expect(blocked.status).toBe(403);
-    expect(blocked.body.error.code).toBe("mfa_setup_required");
-    expect((await client.get("/auth/me")).status).toBe(200);
-    const setup = await client.post<MfaSetup>("/auth/mfa/setup");
-    expect((await client.post("/auth/mfa/verify", { totp: totp(setup.body.secret) })).status).toBe(200);
-    expect((await client.get("/org")).status).toBe(200);
+  it("rejects a foreign Origin and a cross-site fetch on better-auth's sign-in", async () => {
+    const { email } = await signup(ctx);
+    const evil = await new Client(ctx).req("POST", "/auth/sign-in/email", {
+      json: { email, password: PASSWORD },
+      headers: { origin: "https://evil.example" },
+    });
+    expect(evil.body.error.code).toBe("csrf");
+    const site = await new Client(ctx).req("POST", "/auth/sign-in/email", {
+      json: { email, password: PASSWORD },
+      headers: { "sec-fetch-site": "cross-site" },
+    });
+    expect(site.body.error.code).toBe("csrf");
   });
-});
 
-describe("CSRF", () => {
-  it("rejects state-changing requests without X-Requested-With", async () => {
+  it("rejects org mutations without the header", async () => {
     const { client } = await signup(ctx);
     const res = await client.req("PATCH", "/org", { json: { name: "x" }, csrf: false });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("csrf");
   });
+});
 
-  it("rejects a foreign Origin even with the header", async () => {
+describe("better-auth surface", () => {
+  it("exposes only the allowlisted endpoints", async () => {
     const { client } = await signup(ctx);
-    const res = await client.req("PATCH", "/org", { json: { name: "x" }, headers: { origin: "https://evil.example" } });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("csrf");
-  });
-
-  it("applies to login too", async () => {
-    const c = new Client(ctx);
-    const res = await c.req("POST", "/auth/login", { json: { email: "a@b.co", password: "x" }, csrf: false });
-    expect(res.status).toBe(403);
+    for (const [method, path] of [
+      ["POST", "/auth/sign-up/email"],
+      ["GET", "/auth/get-session"],
+      ["GET", "/auth/list-sessions"],
+      ["POST", "/auth/sso/register"],
+      ["GET", "/auth/sso/providers"],
+      ["POST", "/auth/two-factor/view-backup-codes"],
+      ["POST", "/auth/change-password"],
+    ] as const) {
+      expect((await client.req(method, path, { json: method === "POST" ? {} : undefined })).status, path).toBe(404);
+    }
   });
 });
 
@@ -183,11 +330,5 @@ describe("hardening", () => {
     expect(res.headers.get("strict-transport-security")).toMatch(/max-age/);
     expect(res.headers.get("x-request-id")).toBeTruthy();
     expect((await ctx.app.request("/api/v1/readyz")).status).toBe(200);
-  });
-
-  it("never returns password hashes or secrets in Me", async () => {
-    const { client } = await signup(ctx);
-    const me = await client.get("/auth/me");
-    expect(JSON.stringify(me.body)).not.toMatch(/argon2|password|secret/i);
   });
 });

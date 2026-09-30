@@ -1,15 +1,18 @@
 /**
- * Demo data: org "Acme Cloud", owner demo@slai.dev, a `demo` help-desk
- * connection, two customer accounts, an active default Enterprise policy and an
- * active Premium policy. Idempotent: rerunning updates rows in place.
+ * Demo data: org "Acme Cloud", owner demo@slai.dev (pre-enrolled in TOTP with a
+ * fixed, dev-only secret), a `demo` help-desk connection, customer accounts, an
+ * active default Enterprise policy and an active Premium policy. Idempotent:
+ * rerunning updates rows in place.
  */
 import { randomBytes } from "node:crypto";
 import { type PolicyInput, parsePolicy } from "@slai/sla-engine";
 import { and, eq, sql } from "drizzle-orm";
+import { type AuthSecret, authSecrets, sealForAuth } from "./auth-secrets.js";
 import { connect, type Tx } from "./client.js";
 import { AAD, encrypt, encryptJson, type Keyring } from "./crypto.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
 import {
+  accounts,
   autonomyRules,
   connections,
   customerAccounts,
@@ -17,8 +20,10 @@ import {
   notificationChannels,
   organizations,
   slaPolicies,
+  twoFactors,
   users,
 } from "./schema.js";
+import { base32Encode, otpauthUrl } from "./totp.js";
 
 export const DEMO = {
   orgName: "Acme Cloud",
@@ -26,7 +31,18 @@ export const DEMO = {
   email: "demo@slai.dev",
   password: "slai-demo-password-1",
   name: "Demo Owner",
+  /**
+   * DEV ONLY. The raw TOTP secret better-auth stores for the demo user (sealed).
+   * Authenticator apps and `pnpm demo:otp` use its base32 form.
+   */
+  totpSecret: "slai-demo-totp-secret-dev-only-1",
+  /** DEV ONLY. Ten single-use backup codes for the demo user. */
+  backupCodes: Array.from({ length: 10 }, (_, i) => `demo${i}-backup`),
 } as const;
+
+/** The demo user's TOTP secret in base32 (what an authenticator app is given). */
+export const DEMO_TOTP_BASE32 = base32Encode(Buffer.from(DEMO.totpSecret, "utf8"));
+export const DEMO_OTPAUTH_URL = otpauthUrl(DEMO_TOTP_BASE32, DEMO.email);
 
 const US_HOLIDAYS = [
   "2026-01-01",
@@ -160,7 +176,8 @@ async function upsertPolicy(tx: Tx, orgId: string, def: Omit<PolicyInput, "id">,
   return id;
 }
 
-export async function seed(ownerUrl: string, opts: { keyring?: Keyring } = {}) {
+export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecrets?: AuthSecret[] } = {}) {
+  const secrets = opts.authSecrets ?? authSecretsFromEnv();
   const { db, close } = connect(ownerUrl, { max: 1, applicationName: "slai-seed" });
   try {
     return await db.transaction(async (tx) => {
@@ -172,17 +189,36 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring } = {}) {
         .returning();
       const orgId = org!.id;
 
-      const [prior] = await tx.select().from(users).where(eq(users.email, DEMO.email));
-      const passwordHash =
-        prior && (await verifyPassword(prior.passwordHash, DEMO.password))
-          ? prior.passwordHash
-          : await hashPassword(DEMO.password);
       const [user] = await tx
         .insert(users)
-        .values({ email: DEMO.email, name: DEMO.name, passwordHash })
-        .onConflictDoUpdate({ target: users.email, set: { passwordHash, disabledAt: null } })
+        .values({ email: DEMO.email, name: DEMO.name, emailVerified: true, mfaEnabled: true })
+        .onConflictDoUpdate({ target: users.email, set: { disabledAt: null, mfaEnabled: true } })
         .returning();
       const userId = user!.id;
+      const [prior] = await tx
+        .select()
+        .from(accounts)
+        .where(and(eq(accounts.userId, userId), eq(accounts.providerId, "credential")));
+      const password =
+        prior?.password && (await verifyPassword(prior.password, DEMO.password))
+          ? prior.password
+          : await hashPassword(DEMO.password);
+      await tx
+        .insert(accounts)
+        .values({ userId, accountId: userId, providerId: "credential", password })
+        .onConflictDoUpdate({ target: [accounts.providerId, accounts.accountId], set: { password } });
+      // Pre-enrolled TOTP (sealed the way better-auth's twoFactor plugin seals it).
+      const totp = {
+        secret: await sealForAuth(DEMO.totpSecret, secrets),
+        backupCodes: await sealForAuth(JSON.stringify(DEMO.backupCodes), secrets),
+        verified: true,
+        failedVerificationCount: 0,
+        lockedUntil: null,
+      };
+      await tx
+        .insert(twoFactors)
+        .values({ userId, ...totp })
+        .onConflictDoUpdate({ target: twoFactors.userId, set: totp });
       await tx
         .insert(memberships)
         .values({ orgId, userId, role: "owner" })
@@ -324,4 +360,13 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring } = {}) {
   } finally {
     await close();
   }
+}
+
+/** better-auth's secrets from SESSION_SECRET (and SESSION_SECRETS_PREVIOUS). */
+export function authSecretsFromEnv(env: NodeJS.ProcessEnv = process.env): AuthSecret[] {
+  if (!env.SESSION_SECRET) throw new Error("SESSION_SECRET is not set (run `pnpm setup:env`)");
+  return authSecrets(env.SESSION_SECRET, {
+    version: env.SESSION_SECRET_VERSION ? Number(env.SESSION_SECRET_VERSION) : undefined,
+    previous: env.SESSION_SECRETS_PREVIOUS,
+  });
 }

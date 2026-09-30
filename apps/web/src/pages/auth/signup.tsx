@@ -85,13 +85,14 @@ export function SignupPage() {
 
   const signup = useMutation({
     mutationFn: api.auth.signup,
-    onSuccess: async (me) => {
+    onSuccess: async (result) => {
       queryClient.clear();
-      queryClient.setQueryData(qk.me, me);
-      await navigate({ to: "/onboarding" });
+      if (result.status !== "mfa_required") queryClient.setQueryData(qk.me, result.me);
+      // Every new account enrolls a second factor before anything else.
+      await navigate({ to: "/mfa/setup" });
     },
     onError: (e) => {
-      if (isApiError(e) && e.code === "email_taken") {
+      if (isApiError(e) && (e.code === "email_taken" || e.code === "signup_failed")) {
         setErrors({ email: "An account with this email already exists." });
         return;
       }

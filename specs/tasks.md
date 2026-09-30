@@ -23,6 +23,19 @@ Each task references the requirements it serves.
       autonomy rules, notification channels, dashboard, replays, usage, audit, SSE (PR-1 to PR-25)
 - [x] T-14 Tests: RLS isolation (DB and API), audit immutability, auth flows, CSRF, RBAC,
       upload validation, webhook signature rejection
+- [x] T-15 better-auth replaces the hand-rolled auth: Drizzle adapter on a `slai_auth` role,
+      sealing adapter (sha256 session tokens, sealed SSO secrets), argon2id kept, migration 0005
+      (credential accounts from existing hashes, forced re-enrollment), allowlisted mount behind
+      our CSRF/rate limits/audit (PR-24, TR-23, TR-26, TR-27)
+- [x] T-16 Mandatory MFA: server-side enrollment gate, TOTP + single-use backup codes, passkeys,
+      no trusted devices, last factor protected; demo user pre-enrolled, `pnpm demo:otp` (PR-24, TR-23)
+- [x] T-17 SSO per org (OIDC and SAML): admin routes, DNS TXT domain verification, email-domain
+      discovery, JIT as member, enforce SSO, "also require slai MFA for SSO users"; tests against
+      `oauth2-mock-server` and a software WebAuthn authenticator (PR-24, TR-23, TR-23a)
+- [ ] T-18 SCIM provisioning and deprovisioning; group-to-role mapping from the IdP
+- [ ] T-19 Check the IdP's `amr`/`acr` claims for MFA; admin reset of a member's second factor;
+      recovery flow for users who lose every factor (today an admin must help out of band)
+- [ ] T-19a SAML end-to-end test against a local IdP, and a SAML POST-binding check with SameSite=Lax cookies
 
 ## M2: Connectors
 - [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
@@ -61,13 +74,16 @@ Each task references the requirements it serves.
       CitationQuote, and the `/design` style guide (TR-3)
 - [x] T-51 App shell, API client, mock API mode (MSW) (TR-32)
 - [x] T-52 Auth and MFA pages; onboarding wizard (connect → upload → review → replay)
+- [x] T-52a Email-first sign-in with SSO discovery; second-factor step (TOTP, backup code, passkey);
+      mandatory enrollment (QR, manual key, backup codes with copy/download, or a passkey);
+      Settings → Security and Settings → Single sign-on; MSW mock mode updated (PR-24)
 - [x] T-53 Dashboard, tickets list and detail, approvals inbox (PR-11, PR-18, PR-21)
 - [x] T-54 Contracts and the contract review screen (citations; ambiguity gating on approve) (PR-3, PR-4)
 - [x] T-55 Policies, customers, connections, autonomy rules, replay report, usage, audit, team, settings
 
 - [ ] T-56 Wire SSE live updates (replace polling)
 - [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
-- [ ] T-58 MFA QR code; inline contract text on the review screen; bundle splitting
+- [ ] T-58 Inline contract text on the review screen; bundle splitting (the MFA QR code shipped in T-52a)
 - [ ] T-59 API contract: document that `approvedBy`/`uploadedBy`/`decidedBy` are user ids; type the invite response; invitation email and accept endpoint
 
 ## M6: Integration and launch readiness
