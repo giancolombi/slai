@@ -222,6 +222,22 @@
 - **TR-30** Every model call and sandbox second is metered to `usage_ledger`:
   provider, model, tokens including cache, cost in micro-dollars, and sandbox
   seconds.
+- **TR-30a** SOC 2 control mapping (what enforces each control in code):
+
+  | Control | Enforced by |
+  |---|---|
+  | CC6.1 Tenant isolation | FORCE RLS on every org table; `withOrg`; `slai_app` NOBYPASSRLS; `assertInOrg` on client-supplied ids (foreign-key checks skip RLS) |
+  | CC6.1 Least privilege | Column grants: `slai_app` cannot read password hashes, MFA secrets, or sessions; `slai_worker` cannot read ticket content, credentials, or policies |
+  | CC6.1 Authentication and MFA | argon2id; a dummy hash for unknown emails; RFC 6238 TOTP with replay rejection; org `require_mfa` |
+  | CC6.1 Sessions | sha256-only token storage; 12h idle / 7d absolute; the token rotates on MFA; server-side logout |
+  | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request |
+  | CC6.6 Boundary | CSRF (header + Origin + Sec-Fetch-Site); CORS locked to `APP_URL`; body limits; login and webhook rate limits; webhook signatures |
+  | CC6.7 Encryption at rest | AES-256-GCM with a key id and context-bound AAD for every secret; secrets masked in the API |
+  | CC6.8 Uploads | Magic-byte sniffing; 20 MB cap; sanitized names; server-generated storage keys |
+  | CC7.2 Audit and logs | `audit()` in the same transaction; a trigger blocks UPDATE/DELETE/TRUNCATE; pino redaction; no request bodies in logs |
+  | CC8.1 Change integrity | Policies need `parsePolicy` and admin approval; versions are superseded, never edited in place |
+  | PI1 Billing integrity | Append-only `usage_ledger`; money figures come only from the engine |
+
 - **TR-31** CI (lint, typecheck, test against Postgres) must pass before merging to
   main.
 
