@@ -36,9 +36,11 @@ import {
   type TimelineItem,
   ticketCountForDay,
 } from "./generate.js";
+import { DEMO_ARTICLES, demoArticleUpdatedAt, demoArticleUrl } from "./knowledge.js";
 
 export const DEMO_HISTORY_DAYS = 120;
 const PAGE_SIZE = 100;
+const ARTICLE_PAGE_SIZE = 10;
 
 export const demoConfigSchema = z.object({
   seed: z.string().min(1).default("acme"),
@@ -128,6 +130,7 @@ export const demo: ConnectorDefinition<DemoCredentials> = {
   write: { internalNote: true, publicReply: true, assign: true, priority: true, tags: true },
   defaultMapping,
   docsUrl: "https://github.com/slai/slai/tree/main/packages/connectors/src/connectors/demo",
+  supportsKnowledge: true,
   create(ctx: ConnectorContext<DemoCredentials>): ConnectorClient {
     const parsed = demoConfigSchema.safeParse(ctx.config ?? {});
     if (!parsed.success) throw new ConnectorError(`demo: invalid config: ${parsed.error.message}`, "invalid");
@@ -324,6 +327,22 @@ export const demo: ConnectorDefinition<DemoCredentials> = {
 
       async postPublicReply(sourceId, body) {
         return comment(sourceId, body, true);
+      },
+
+      async listKnowledgeArticles(cursor) {
+        const isState = (v: unknown): v is { offset: number } =>
+          typeof (v as { offset?: unknown })?.offset === "number";
+        const offset = decodeCursor(cursor, isState)?.offset ?? 0;
+        const items = DEMO_ARTICLES.slice(offset, offset + ARTICLE_PAGE_SIZE).map((a) => ({
+          sourceId: a.slug,
+          title: a.title,
+          url: demoArticleUrl(a.slug),
+          bodyText: plainText(a.body),
+          locale: "en-us",
+          updatedAt: demoArticleUpdatedAt(a),
+        }));
+        const next = offset + items.length;
+        return { items, nextCursor: next < DEMO_ARTICLES.length ? encodeCursor({ offset: next }) : null };
       },
 
       async updateTicket(sourceId, patch) {

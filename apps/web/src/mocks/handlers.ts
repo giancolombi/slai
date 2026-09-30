@@ -4,6 +4,8 @@ import type {
   Connection,
   Contract,
   CustomerAccount,
+  KnowledgeArticle,
+  KnowledgeSource,
   List,
   Member,
   NotificationChannel,
@@ -20,27 +22,33 @@ import {
   approveActionBody,
   autonomyRuleBody,
   createConnectionBody,
+  createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
   discoverBody,
   inviteBody,
+  knowledgeArticleQuery,
   loginBody,
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
+  savedReplyBody,
   signupBody,
   switchOrgBody,
+  updateKnowledgeArticleBody,
   updateMemberBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
+  updateSavedReplyBody,
   upsertCustomerBody,
   verifyBackupCodeBody,
   verifyTotpBody,
 } from "@slai/shared";
 import { delay, HttpResponse, http } from "msw";
 import type { z } from "zod";
+import { matchesArticle } from "../lib/knowledge";
 import {
   audit,
   dashboard,
@@ -54,7 +62,14 @@ import {
   toSummary,
   usage,
 } from "./db";
-import { buildCustomers, buildTickets, CONNECTORS, replayResult } from "./fixtures";
+import {
+  buildCustomers,
+  buildTickets,
+  CONNECTORS,
+  knowledgeRefsFor,
+  type MockKnowledgeSource,
+  replayResult,
+} from "./fixtures";
 import { kestrelAmbiguities, kestrelCitations, kestrelDraftDefinition } from "./policies";
 
 const url = (path: string) => `${API_BASE}${path}`;
@@ -137,6 +152,21 @@ function guarded<Args extends { request: Request; params: Record<string, string 
 }
 
 // ---------------------------------------------------------------- lazy state transitions
+
+function sourceView(s: MockKnowledgeSource): KnowledgeSource {
+  const mine = org().knowledgeArticles.filter((a) => a.sourceId === s.id);
+  return { ...s, articleCount: mine.length, enabledCount: mine.filter((a) => a.enabled).length };
+}
+
+/** A requested knowledge sync finishes a few seconds later (the worker's `sync-knowledge` job in the real API). */
+function advanceKnowledge(now: number) {
+  for (const s of org().knowledgeSources) {
+    if (s.status !== "syncing") continue;
+    s.status = "idle";
+    s.lastSyncAt = new Date(now).toISOString();
+    s.lastError = null;
+  }
+}
 
 function advanceContracts(now: number) {
   const o = org();
@@ -1038,6 +1068,9 @@ export const handlers = [
           status: "proposed",
           body: `Hi ${first},\n\nThanks for your patience while we looked into this. Our engineers have identified the cause and a fix is rolling out now. I'll confirm here as soon as it's complete, and within the next hour either way.\n\n${t.assigneeName ?? "The support team"}`,
           payload: {},
+          usedKnowledge: knowledgeRefsFor(t.subject).filter((r) =>
+            o.knowledgeArticles.some((a) => a.id === r.id && a.enabled),
+          ),
           confidence: 0.87,
           blockedReason: null,
           createdAt: new Date(now).toISOString(),
@@ -1126,6 +1159,172 @@ export const handlers = [
       audit(actor(), "action.rejected", { type: "agent_action", id: a.id }, { reason: body.reason ?? null });
       return HttpResponse.json(a);
     }),
+  ),
+
+  // ------------------------------------------------ knowledge (T-47)
+  http.get(
+    url("/knowledge-sources"),
+    guarded(() => {
+      advanceKnowledge(Date.now());
+      return HttpResponse.json(list(org().knowledgeSources.map(sourceView)));
+    }),
+  ),
+  http.post(
+    url("/knowledge-sources"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, createKnowledgeSourceBody);
+        if (body instanceof Response) return body;
+        const o = org();
+        if (body.kind === "manual") {
+          if (body.connectionId) return fail(400, "invalid_request", "Saved replies don't belong to a connection.");
+          if (o.knowledgeSources.some((s) => s.kind === "manual"))
+            return fail(409, "conflict", "Your organization already has a saved-replies source.");
+        } else {
+          const conn = o.connections.find((c) => c.id === body.connectionId);
+          if (!conn) return fail(400, "invalid_request", "Choose a connected help desk.");
+          if (!CONNECTORS.find((c) => c.provider === conn.provider)?.supportsKnowledge)
+            return fail(400, "invalid_request", "This help desk has no help center slai can sync.");
+          if (o.knowledgeSources.some((s) => s.connectionId === conn.id && s.kind === body.kind))
+            return fail(409, "conflict", "This help desk is already a knowledge source.");
+        }
+        const src: MockKnowledgeSource = {
+          id: crypto.randomUUID(),
+          connectionId: body.connectionId,
+          kind: body.kind,
+          name: body.name,
+          status: body.kind === "manual" ? "idle" : "syncing",
+          lastSyncAt: null,
+          lastError: null,
+          createdAt: new Date().toISOString(),
+        };
+        o.knowledgeSources.push(src);
+        audit(actor(), "knowledge_source.created", { type: "knowledge_source", id: src.id }, { kind: src.kind });
+        return HttpResponse.json(sourceView(src), { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/knowledge-sources/:id/sync"),
+    guarded(
+      ({ params }) => {
+        const src = org().knowledgeSources.find((s) => s.id === params.id);
+        if (!src) return fail(404, "not_found", "Knowledge source not found.");
+        if (src.kind === "manual") return fail(400, "invalid_request", "Saved replies are not synced.");
+        src.status = "syncing";
+        src.lastError = null;
+        audit(actor(), "knowledge_source.sync_requested", { type: "knowledge_source", id: src.id });
+        return HttpResponse.json({ queued: true }, { status: 202 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.get(
+    url("/knowledge-articles"),
+    guarded(({ request }) => {
+      const r = knowledgeArticleQuery.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+      if (!r.success) return fail(400, "invalid_query", "Query parameters are invalid.", r.error.issues);
+      const { q, sourceId, cursor, limit } = r.data;
+      const all = org()
+        .knowledgeArticles.filter((a) => (!sourceId || a.sourceId === sourceId) && matchesArticle(a, q))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      const offset = Number(cursor ?? 0) || 0;
+      const page = all.slice(offset, offset + limit);
+      return HttpResponse.json(list(page, offset + limit < all.length ? String(offset + limit) : null));
+    }),
+  ),
+  http.patch(
+    url("/knowledge-articles/:id"),
+    guarded(
+      async ({ request, params }) => {
+        const body = await parse(request, updateKnowledgeArticleBody);
+        if (body instanceof Response) return body;
+        const a = org().knowledgeArticles.find((x) => x.id === params.id);
+        if (!a) return fail(404, "not_found", "Article not found.");
+        a.enabled = body.enabled;
+        audit(
+          actor(),
+          body.enabled ? "knowledge_article.enabled" : "knowledge_article.disabled",
+          { type: "knowledge_article", id: a.id },
+          { title: a.title },
+        );
+        return HttpResponse.json(a);
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/saved-replies"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, savedReplyBody);
+        if (body instanceof Response) return body;
+        const o = org();
+        let src = o.knowledgeSources.find((s) => s.kind === "manual");
+        if (!src) {
+          src = {
+            id: crypto.randomUUID(),
+            connectionId: null,
+            kind: "manual",
+            name: "Saved replies",
+            status: "idle",
+            lastSyncAt: null,
+            lastError: null,
+            createdAt: new Date().toISOString(),
+          };
+          o.knowledgeSources.push(src);
+        }
+        const a: KnowledgeArticle = {
+          id: crypto.randomUUID(),
+          sourceId: src.id,
+          sourceKind: "manual",
+          sourceName: src.name,
+          externalId: null,
+          title: body.title,
+          url: body.url,
+          bodyText: body.bodyText,
+          locale: null,
+          enabled: true,
+          updatedAt: new Date().toISOString(),
+        };
+        o.knowledgeArticles.push(a);
+        audit(actor(), "saved_reply.created", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return HttpResponse.json(a, { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.patch(
+    url("/saved-replies/:id"),
+    guarded(
+      async ({ request, params }) => {
+        const body = await parse(request, updateSavedReplyBody);
+        if (body instanceof Response) return body;
+        const a = org().knowledgeArticles.find((x) => x.id === params.id && x.sourceKind === "manual");
+        if (!a) return fail(404, "not_found", "Saved reply not found.");
+        Object.assign(a, Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined)), {
+          updatedAt: new Date().toISOString(),
+        });
+        audit(actor(), "saved_reply.updated", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return HttpResponse.json(a);
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/saved-replies/:id"),
+    guarded(
+      ({ params }) => {
+        const o = org();
+        const a = o.knowledgeArticles.find((x) => x.id === params.id && x.sourceKind === "manual");
+        if (!a) return fail(404, "not_found", "Saved reply not found.");
+        o.knowledgeArticles = o.knowledgeArticles.filter((x) => x.id !== a.id);
+        audit(actor(), "saved_reply.deleted", { type: "knowledge_article", id: a.id }, { title: a.title });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
   ),
 
   // ------------------------------------------------ autonomy & notifications

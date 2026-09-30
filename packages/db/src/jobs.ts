@@ -25,6 +25,8 @@ export const JOB_PAYLOADS = {
   "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
   /** The connection's status/priority mapping changed: re-ingest its open tickets so clocks recompute (T-25). */
   "remap-connection": z.object({ orgId: uuid, connectionId: uuid }),
+  /** Page through one knowledge source's articles and upsert them (T-47). */
+  "sync-knowledge": z.object({ orgId: uuid, sourceId: uuid }),
 } as const;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -41,6 +43,7 @@ export const QUEUE = {
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
   remapConnection: "remap-connection",
+  syncKnowledge: "sync-knowledge",
 } as const satisfies Record<string, JobName>;
 
 /** Parses a job's data in the worker (trust boundary). */

@@ -19,6 +19,7 @@ import { ApiError, badRequest, notFound } from "../errors.js";
 import { requireRole } from "../middleware/auth.js";
 import { oauthApp } from "../oauth.js";
 import { body, idParam } from "../validate.js";
+import { addKnowledgeSource } from "./knowledge.js";
 
 type ConnectionRow = typeof connections.$inferSelect;
 
@@ -77,6 +78,7 @@ export async function insertConnection(
     metadata: { provider: def.provider, name: input.name, via: input.via },
   });
   await deps.jobs.send(tx, "sync-connection", { orgId: input.orgId, connectionId: id, full: true });
+  if (def.supportsKnowledge) await addKnowledgeSource(tx, c, deps, { connectionId: id, name: input.name });
   return row!;
 }
 
@@ -171,6 +173,7 @@ export function connectionRoutes(deps: AppDeps) {
             },
           }
         : {}),
+      supportsKnowledge: d.supportsKnowledge ?? false,
     }));
     return c.json(items);
   });

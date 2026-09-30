@@ -196,6 +196,12 @@ const autonomyRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/autonomy/autonomy"), "AutonomyPage"),
 });
 
+const knowledgeRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/knowledge",
+  component: lazyRouteComponent(() => import("./pages/knowledge/knowledge"), "KnowledgePage"),
+});
+
 const replaysRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/replay",
@@ -247,6 +253,7 @@ const routeTree = rootRoute.addChildren([
     customersRoute,
     connectionsRoute,
     autonomyRoute,
+    knowledgeRoute,
     replaysRoute,
     replayRoute,
     usageRoute,

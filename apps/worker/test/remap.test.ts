@@ -129,7 +129,7 @@ describe("re-evaluation after a mapping change (T-25)", () => {
   });
 
   it("re-ingests closed tickets only when their raw values now map differently", async () => {
-    const ingests = async (mapping: { status: Record<string, "closed" | "on_hold">; priority: object }) => {
+    const ingests = async (mapping: { status: Record<string, string>; priority: Record<string, string> }) => {
       await owner.db.update(connections).set({ mapping }).where(eq(connections.id, connectionId));
       const before = h.queue.sent.length;
       await h.queue.send("remap-connection", { orgId, connectionId });

@@ -4,6 +4,7 @@ import type { z } from "zod";
 import { executeAction, runAgent } from "./agents.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
+import { syncKnowledge } from "./knowledge.js";
 import { runReplay } from "./replay.js";
 import { evaluateTicketJob, ingestTicket, processWebhook, remapConnection, syncConnection } from "./sync.js";
 
@@ -21,6 +22,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "execute-action": (p) => executeAction(deps, p),
     "extract-contract": (p) => extractContractJob(deps, p),
     "run-replay": (p) => runReplay(deps, p),
+    "sync-knowledge": (p) => syncKnowledge(deps, p),
   };
 }
 
