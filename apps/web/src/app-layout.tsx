@@ -3,6 +3,7 @@ import {
   AppShellMenuButton,
   Avatar,
   Badge,
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -28,6 +29,7 @@ import {
   Bot,
   Building2,
   Cable,
+  CircleHelp,
   FileSignature,
   Gauge,
   History,
@@ -47,6 +49,8 @@ import {
 import { type FormEvent, useEffect, useRef } from "react";
 import { BillingBanner } from "./components/billing-banner";
 import { LiveIndicator } from "./components/live-indicator";
+import { PageHelpButton } from "./help/help-panel";
+import { WelcomeDialog } from "./help/welcome";
 import { api, errorMessage } from "./lib/api";
 import { useLiveUpdates } from "./lib/live";
 import { useActions, useContracts, useMe } from "./lib/queries";
@@ -74,6 +78,11 @@ function Nav() {
       }
       footer={
         <ul>
+          <li>
+            <Link to="/help" className={sidebarItemClass}>
+              <SidebarItemContent icon={<CircleHelp />} label="Help" />
+            </Link>
+          </li>
           <li>
             <Link to="/design" className={sidebarItemClass}>
               <SidebarItemContent icon={<Palette />} label="Design system" />
@@ -147,6 +156,33 @@ function TicketSearch() {
         />
       </form>
     </search>
+  );
+}
+
+/** `?` opens the Help center from anywhere (not while typing; `/` stays ticket search). */
+function useHelpShortcut() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest?.("input, textarea, select, [contenteditable=''], [contenteditable='true']")) return;
+      if (document.querySelector("[role=dialog]")) return;
+      e.preventDefault();
+      void navigate({ to: "/help" });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate]);
+}
+
+function HelpButton() {
+  return (
+    <Button asChild variant="ghost" size="md" className="size-8.5 px-0!" aria-label="Help (?)" title="Help (?)">
+      <Link to="/help">
+        <CircleHelp aria-hidden />
+      </Link>
+    </Button>
   );
 }
 
@@ -237,6 +273,7 @@ export function AppLayout() {
   const { data: me } = useMe();
   // The mock API has no event stream; it keeps polling instead.
   useLiveUpdates(me?.organization.id, !MOCK_MODE);
+  useHelpShortcut();
   return (
     <AppShell
       sidebar={nav}
@@ -257,6 +294,8 @@ export function AppLayout() {
           <div className="ml-auto flex items-center gap-1.5">
             <LiveIndicator />
             <TicketSearch />
+            <PageHelpButton />
+            <HelpButton />
             <ThemeToggle />
             <UserMenu />
           </div>
@@ -265,6 +304,7 @@ export function AppLayout() {
     >
       <BillingBanner />
       <Outlet />
+      <WelcomeDialog />
     </AppShell>
   );
 }

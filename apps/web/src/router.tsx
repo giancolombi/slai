@@ -279,31 +279,48 @@ const settingsRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/settings/settings"), "SettingsPage"),
 });
 
+const helpRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/help",
+  component: lazyRouteComponent(() => import("./pages/help/help-center"), "HelpCenterPage"),
+});
+
+const guideRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/help/$guideId",
+  component: lazyRouteComponent(() => import("./pages/help/guide"), "GuidePage"),
+});
+
+/** The pages inside the app shell. Every one with a component needs a `PAGE_HELP` entry (tested). */
+export const APP_PAGE_ROUTES = [
+  dashboardRoute,
+  ticketsRoute,
+  ticketRoute,
+  approvalsRoute,
+  contractsRoute,
+  contractRoute,
+  policiesRoute,
+  customersRoute,
+  connectionsRoute,
+  connectionRoute,
+  autonomyRoute,
+  knowledgeRoute,
+  replaysRoute,
+  replayRoute,
+  billingRoute,
+  usageRoute,
+  auditRoute,
+  teamRoute,
+  settingsRoute,
+  helpRoute,
+  guideRoute,
+] as const;
+
 const routeTree = rootRoute.addChildren([
   authLayout.addChildren([loginRoute, signupRoute, mfaRoute, mfaSetupRoute, inviteRoute]),
   designRoute,
   onboardingRoute,
-  appLayout.addChildren([
-    dashboardRoute,
-    ticketsRoute,
-    ticketRoute,
-    approvalsRoute,
-    contractsRoute,
-    contractRoute,
-    policiesRoute,
-    customersRoute,
-    connectionsRoute,
-    connectionRoute,
-    autonomyRoute,
-    knowledgeRoute,
-    replaysRoute,
-    replayRoute,
-    billingRoute,
-    usageRoute,
-    auditRoute,
-    teamRoute,
-    settingsRoute,
-  ]),
+  appLayout.addChildren(APP_PAGE_ROUTES),
 ]);
 
 export function createAppRouter(queryClient: QueryClient) {

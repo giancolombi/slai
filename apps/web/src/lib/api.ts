@@ -33,6 +33,7 @@ import type {
   switchOrgBody,
   updateMappingBody,
   updateMemberBody,
+  updateOnboardingBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
@@ -67,6 +68,7 @@ import {
   type MfaResetResult,
   type NotificationChannel,
   type Offboarding,
+  type OnboardingState,
   type OrgExport,
   type OrgSettings,
   type OrgSsoSettings,
@@ -462,6 +464,10 @@ export const api = {
   },
   dashboard: {
     get: () => get<DashboardSummary>("/dashboard"),
+  },
+  onboarding: {
+    get: () => get<OnboardingState>("/onboarding"),
+    update: (body: In<typeof updateOnboardingBody>) => patch<OnboardingState>("/onboarding", body),
   },
   replays: {
     list: () => get<List<Replay>>("/replays"),
