@@ -156,7 +156,7 @@ export const kestrelCitations: { path: string; quote: string; document: string; 
   {
     path: "calendar.timezone",
     quote:
-      "“Business Hours” means 08:00 to 18:00 UK time on any Business Day, being a day other than a Saturday, Sunday or public holiday in England.",
+      "‘Business Hours’ means 08:00 to 18:00 UK time on any Business Day, being a day other than a Saturday, Sunday or public holiday in England.",
     document: KESTREL_DOC,
     page: 3,
   },
