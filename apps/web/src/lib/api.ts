@@ -23,7 +23,9 @@ import type {
   notificationChannelBody,
   policyPreviewBody,
   rejectActionBody,
+  resetMemberMfaBody,
   savedReplyBody,
+  scimGroupRoleBody,
   setWebhookSecretBody,
   signupBody,
   switchOrgBody,
@@ -59,6 +61,7 @@ import {
   type List,
   type Me,
   type Member,
+  type MfaResetResult,
   type NotificationChannel,
   type OrgSettings,
   type OrgSsoSettings,
@@ -68,9 +71,13 @@ import {
   type Replay,
   type Risk,
   type Role,
+  type ScimGroupRole,
+  type ScimSettings,
+  type ScimTokenCreated,
   type SignInDiscovery,
   type SignInResult,
   type SsoProvider,
+  type StepUp,
   type TicketDetail,
   type TicketStatus,
   type TicketSummary,
@@ -300,6 +307,11 @@ export const api = {
     list: () => get<Passkey[]>("/auth/passkey/list-user-passkeys"),
     remove: (passkeyId: string) => post<void>("/auth/passkey/delete-passkey", { id: passkeyId }),
   },
+  /** Step-up for sensitive actions (TOTP step-up is `auth.verifyTotp` on the signed-in session). */
+  stepUp: {
+    passkeyOptions: () => get<unknown>("/auth/step-up/passkey-options"),
+    passkey: (response: unknown) => post<StepUp>("/auth/step-up/passkey", { response }),
+  },
   org: {
     get: () => get<OrgSettings>("/org"),
     update: (body: In<typeof updateOrgBody>) => patch<OrgSettings>("/org", body),
@@ -313,12 +325,21 @@ export const api = {
     remove: (providerId: string) => del(`/org/sso/providers/${id(providerId)}`),
     verifyDomain: (providerId: string) => post<SsoProvider>(`/org/sso/providers/${id(providerId)}/verify-domain`),
   },
+  scim: {
+    get: () => get<ScimSettings>("/org/scim"),
+    createToken: (name: string) => post<ScimTokenCreated>("/org/scim/tokens", { name }),
+    revokeToken: (tokenId: string) => del(`/org/scim/tokens/${id(tokenId)}`),
+    mapGroup: (body: In<typeof scimGroupRoleBody>) => post<ScimGroupRole>("/org/scim/group-roles", body),
+    unmapGroup: (mappingId: string) => del(`/org/scim/group-roles/${id(mappingId)}`),
+  },
   members: {
     list: () => get<List<Member>>("/members"),
     invite: (body: In<typeof inviteBody>) => post<Invitation>("/members/invite", body),
     setRole: (userId: string, role: Role) =>
       patch<Member>(`/members/${id(userId)}`, { role } satisfies In<typeof updateMemberBody>),
     remove: (userId: string) => del(`/members/${id(userId)}`),
+    resetMfa: (userId: string, reason: string) =>
+      post<MfaResetResult>(`/members/${id(userId)}/reset-mfa`, { reason } satisfies In<typeof resetMemberMfaBody>),
   },
   connectors: {
     list: () => get<ConnectorInfo[]>("/connectors"),

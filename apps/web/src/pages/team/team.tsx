@@ -1,10 +1,15 @@
-import { inviteBody, type Member, ROLES, type Role } from "@slai/shared";
+import { inviteBody, type Member, ROLES, type Role, resetMemberMfaBody } from "@slai/shared";
 import {
   Avatar,
   Badge,
   Button,
   Card,
   Dialog,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   EmptyState,
   Field,
   formatRelative,
@@ -16,16 +21,19 @@ import {
   TableMessage,
   TBody,
   TD,
+  Textarea,
   TH,
   THead,
   TR,
   toast,
 } from "@slai/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ShieldAlert, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { KeyRound, MoreHorizontal, ShieldAlert, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
-import { api, errorMessage } from "../../lib/api";
+import { StepUp } from "../../components/step-up";
+import { api, errorMessage, isApiError } from "../../lib/api";
+import { canResetMfa, stepUpFresh } from "../../lib/auth-flow";
 import { ROLE_HELP, ROLE_LABEL } from "../../lib/labels";
 import { qk, useMe, useMembers } from "../../lib/queries";
 
@@ -127,12 +135,89 @@ function RemoveDialog({ member, onClose }: { member: Member | null; onClose: () 
   );
 }
 
+/**
+ * Reset a member's second factors (T-19): a reason for the audit log and a fresh
+ * step-up (TOTP or passkey in the last 5 minutes). The member is signed out
+ * everywhere, emailed, and enrolls again at their next sign-in.
+ */
+function ResetMfaDialog({ member, onClose }: { member: Member | null; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const { data: me } = useMe();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const close = () => {
+    setReason("");
+    setError(null);
+    onClose();
+  };
+  const reset = useMutation({
+    mutationFn: (m: Member) => api.members.resetMfa(m.userId, reason.trim()),
+    onSuccess: (r, m) => {
+      void queryClient.invalidateQueries({ queryKey: qk.members });
+      toast({
+        tone: "success",
+        title: `Two-factor reset for ${m.name}`,
+        description: `Removed ${[r.removed.totp && "their authenticator app and backup codes", r.removed.passkeys > 0 && `${r.removed.passkeys} passkey${r.removed.passkeys === 1 ? "" : "s"}`].filter(Boolean).join(" and ") || "no factors"}; signed out of ${r.sessionsRevoked} session${r.sessionsRevoked === 1 ? "" : "s"}. They've been emailed.`,
+      });
+      close();
+    },
+    onError: (e) => {
+      // The proof expired meanwhile: show the step-up prompt again.
+      if (isApiError(e) && e.code === "step_up_required") void queryClient.invalidateQueries({ queryKey: qk.me });
+      setError(errorMessage(e));
+    },
+  });
+  const reasonOk = resetMemberMfaBody.safeParse({ reason }).success;
+  const fresh = me ? stepUpFresh(me) : false;
+  return (
+    <Dialog
+      open={member !== null}
+      onOpenChange={(o) => !o && close()}
+      title={`Reset two-factor for ${member?.name ?? "member"}?`}
+      description="Their authenticator app, backup codes and passkeys are removed and they're signed out everywhere. They set up two-factor again at their next sign-in, and get an email about it. Only do this after checking it's really them."
+      footer={
+        <>
+          <Button variant="ghost" onClick={close}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            disabled={!reasonOk || !fresh}
+            loading={reset.isPending}
+            onClick={() => member && reset.mutate(member)}
+          >
+            Reset two-factor
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Field
+          label="Reason"
+          hint="How you verified their identity (a ticket, a call). Recorded in the audit log."
+          error={error ?? undefined}
+        >
+          <Textarea
+            rows={3}
+            value={reason}
+            maxLength={500}
+            placeholder="HELP-123: lost phone; verified on a video call"
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </Field>
+        {me && !fresh && <StepUp me={me} onVerified={() => setError(null)} />}
+      </div>
+    </Dialog>
+  );
+}
+
 export function TeamPage() {
   const members = useMembers();
   const { data: me } = useMe();
   const queryClient = useQueryClient();
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removing, setRemoving] = useState<Member | null>(null);
+  const [resetting, setResetting] = useState<Member | null>(null);
   const isOwner = me?.role === "owner";
   const isAdmin = isOwner || me?.role === "admin";
 
@@ -211,6 +296,16 @@ export function TeamPage() {
                               <div className="truncate font-medium text-ink">
                                 {m.name}
                                 {self && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}
+                                {!m.active && (
+                                  <Badge tone="outline" size="sm" className="ml-1.5">
+                                    Deactivated
+                                  </Badge>
+                                )}
+                                {m.scimManaged && (
+                                  <Badge tone="outline" size="sm" className="ml-1.5">
+                                    SCIM
+                                  </Badge>
+                                )}
                               </div>
                               <div className="truncate text-xs text-ink-muted">{m.email}</div>
                             </div>
@@ -255,13 +350,27 @@ export function TeamPage() {
                           )}
                         </TD>
                         <TD>
-                          {isAdmin && m.role !== "owner" && !self && (
-                            <IconButton
-                              size="sm"
-                              label={`Remove ${m.name}`}
-                              icon={<Trash2 />}
-                              onClick={() => setRemoving(m)}
-                            />
+                          {me && (canResetMfa(me, m) || (isAdmin && m.role !== "owner" && !self)) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <IconButton size="sm" label={`Actions for ${m.name}`} icon={<MoreHorizontal />} />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {canResetMfa(me, m) && (
+                                  <DropdownMenuItem onSelect={() => setResetting(m)}>
+                                    <KeyRound aria-hidden /> Reset two-factor
+                                  </DropdownMenuItem>
+                                )}
+                                {isAdmin && m.role !== "owner" && !self && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem destructive onSelect={() => setRemoving(m)}>
+                                      <Trash2 aria-hidden /> Remove
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </TD>
                       </TR>
@@ -275,6 +384,7 @@ export function TeamPage() {
       </Card>
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       <RemoveDialog member={removing} onClose={() => setRemoving(null)} />
+      <ResetMfaDialog member={resetting} onClose={() => setResetting(null)} />
     </Page>
   );
 }

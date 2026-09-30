@@ -61,6 +61,24 @@ export function mfaRedirect(me: Me): "/mfa/setup" | "/mfa" | null {
   return null;
 }
 
+/** Is this session's TOTP/passkey proof fresh enough for a sensitive action (the server decides; this picks the UI)? */
+export function stepUpFresh(me: Me, now: Date = new Date()): boolean {
+  const until = me.security.stepUpUntil;
+  return until !== null && new Date(until).getTime() > now.getTime();
+}
+
+/**
+ * Whether to offer "Reset two-factor" on a Team row. Mirrors the server's guard
+ * rails that the client can see (admin or owner, not yourself, owners only by
+ * owners, active members); the server also refuses the last owner and members
+ * of organizations this admin does not administer.
+ */
+export function canResetMfa(me: Me, member: { userId: string; role: Me["role"]; active: boolean }): boolean {
+  if (me.role !== "owner" && me.role !== "admin") return false;
+  if (member.userId === me.user.id || !member.active) return false;
+  return member.role !== "owner" || me.role === "owner";
+}
+
 /** Second-factor methods available to a signed-in session that must verify (step-up). */
 export function stepUpMethods(me: Me): SecondFactor[] {
   const m: SecondFactor[] = [];

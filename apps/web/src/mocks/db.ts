@@ -23,6 +23,7 @@ import type {
   Policy,
   Replay,
   Risk,
+  ScimSettings,
   TicketDetail,
   TicketSummary,
   UsageSummary,
@@ -61,6 +62,8 @@ import {
 export interface OrgData {
   settings: OrgSettings;
   sso: OrgSsoSettings;
+  /** SCIM provisioning settings (created lazily by the handlers). */
+  scim?: ScimSettings;
   members: Member[];
   connections: Connection[];
   customers: MockCustomer[];

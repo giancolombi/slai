@@ -14,6 +14,13 @@ export async function signInWithPasskey(): Promise<SignInResult> {
   return api.passkeys.authenticate(response);
 }
 
+/** Proves a passkey in the current session (step-up before a sensitive action). */
+export async function stepUpWithPasskey() {
+  const optionsJSON = (await api.stepUp.passkeyOptions()) as Parameters<typeof startAuthentication>[0]["optionsJSON"];
+  const response = await startAuthentication({ optionsJSON });
+  return api.stepUp.passkey(response);
+}
+
 export async function registerPasskey(name?: string) {
   const optionsJSON = (await api.passkeys.registerOptions()) as Parameters<typeof startRegistration>[0]["optionsJSON"];
   const response = await startRegistration({ optionsJSON });

@@ -20,6 +20,7 @@ export const qk = {
   me: ["me"] as const,
   org: ["org"] as const,
   sso: ["org-sso"] as const,
+  scim: ["org-scim"] as const,
   passkeys: ["passkeys"] as const,
   members: ["members"] as const,
   connectors: ["connectors"] as const,
@@ -79,6 +80,7 @@ export const meQuery = queryOptions({ queryKey: qk.me, queryFn: api.auth.me, sta
 export const useMe = () => useQuery(meQuery);
 export const useOrg = () => useQuery({ queryKey: qk.org, queryFn: api.org.get });
 export const useOrgSso = (enabled = true) => useQuery({ queryKey: qk.sso, queryFn: api.sso.get, enabled });
+export const useOrgScim = (enabled = true) => useQuery({ queryKey: qk.scim, queryFn: api.scim.get, enabled });
 export const usePasskeys = () => useQuery({ queryKey: qk.passkeys, queryFn: api.passkeys.list });
 export const useMembers = () => useQuery({ queryKey: qk.members, queryFn: api.members.list });
 export const useConnectors = () =>
