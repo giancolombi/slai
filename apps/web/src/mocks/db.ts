@@ -12,6 +12,7 @@ import type {
   Connection,
   Contract,
   DashboardSummary,
+  Invitation,
   KnowledgeArticle,
   Me,
   Member,
@@ -23,6 +24,7 @@ import type {
   Policy,
   Replay,
   Risk,
+  ScimSettings,
   TicketDetail,
   TicketSummary,
   UsageSummary,
@@ -61,7 +63,11 @@ import {
 export interface OrgData {
   settings: OrgSettings;
   sso: OrgSsoSettings;
+  /** SCIM provisioning settings (created lazily by the handlers). */
+  scim?: ScimSettings;
   members: Member[];
+  /** Invitations (created lazily; older persisted mock databases have none). */
+  invitations?: Invitation[];
   connections: Connection[];
   customers: MockCustomer[];
   contracts: Contract[];
@@ -133,7 +139,7 @@ function seedAcme(now: number): OrgData {
 export function emptyOrg(id: string, name: string, owner: Member, now: number): OrgData {
   return {
     settings: { id, name, plan: TRIAL.plan, monthlySpendCapCents: null },
-    sso: { enforceSso: false, requireMfaForSso: false, providers: [] },
+    sso: { enforceSso: false, requireMfaForSso: false, requireIdpMfa: false, providers: [] },
     members: [owner],
     connections: [],
     customers: [],
@@ -172,6 +178,8 @@ function seed(): MockDb {
     role: "admin",
     mfaEnabled: true,
     lastLoginAt: null,
+    active: true,
+    scimManaged: false,
   };
   return {
     version: VERSION,

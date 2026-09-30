@@ -125,7 +125,14 @@ export function buildMe(): Me {
       { id: ACME_ORG_ID, name: "Acme Cloud", role: "owner" },
       { id: SANDBOX_ORG_ID, name: "Acme Cloud (Sandbox)", role: "admin" },
     ],
-    security: { authMethod: "password", mfa: "satisfied", totp: true, passkeys: 1, hasPassword: true },
+    security: {
+      authMethod: "password",
+      mfa: "satisfied",
+      totp: true,
+      passkeys: 1,
+      hasPassword: true,
+      stepUpUntil: null,
+    },
   };
 }
 
@@ -135,6 +142,7 @@ export function buildOrgSso(): OrgSsoSettings {
   return {
     enforceSso: false,
     requireMfaForSso: false,
+    requireIdpMfa: false,
     providers: [
       {
         id: "0d9c2d1e-2b0a-4c1e-9f00-5b0a00000001",
@@ -207,6 +215,8 @@ export function buildMembers(now: number): Member[] {
       role: "owner",
       mfaEnabled: true,
       lastLoginAt: new Date(now - 4 * MIN).toISOString(),
+      active: true,
+      scimManaged: false,
     },
     ...AGENTS.map((name, i) => ({
       userId: `u_${name
@@ -223,6 +233,9 @@ export function buildMembers(now: number): Member[] {
       role: roles[i]!,
       mfaEnabled: i % 3 !== 2,
       lastLoginAt: i === 6 ? null : new Date(now - (i + 1) * 3.7 * HOUR).toISOString(),
+      // Provisioned by Okta SCIM; Daniel was deactivated at the IdP.
+      active: i !== 5,
+      scimManaged: i >= 4,
     })),
   ];
 }

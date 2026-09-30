@@ -79,6 +79,7 @@ export function ssoRoutes(deps: AppDeps) {
       return {
         enforceSso: o?.enforceSso ?? false,
         requireMfaForSso: o?.ssoRequireMfa ?? false,
+        requireIdpMfa: o?.ssoRequireIdpMfa ?? false,
         providers: rows.map(toDto),
       };
     });
@@ -195,6 +196,7 @@ export function ssoRoutes(deps: AppDeps) {
         .set({
           ...(input.enforceSso !== undefined && { enforceSso: input.enforceSso }),
           ...(input.requireMfaForSso !== undefined && { ssoRequireMfa: input.requireMfaForSso }),
+          ...(input.requireIdpMfa !== undefined && { ssoRequireIdpMfa: input.requireIdpMfa }),
         })
         .where(eq(organizations.id, a.orgId));
       if (input.enforceSso !== undefined && input.enforceSso !== o?.enforceSso) {
@@ -212,6 +214,15 @@ export function ssoRoutes(deps: AppDeps) {
           action: "sso.mfa_policy_changed",
           target: { type: "organization", id: a.orgId },
           metadata: { requireMfaForSso: input.requireMfaForSso },
+        });
+      }
+      if (input.requireIdpMfa !== undefined && input.requireIdpMfa !== o?.ssoRequireIdpMfa) {
+        await audit(tx, {
+          ...auditBase(c),
+          orgId: a.orgId,
+          action: "sso.idp_mfa_policy_changed",
+          target: { type: "organization", id: a.orgId },
+          metadata: { requireIdpMfa: input.requireIdpMfa },
         });
       }
     });

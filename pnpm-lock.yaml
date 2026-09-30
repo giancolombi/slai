@@ -78,6 +78,9 @@ importers:
       oauth2-mock-server:
         specifier: ^9.2.0
         version: 9.2.0
+      xml-crypto:
+        specifier: 6.3.2
+        version: 6.3.2
 
   apps/web:
     dependencies:

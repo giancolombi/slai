@@ -85,6 +85,13 @@ const mfaSetupRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/auth/mfa-setup"), "MfaSetupPage"),
 });
 
+/** Accepting an invitation (T-59a): public; the page itself handles signed-in, signed-out and SSO. */
+const inviteRoute = createRoute({
+  getParentRoute: () => authLayout,
+  path: "/invite/$token",
+  component: lazyRouteComponent(() => import("./pages/auth/invite"), "InvitePage"),
+});
+
 const designRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/design",
@@ -273,7 +280,7 @@ const settingsRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  authLayout.addChildren([loginRoute, signupRoute, mfaRoute, mfaSetupRoute]),
+  authLayout.addChildren([loginRoute, signupRoute, mfaRoute, mfaSetupRoute, inviteRoute]),
   designRoute,
   onboardingRoute,
   appLayout.addChildren([

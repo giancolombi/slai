@@ -20,9 +20,11 @@ export const qk = {
   me: ["me"] as const,
   org: ["org"] as const,
   sso: ["org-sso"] as const,
+  scim: ["org-scim"] as const,
   offboarding: ["org-offboarding"] as const,
   passkeys: ["passkeys"] as const,
   members: ["members"] as const,
+  invitations: ["members", "invitations"] as const,
   connectors: ["connectors"] as const,
   connections: ["connections"] as const,
   connection: (id: string) => ["connections", id] as const,
@@ -89,8 +91,11 @@ export const useOffboarding = (enabled = true) =>
       q.state.data?.exports.some((e) => e.status === "queued" || e.status === "running") ? 3000 : false,
   });
 export const useOrgSso = (enabled = true) => useQuery({ queryKey: qk.sso, queryFn: api.sso.get, enabled });
+export const useOrgScim = (enabled = true) => useQuery({ queryKey: qk.scim, queryFn: api.scim.get, enabled });
 export const usePasskeys = () => useQuery({ queryKey: qk.passkeys, queryFn: api.passkeys.list });
 export const useMembers = () => useQuery({ queryKey: qk.members, queryFn: api.members.list });
+export const useInvitations = (enabled = true) =>
+  useQuery({ queryKey: qk.invitations, queryFn: api.members.invitations, enabled });
 export const useConnectors = () =>
   useQuery({ queryKey: qk.connectors, queryFn: api.connectors.list, staleTime: 10 * 60_000 });
 export const useConnections = () => useQuery({ queryKey: qk.connections, queryFn: api.connections.list });

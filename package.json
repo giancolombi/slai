@@ -19,6 +19,7 @@
     "db:seed": "pnpm --filter @slai/db seed",
     "setup:env": "tsx packages/db/src/scripts/setup-env.ts",
     "demo:otp": "pnpm --silent --filter @slai/db demo:otp",
+    "auth:break-glass": "pnpm --silent --filter @slai/db break-glass",
     "db:backup": "pnpm --silent --filter @slai/db backup",
     "db:restore": "pnpm --silent --filter @slai/db restore",
     "keys:rotate": "pnpm --silent --filter @slai/db keys:rotate"

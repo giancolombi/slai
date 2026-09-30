@@ -23,6 +23,7 @@ import { ErrorState } from "../../components/page";
 import { api, errorMessage } from "../../lib/api";
 import { qk, useOrgSso } from "../../lib/queries";
 import { apiFieldErrors, type FieldErrors, zodFieldErrors } from "../auth/form-errors";
+import { ScimCard } from "./scim";
 
 function CopyValue({ value, label }: { value: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -343,8 +344,20 @@ export function SsoTab() {
               onCheckedChange={(requireMfaForSso) => update.mutate({ requireMfaForSso })}
             />
           </Field>
+          <Field
+            inline
+            label="Require the identity provider to assert MFA"
+            hint="Refuse SSO sign-ins unless the IdP says it used multi-factor authentication (OIDC amr, SAML authentication context). Check your IdP sends it before turning this on."
+          >
+            <Switch
+              checked={sso.data.requireIdpMfa}
+              disabled={update.isPending}
+              onCheckedChange={(requireIdpMfa) => update.mutate({ requireIdpMfa })}
+            />
+          </Field>
         </CardContent>
       </Card>
+      <ScimCard ssoReady={hasVerified} />
       <AddProviderDialog open={adding} onOpenChange={setAdding} />
     </div>
   );

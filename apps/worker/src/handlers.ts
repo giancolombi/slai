@@ -5,10 +5,12 @@ import { executeAction, runAgent } from "./agents.js";
 import { billingSnapshotJob } from "./billing.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
+import { sendInviteEmail } from "./invite-email.js";
 import { syncKnowledge } from "./knowledge.js";
 import { deleteOrgIfDue, exportOrg } from "./offboarding.js";
 import { runReplay } from "./replay.js";
 import { runRetention } from "./retention.js";
+import { sendSecurityEmail } from "./security-email.js";
 import { evaluateTicketJob, ingestTicket, processWebhook, remapConnection, syncConnection } from "./sync.js";
 
 type Data<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>;
@@ -25,6 +27,8 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "execute-action": (p) => executeAction(deps, p),
     "extract-contract": (p) => extractContractJob(deps, p),
     "run-replay": (p) => runReplay(deps, p),
+    "send-security-email": (p) => sendSecurityEmail(deps, p),
+    "send-invite-email": (p) => sendInviteEmail(deps, p),
     "run-retention": async () => {
       await runRetention(deps);
     },

@@ -6,6 +6,7 @@ export * from "./crypto.js";
 export * from "./evaluation.js";
 export * from "./events.js";
 export * from "./jobs.js";
+export * from "./mfa-reset.js";
 export * from "./migrate.js";
 export * from "./passwords.js";
 export * from "./prod-env.js";

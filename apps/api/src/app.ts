@@ -22,13 +22,17 @@ import { customerRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
+import { invitationAdminRoutes, invitationAuthRoutes } from "./routes/invitations.js";
 import { knowledgeRoutes } from "./routes/knowledge.js";
+import { mfaResetRoutes } from "./routes/mfa-reset.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { oauthRoutes } from "./routes/oauth.js";
 import { offboardingRoutes } from "./routes/offboarding.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
 import { replayRoutes } from "./routes/replays.js";
+import { scimRoutes } from "./routes/scim.js";
+import { scimSettingsRoutes } from "./routes/scim-settings.js";
 import { ssoRoutes } from "./routes/sso.js";
 import { ticketRoutes } from "./routes/tickets.js";
 
@@ -85,10 +89,22 @@ export function createApp(deps: AppDeps) {
   app.route(API_BASE, healthRoutes(deps));
   app.route(`${API_BASE}/webhooks`, webhookRoutes(deps));
   app.route(`${API_BASE}/billing/webhook`, billingWebhookRoutes(deps));
+  // SCIM 2.0 for org IdPs (T-18): bearer-token auth, no cookies, so outside /api/v1 (no CSRF, CORS or session).
+  app.use(
+    "/scim/*",
+    bodyLimit({
+      maxSize: JSON_LIMIT,
+      onError: () => {
+        throw new ApiError(413, "payload_too_large", "Request body is too large.");
+      },
+    }),
+  );
+  app.route("/scim/v2", scimRoutes(deps));
 
   app.use(`${API_BASE}/*`, loadSession(deps, auth));
   // Our /auth routes, then better-auth's allowlisted endpoints behind the same middleware.
   app.route(AUTH_BASE, authRoutes(deps, auth));
+  app.route(AUTH_BASE, invitationAuthRoutes(deps, auth));
   app.route(AUTH_BASE, authHandler(deps, auth));
 
   // OAuth connect flow: browser navigations that check the session themselves and redirect on failure.
@@ -98,6 +114,9 @@ export function createApp(deps: AppDeps) {
   const authed = new Hono<AppEnv>();
   authed.use("*", requireAuth(), writesNeedMember);
   authed.route("/", orgRoutes(deps));
+  authed.route("/", mfaResetRoutes(deps));
+  authed.route("/", invitationAdminRoutes(deps));
+  authed.route("/", scimSettingsRoutes(deps));
   authed.route("/", offboardingRoutes(deps));
   authed.route("/", ssoRoutes(deps));
   authed.route("/", connectionRoutes(deps));

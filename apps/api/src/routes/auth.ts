@@ -1,16 +1,31 @@
 import { randomBytes } from "node:crypto";
-import { audit, memberships, organizations, sessions, users } from "@slai/db";
-import { discoverBody, type SignInDiscovery, type SignInResult, signupBody, switchOrgBody } from "@slai/shared";
-import { and, eq } from "drizzle-orm";
+import {
+  type AuthenticationResponseJSON,
+  type AuthenticatorTransportFuture,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
+import { audit, memberships, organizations, passkeys, sessions, users, verifications } from "@slai/db";
+import {
+  discoverBody,
+  type SignInDiscovery,
+  type SignInResult,
+  type StepUp,
+  signupBody,
+  stepUpPasskeyBody,
+  switchOrgBody,
+} from "@slai/shared";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import { Hono } from "hono";
 import type { Auth } from "../auth/better-auth.js";
 import { CLIENT_IP_HEADER, SESSION_COOKIE } from "../auth/better-auth.js";
 import { SSO_REQUIRED, ssoForEmail } from "../auth/handler.js";
 import { buildMe } from "../auth/me.js";
 import { resolveAuth } from "../auth/session.js";
+import { STEP_UP_WINDOW_MS } from "../auth/step-up.js";
 import { type AppDeps, type AppEnv, auditBase, auth, type Ctx } from "../context.js";
 import { ApiError, conflict, notFound } from "../errors.js";
-import { requireSession } from "../middleware/auth.js";
+import { requireAuth, requireSession } from "../middleware/auth.js";
 import { body } from "../validate.js";
 
 const RATE_LIMITED = () => new ApiError(429, "rate_limited", "Too many attempts. Try again later.");
@@ -113,7 +128,7 @@ export function authRoutes(deps: AppDeps, betterAuth: Auth) {
   });
 
   // Works while MFA is pending, so the web app can route to enrollment or verification.
-  app.get("/me", requireSession, async (c) => c.json(await buildMe(db, auth(c))));
+  app.get("/me", requireSession, async (c) => c.json(await buildMe(db, auth(c), deps.now())));
 
   app.post("/switch-org", requireSession, async (c) => {
     const a = auth(c);
@@ -121,7 +136,13 @@ export function authRoutes(deps: AppDeps, betterAuth: Auth) {
     const [m] = await db
       .select({ role: memberships.role })
       .from(memberships)
-      .where(and(eq(memberships.userId, a.user.id), eq(memberships.orgId, input.organizationId)));
+      .where(
+        and(
+          eq(memberships.userId, a.user.id),
+          eq(memberships.orgId, input.organizationId),
+          isNull(memberships.disabledAt),
+        ),
+      );
     if (!m) throw notFound("Organization");
     await db.transaction(async (tx) => {
       await tx.update(sessions).set({ activeOrgId: input.organizationId }).where(eq(sessions.id, a.sessionId));
@@ -136,7 +157,101 @@ export function authRoutes(deps: AppDeps, betterAuth: Auth) {
     // The MFA state can differ per org (SSO trust is per org), so re-resolve.
     const { ctx } = await resolveAuth(deps, betterAuth, c.req.raw.headers);
     if (!ctx) throw notFound("Organization");
-    return c.json(await buildMe(db, ctx));
+    return c.json(await buildMe(db, ctx, deps.now()));
+  });
+
+  // ------------------------------------------------------------ step-up with a passkey (T-19)
+  // TOTP step-up is `/auth/two-factor/verify-totp` on a signed-in session (better-auth, handler.ts).
+  const rpID = new URL(deps.env.APP_URL).hostname;
+  const challengeKey = (sessionId: string) => `slai-step-up:${sessionId}`;
+
+  app.get("/step-up/passkey-options", requireAuth(), async (c) => {
+    const a = auth(c);
+    if (!deps.rateLimits.loginByIp.take(`step-up:${c.get("ip") ?? "unknown"}`)) throw RATE_LIMITED();
+    const mine = await db
+      .select({ id: passkeys.credentialID, transports: passkeys.transports })
+      .from(passkeys)
+      .where(eq(passkeys.userId, a.user.id));
+    if (mine.length === 0) throw conflict("You have no passkey. Use your authenticator app.", "no_passkey");
+    const options = await generateAuthenticationOptions({
+      rpID,
+      userVerification: "required",
+      allowCredentials: mine.map((p) => ({
+        id: p.id,
+        transports: p.transports ? (p.transports.split(",") as AuthenticatorTransportFuture[]) : undefined,
+      })),
+    });
+    await db.transaction(async (tx) => {
+      await tx.delete(verifications).where(eq(verifications.identifier, challengeKey(a.sessionId)));
+      await tx.insert(verifications).values({
+        identifier: challengeKey(a.sessionId),
+        value: options.challenge,
+        expiresAt: new Date(deps.now().getTime() + STEP_UP_WINDOW_MS),
+      });
+    });
+    return c.json(options);
+  });
+
+  app.post("/step-up/passkey", requireAuth(), async (c) => {
+    const a = auth(c);
+    if (!deps.rateLimits.loginByIp.take(`step-up:${c.get("ip") ?? "unknown"}`)) throw RATE_LIMITED();
+    const input = await body(c, stepUpPasskeyBody);
+    const response = input.response as unknown as AuthenticationResponseJSON;
+    const [challenge] = await db
+      .delete(verifications)
+      .where(and(eq(verifications.identifier, challengeKey(a.sessionId)), gt(verifications.expiresAt, deps.now())))
+      .returning({ value: verifications.value });
+    const [pk] =
+      typeof response.id === "string"
+        ? await db
+            .select()
+            .from(passkeys)
+            .where(and(eq(passkeys.userId, a.user.id), eq(passkeys.credentialID, response.id)))
+        : [];
+    const failed = async (reason: string) => {
+      await audit(db, {
+        ...auditBase(c),
+        orgId: a.orgId,
+        action: "auth.step_up_failed",
+        target: { type: "user", id: a.user.id },
+        metadata: { factor: "passkey", reason },
+      });
+      return new ApiError(401, "invalid_code", "That passkey could not be verified.");
+    };
+    if (!challenge || !pk) throw await failed(challenge ? "unknown_passkey" : "no_challenge");
+    let verified: Awaited<ReturnType<typeof verifyAuthenticationResponse>>;
+    try {
+      verified = await verifyAuthenticationResponse({
+        response,
+        expectedChallenge: challenge.value,
+        expectedOrigin: new URL(deps.env.APP_URL).origin,
+        expectedRPID: rpID,
+        requireUserVerification: true,
+        credential: {
+          id: pk.credentialID,
+          publicKey: new Uint8Array(Buffer.from(pk.publicKey, "base64")),
+          counter: pk.counter,
+          transports: pk.transports ? (pk.transports.split(",") as AuthenticatorTransportFuture[]) : undefined,
+        },
+      });
+    } catch {
+      throw await failed("verification_failed");
+    }
+    if (!verified.verified || !verified.authenticationInfo.userVerified) throw await failed("not_verified");
+    const at = deps.now();
+    await db.transaction(async (tx) => {
+      await tx.update(passkeys).set({ counter: verified.authenticationInfo.newCounter }).where(eq(passkeys.id, pk.id));
+      await tx.update(sessions).set({ stepUpAt: at, mfaVerified: true }).where(eq(sessions.id, a.sessionId));
+      await audit(tx, {
+        ...auditBase(c),
+        orgId: a.orgId,
+        action: "auth.step_up",
+        target: { type: "user", id: a.user.id },
+        metadata: { factor: "passkey" },
+      });
+    });
+    const out: StepUp = { stepUpUntil: new Date(at.getTime() + STEP_UP_WINDOW_MS).toISOString() };
+    return c.json(out);
   });
 
   return app;

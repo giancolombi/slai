@@ -23,6 +23,16 @@ export const JOB_PAYLOADS = {
   "evaluate-ticket": z.object({ orgId: uuid, ticketId: uuid }),
   /** Fetch one ticket's history from the help desk and ingest it (from sync and webhooks). */
   "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
+  /** Tell a user about a security change to their account (T-19: an admin or break-glass factor reset). */
+  "send-security-email": z.object({
+    orgId: uuid,
+    userId: uuid,
+    kind: z.enum(["mfa_reset"]),
+    /** The admin who did it (null: break-glass by an operator). */
+    actorUserId: uuid.nullable(),
+  }),
+  /** Email an invitation link to the invitee (T-59a). The token is read sealed from the row, never from the payload. */
+  "send-invite-email": z.object({ orgId: uuid, invitationId: uuid }),
   /** Data retention (T-64): cross-org purge of old content, expired auth state and archived contracts. */
   "run-retention": z.object({}),
   /** Builds an org's export bundle (T-64). */
@@ -50,6 +60,8 @@ export const QUEUE = {
   runReplay: "run-replay",
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
+  sendSecurityEmail: "send-security-email",
+  sendInviteEmail: "send-invite-email",
   runRetention: "run-retention",
   exportOrg: "export-org",
   deleteOrg: "delete-org",

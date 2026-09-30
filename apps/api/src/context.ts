@@ -55,6 +55,8 @@ export interface AuthContext {
   /** Anything but `satisfied` blocks every route outside /auth (requireAuth). */
   mfa: MfaState;
   factors: { totp: boolean; passkeys: number; hasPassword: boolean };
+  /** When TOTP or a passkey was last proven in this session (step-up for sensitive actions). */
+  stepUpAt: Date | null;
 }
 
 export type AppEnv = {

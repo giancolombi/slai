@@ -16,6 +16,7 @@
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
     "demo:otp": "tsx src/scripts/demo-otp.ts",
+    "break-glass": "tsx src/scripts/break-glass.ts",
     "keys:rotate": "tsx src/scripts/rotate-keys.ts",
     "backup": "tsx src/scripts/backup.ts",
     "restore": "tsx src/scripts/restore.ts"

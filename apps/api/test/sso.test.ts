@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { auditEvents, memberships, ssoProviders, users } from "@slai/db";
+import { auditEvents, memberships, sessions, ssoProviders, users } from "@slai/db";
 import type { Me, OrgSsoSettings, SignInDiscovery, SsoProvider } from "@slai/shared";
 import { and, eq } from "drizzle-orm";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -20,12 +20,15 @@ const domain = `sso-${randomUUID().slice(0, 8)}.example`;
 
 /** The identity the IdP asserts (in the ID token, the access token and /userinfo). */
 let identity = { sub: "", email: "", email_verified: true, name: "" };
-idp.service.on("beforeTokenSigning", (token) => Object.assign(token.payload, identity));
+/** How the IdP says it authenticated the user (ID token only). */
+let authn: { amr?: string[]; acr?: string } = {};
+idp.service.on("beforeTokenSigning", (token) => Object.assign(token.payload, identity, authn));
 idp.service.on("beforeUserinfo", (res) => {
   res.body = { ...identity };
 });
-function asUser(email: string, name = "Jit User") {
+function asUser(email: string, name = "Jit User", how: typeof authn = {}) {
   identity = { sub: `sub-${email}`, email, email_verified: true, name };
+  authn = how;
 }
 
 /** Runs the browser side of an OIDC login: discover → IdP → callback. Returns the callback response. */
@@ -209,6 +212,65 @@ describe("OIDC sign-in end to end", () => {
     const setup = await client.post("/auth/two-factor/enable", {});
     expect(setup.status).toBe(200);
     await admin.client.patch("/org/sso", { requireMfaForSso: false });
+  });
+});
+
+describe("the IdP's MFA claims (amr/acr)", () => {
+  const sessionOf = async (email: string) => {
+    const [u] = await ctx.owner.db.select().from(users).where(eq(users.email, email));
+    return ctx.owner.db.select().from(sessions).where(eq(sessions.userId, u!.id));
+  };
+
+  it("records amr and acr on the session and in the login audit event", async () => {
+    const email = `amr-${randomUUID().slice(0, 6)}@${domain}`;
+    asUser(email, "Amr User", { amr: ["pwd", "mfa", "otp"], acr: "urn:okta:loa:2fa:any" });
+    const client = new Client(ctx);
+    expect((await ssoLogin(client, email)).headers.get("location")).toBe(`${APP_URL}/`);
+    const [s] = await sessionOf(email);
+    expect(s).toMatchObject({ authMethod: "sso", idpAmr: ["pwd", "mfa", "otp"], idpAcr: "urn:okta:loa:2fa:any" });
+    const [login] = await ctx.owner.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.actorId, s!.userId), eq(auditEvents.action, "auth.login")));
+    expect(login!.metadata).toMatchObject({ method: "sso", amr: ["pwd", "mfa", "otp"], acr: "urn:okta:loa:2fa:any" });
+  });
+
+  it("with 'require the IdP to assert MFA' on, refuses a sign-in without an MFA amr", async () => {
+    const on = await admin.client.patch<OrgSsoSettings>("/org/sso", { requireIdpMfa: true });
+    expect(on.status).toBe(200);
+    expect(on.body.requireIdpMfa).toBe(true);
+    try {
+      const weak = `weak-${randomUUID().slice(0, 6)}@${domain}`;
+      asUser(weak, "Weak", { amr: ["pwd"] });
+      const c1 = new Client(ctx);
+      const res = await ssoLogin(c1, weak);
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toBe(`${APP_URL}/login?sso_error=idp_mfa_required`);
+      expect(c1.cookie).toBeNull();
+      expect((await c1.get("/auth/me")).status).toBe(401);
+      expect(await sessionOf(weak)).toEqual([]);
+      const [failed] = await ctx.owner.db
+        .select()
+        .from(auditEvents)
+        .where(and(eq(auditEvents.action, "auth.login_failed"), eq(auditEvents.actorName, weak)));
+      expect(failed!.metadata).toMatchObject({ reason: "idp_mfa_missing", amr: ["pwd"] });
+
+      // No amr at all is refused too.
+      const none = `none-${randomUUID().slice(0, 6)}@${domain}`;
+      asUser(none, "None");
+      expect((await ssoLogin(new Client(ctx), none)).headers.get("location")).toContain("idp_mfa_required");
+
+      // pwd + otp (two factor categories) is MFA.
+      const strong = `strong-${randomUUID().slice(0, 6)}@${domain}`;
+      asUser(strong, "Strong", { amr: ["pwd", "otp"] });
+      const c2 = new Client(ctx);
+      expect((await ssoLogin(c2, strong)).headers.get("location")).toBe(`${APP_URL}/`);
+      expect((await c2.get("/tickets")).status).toBe(200);
+    } finally {
+      await admin.client.patch("/org/sso", { requireIdpMfa: false });
+    }
+    const events = await ctx.owner.db.select().from(auditEvents).where(eq(auditEvents.orgId, admin.orgId));
+    expect(events.map((e) => e.action)).toContain("sso.idp_mfa_policy_changed");
   });
 });
 

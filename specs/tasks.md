@@ -32,10 +32,15 @@ Each task references the requirements it serves.
 - [x] T-17 SSO per org (OIDC and SAML): admin routes, DNS TXT domain verification, email-domain
       discovery, JIT as member, enforce SSO, "also require slai MFA for SSO users"; tests against
       `oauth2-mock-server` and a software WebAuthn authenticator (PR-24, TR-23, TR-23a)
-- [ ] T-18 SCIM provisioning and deprovisioning; group-to-role mapping from the IdP
-- [ ] T-19 Check the IdP's `amr`/`acr` claims for MFA; admin reset of a member's second factor;
-      recovery flow for users who lose every factor (today an admin must help out of band)
-- [ ] T-19a SAML end-to-end test against a local IdP, and a SAML POST-binding check with SameSite=Lax cookies
+- [x] T-18 SCIM 2.0 at `/scim/v2` (Users, Groups; Okta and Entra shapes): per-org hashed tokens,
+      deactivation disables the membership and revokes sessions, group-to-role mapping in SSO
+      settings; minimal subset instead of `@better-auth/scim` (PR-24, TR-23c)
+- [x] T-19 IdP `amr`/`acr` recorded on SSO sessions and "require the IdP to assert MFA"; admin reset
+      of a member's second factors from Team (step-up, reason, email, audit; no owners by admins,
+      no last owner, cross-org rule); `pnpm auth:break-glass` for the last owner (PR-24, TR-23b)
+- [x] T-19a SAML end to end against in-test signed assertions (signature, audience, expiry,
+      InResponseTo, RelayState, replay, JIT) and the POST binding with SameSite=Lax + CSRF; fixed
+      `verifications.id` (uuid → text), which broke every SAML sign-in (TR-23, TR-24)
 
 ## M2: Connectors
 - [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
@@ -93,8 +98,9 @@ Each task references the requirements it serves.
       466.6 → 62 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
 - [x] T-59 API contract: `approvedBy`/`uploadedBy`/`decidedBy` documented as user ids, with
       `…ByName` display names on the DTOs; the invite response is the shared `Invitation` DTO
-- [ ] T-59a Invitation email (worker mailer) and accept flow (sign up or sign in, then join the org).
-      Moved to after the better-auth merge (T-15 to T-19); now unblocked
+- [x] T-59a Invitation email (`send-invite-email`, token sealed only until sent) and `/invite/:token`:
+      sign up there (then MFA enrollment) or sign in (SSO/enforce-SSO honoured) and join with the
+      invited role; single use, 7-day expiry, resend/revoke from Team, audited (PR-24, TR-23d)
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →

@@ -9,7 +9,15 @@ const me = (security: Partial<Me["security"]> = {}): Me => ({
   organization: { id: "o1", name: "Acme", slug: "acme", plan: "trial" },
   role: "owner",
   organizations: [{ id: "o1", name: "Acme", role: "owner" }],
-  security: { authMethod: "password", mfa: "satisfied", totp: false, passkeys: 0, hasPassword: true, ...security },
+  security: {
+    authMethod: "password",
+    mfa: "satisfied",
+    totp: false,
+    passkeys: 0,
+    hasPassword: true,
+    stepUpUntil: null,
+    ...security,
+  },
 });
 
 describe("sign-in step machine", () => {

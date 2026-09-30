@@ -33,9 +33,10 @@ import { API_BASE } from "@slai/shared";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor } from "better-auth/plugins";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { AppDeps } from "../context.js";
 import { domainsOf, emailDomain } from "./domains.js";
+import { type IdpAuthn, oidcAuthn } from "./idp-mfa.js";
 import { sealAdapter } from "./sealing-adapter.js";
 
 export const AUTH_BASE = `${API_BASE}/auth`;
@@ -50,6 +51,8 @@ export interface RequestMeta {
   ip: string | null;
   userAgent: string | null;
   requestId: string;
+  /** Set during an OIDC callback: the verified ID token's `amr`/`acr` (the handler records and enforces them). */
+  idp?: IdpAuthn;
 }
 export const requestMeta = new AsyncLocalStorage<RequestMeta>();
 
@@ -114,6 +117,7 @@ export function createAuth(deps: AuthDeps) {
         authMethod: { type: "string", required: false, input: false },
         mfaVerified: { type: "boolean", required: false, input: false },
         ssoOrgId: { type: "string", required: false, input: false },
+        stepUpAt: { type: "date", required: false, input: false },
       },
     },
     account: {
@@ -166,6 +170,8 @@ export function createAuth(deps: AuthDeps) {
               data.authMethod = s.authMethod ?? "password";
               data.mfaVerified = true;
             }
+            // A TOTP code or a passkey was just proven: fresh for step-up (a backup code is not).
+            if (path === "/two-factor/verify-totp" || origin?.authMethod === "passkey") data.stepUpAt = new Date();
             if (origin?.authMethod === "sso") {
               const provider = await providerById(ctx?.params?.providerId);
               data.ssoOrgId = provider?.orgId ?? null;
@@ -175,7 +181,7 @@ export function createAuth(deps: AuthDeps) {
               const [m] = await db
                 .select({ orgId: memberships.orgId })
                 .from(memberships)
-                .where(eq(memberships.userId, s.userId))
+                .where(and(eq(memberships.userId, s.userId), isNull(memberships.disabledAt)))
                 .orderBy(asc(memberships.createdAt))
                 .limit(1);
               data.activeOrgId = m?.orgId ?? null;
@@ -219,7 +225,10 @@ export function createAuth(deps: AuthDeps) {
         defaultOverrideUserInfo: false,
         provisionUserOnEveryLogin: true,
         // JIT: a user signing in through an org's IdP becomes a `member` of that org.
-        provisionUser: async ({ user, provider }) => {
+        provisionUser: async ({ user, provider, token }) => {
+          // OIDC: better-auth verified the ID token (JWKS, iss, aud) before calling us.
+          const store = requestMeta.getStore();
+          if (store && token?.idToken) store.idp = oidcAuthn(token.idToken);
           const orgId = (provider as { organizationId?: string | null }).organizationId;
           if (!orgId) return;
           const [created] = await db

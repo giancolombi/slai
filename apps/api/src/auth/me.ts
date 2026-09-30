@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { type Executor, memberships, organizations, sessions } from "@slai/db";
 import type { Me, Role } from "@slai/shared";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { AuthContext } from "../context.js";
 import { notFound } from "../errors.js";
+import { stepUpUntil } from "./step-up.js";
 
-export async function buildMe(db: Executor, a: AuthContext): Promise<Me> {
+export async function buildMe(db: Executor, a: AuthContext, now: Date = new Date()): Promise<Me> {
   const rows = await db
     .select({
       id: organizations.id,
@@ -16,7 +17,7 @@ export async function buildMe(db: Executor, a: AuthContext): Promise<Me> {
     })
     .from(memberships)
     .innerJoin(organizations, eq(organizations.id, memberships.orgId))
-    .where(eq(memberships.userId, a.user.id))
+    .where(and(eq(memberships.userId, a.user.id), isNull(memberships.disabledAt)))
     .orderBy(asc(memberships.createdAt));
   const active = rows.find((r) => r.id === a.orgId);
   if (!active) throw notFound("Organization");
@@ -31,6 +32,7 @@ export async function buildMe(db: Executor, a: AuthContext): Promise<Me> {
       totp: a.factors.totp,
       passkeys: a.factors.passkeys,
       hasPassword: a.factors.hasPassword,
+      stepUpUntil: stepUpUntil(a, now)?.toISOString() ?? null,
     },
   };
 }

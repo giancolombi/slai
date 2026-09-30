@@ -5,7 +5,7 @@
  */
 import { accounts, memberships, organizations, passkeys, sessions, users } from "@slai/db";
 import type { AuthMethod, MfaState, Role } from "@slai/shared";
-import { and, asc, count, eq } from "drizzle-orm";
+import { and, asc, count, eq, isNull } from "drizzle-orm";
 import type { AppDeps, AuthContext } from "../context.js";
 import { ABSOLUTE_TIMEOUT_MS, type Auth } from "./better-auth.js";
 
@@ -57,14 +57,16 @@ export async function toAuthContext(
         await db
           .select({ orgId: memberships.orgId, role: memberships.role })
           .from(memberships)
-          .where(and(eq(memberships.userId, user.id), eq(memberships.orgId, activeOrgId)))
+          .where(
+            and(eq(memberships.userId, user.id), eq(memberships.orgId, activeOrgId), isNull(memberships.disabledAt)),
+          )
       )[0]
     : undefined;
   if (!membership) {
     [membership] = await db
       .select({ orgId: memberships.orgId, role: memberships.role })
       .from(memberships)
-      .where(eq(memberships.userId, user.id))
+      .where(and(eq(memberships.userId, user.id), isNull(memberships.disabledAt)))
       .orderBy(asc(memberships.createdAt))
       .limit(1);
     if (!membership) return null;
@@ -102,6 +104,7 @@ export async function toAuthContext(
       ssoRequireMfa: org?.ssoRequireMfa ?? false,
     }),
     factors: { ...factors, hasPassword: (pw?.n ?? 0) > 0 },
+    stepUpAt: session.stepUpAt ? new Date(session.stepUpAt as string | Date) : null,
   };
 }
 

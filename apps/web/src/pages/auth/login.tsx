@@ -22,7 +22,11 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(
-    sso_error ? "Single sign-on didn't complete. Try again, or ask your admin to check the SSO setup." : null,
+    sso_error === "idp_mfa_required"
+      ? "Your organization requires multi-factor sign-in at your identity provider. Sign in there with MFA and try again."
+      : sso_error
+        ? "Single sign-on didn't complete. Try again, or ask your admin to check the SSO setup."
+        : null,
   );
 
   useEffect(() => {

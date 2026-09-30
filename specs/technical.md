@@ -423,6 +423,9 @@
     (TR-26). `sealAdapter` wraps the adapter: session tokens are stored only as
     sha256 (`sessions.token_hash`), and SSO client secrets / SAML private keys
     are sealed with our keyring (AES-256-GCM, AAD `sso_provider:<id>:...`).
+    `verifications.id` is text, not uuid: better-auth reserves some rows under
+    its own ids (the sha256 of a SAML assertion id for replay protection), and
+    with a uuid column every SAML sign-in failed (found by T-19a; migration 0009).
   - **Passwords** stay argon2id (`@node-rs/argon2`, OWASP parameters) through
     better-auth's custom `hash`/`verify`; migration 0005 turned every
     `users.password_hash` into a `credential` account row. Unknown emails still
@@ -445,7 +448,17 @@
     `mfa_required` with only an httpOnly challenge cookie (no session); for a
     passkey-only user the issued session is revoked and a passkey is required.
     Trusted devices are disabled (every sign-in needs the factor). The last
-    factor cannot be removed.
+    factor cannot be removed. Memberships deactivated by SCIM (`disabled_at`,
+    TR-23c) are ignored everywhere a session resolves its org (session hook,
+    `toAuthContext`, `/auth/me`, switch-org, owner counts).
+  - **Step-up** (`auth/step-up.ts`): sensitive actions need TOTP or a passkey
+    proven in this session within the last 5 minutes (`sessions.step_up_at`, set
+    by a TOTP sign-in or `/auth/two-factor/verify-totp` on a signed-in session,
+    a passkey sign-in, or `GET /auth/step-up/passkey-options` +
+    `POST /auth/step-up/passkey`: a single-use challenge in `verifications`,
+    user verification required). A backup code or an IdP's MFA is not a step-up.
+    `Me.security.stepUpUntil` tells the web app; the server answers 403
+    `step_up_required` with the usable `methods`.
   - **TOTP** is RFC 6238 (SHA-1, 6 digits, 30s, ±1 step). better-auth seals the
     secret and backup codes (XChaCha20-Poly1305 under the versioned
     `SESSION_SECRET`; rotate with `SESSION_SECRET_VERSION` and
@@ -467,6 +480,20 @@
     provider's verified domains. `enforce_sso` (needs a verified provider; lifted
     when the last one is deleted) refuses password and passkey sign-in and
     signup for those domains with 403 `sso_required`.
+  - **IdP MFA claims.** For OIDC the verified ID token's `amr` (RFC 8176) and
+    `acr` are captured in `provisionUser` (better-auth has verified the token by
+    then); for SAML the validated assertion's AuthnContextClassRef is read from
+    the ACS body. Both are stored on the session (`sessions.idp_amr`,
+    `idp_acr`) and in `auth.login`. With the org option `sso_require_idp_mfa`
+    ("require the IdP to assert MFA", `PATCH /org/sso { requireIdpMfa }`), a
+    sign-in whose IdP does not assert MFA is refused: the session is revoked,
+    `auth.login_failed` records `idp_mfa_missing` with the claims, and the browser
+    lands on `/login?sso_error=idp_mfa_required`. MFA is asserted when `amr`
+    contains `mfa`, or methods from two factor categories (knowledge `pwd/pin/kba`,
+    possession `otp/hwk/swk/sms/tel/sc/pop`, inherence `fpt/face/iris/retina/vbm`),
+    or the context is a known MFA class (REFEDS MFA, PAPE multi-factor, Microsoft
+    `multipleauthn`, SAML `MobileTwoFactor*`, `TimeSyncToken`, `SmartcardPKI`)
+    (`auth/idp-mfa.ts`).
   - **Rate limits**: our token buckets (per IP and per email on password sign-in,
     per IP on 2FA verification, passkey and SSO starts, discovery and signup).
     better-auth's built-in limiter is off (it is per-instance memory, like ours,
@@ -478,11 +505,118 @@
     `auth.backup_codes_regenerated`, `auth.passkey_added`, `auth.passkey_removed`,
     `sso.provider_created|updated|deleted`, `sso.domain_verified`,
     `sso.domain_verification_failed`, `sso.enforcement_enabled|disabled`,
-    `sso.mfa_policy_changed`, `sso.jit_provisioned`.
+    `sso.mfa_policy_changed`, `sso.idp_mfa_policy_changed`, `sso.jit_provisioned`,
+    `auth.step_up`, `auth.step_up_failed`, `member.mfa_reset`,
+    `auth.mfa_break_glass_reset`, `scim.token_created|revoked`,
+    `scim.group_role_mapped|unmapped`, `scim.user_provisioned|updated|deactivated|
+    reactivated|deleted`, `scim.group_created|updated|deleted`, and
+    `member.role_changed` with `source: "scim"`.
   - **Demo**: `demo@slai.dev` is pre-enrolled in TOTP with a fixed, dev-only
     secret printed by the seed; `pnpm demo:otp` prints the current code. No demo
     SSO provider is seeded (there is no local mock IdP in docker compose; the
-    tests use `oauth2-mock-server`).
+    tests use `oauth2-mock-server` for OIDC and in-test signed SAML assertions,
+    `xml-crypto` with the keys in `apps/api/test/fixtures/saml`).
+- **TR-23b** Second-factor recovery (T-19):
+  - **Admin reset**: `POST /members/:userId/reset-mfa { reason }` (admin or owner;
+    `routes/mfa-reset.ts`) removes the member's TOTP secret, backup codes and
+    passkeys, deletes every session they have, sets `mfa_enabled = false` (so the
+    next sign-in is mandatory enrollment), audits `member.mfa_reset` (actor,
+    target, reason, what was removed, their other orgs) and queues the
+    `send-security-email` job (the worker emails the member, audited as
+    `notification.sent`). The reason (10–500 chars) records how the admin checked
+    the member's identity.
+  - **Guard rails**, in order: a fresh step-up (TR-23) → 403 `step_up_required`;
+    not yourself → 409 `self_reset`; not the last active owner of any of the
+    member's orgs → 409 `last_owner` (break-glass only); only owners reset owners
+    → 403 `cannot_reset_owner`; and the cross-org rule below → 403
+    `cross_org_member`.
+  - **Cross-org rule (decision)**: factors belong to the user, not to an org, so
+    a reset in org A also changes how the user signs in to org B. slai allows the
+    reset only when **every** organization the member belongs to (including
+    deactivated memberships) is one where the admin is an admin or owner, and an
+    owner wherever the member is an owner. Otherwise an admin of one org could
+    take over an account another org relies on. The alternative (the owner of
+    each org approves) needs a multi-party approval flow; members in orgs the
+    admin does not run go through break-glass instead.
+  - **Break-glass** (the only way to recover an org's last owner, or anyone no
+    admin can reset): `DATABASE_URL=<owner url> pnpm auth:break-glass <email>
+    --reason "<ticket, how identity was verified>" [--operator <name>]`
+    (`packages/db/src/mfa-reset.ts`). It refuses the runtime roles (`slai_app`,
+    `slai_worker`, `slai_auth`) and any role that is neither superuser nor owner
+    of the schema, requires a reason, performs the same reset as above, writes
+    `auth.mfa_break_glass_reset` (actor `break-glass:<operator>`, host, reason,
+    roles) into every org the user belongs to (or with a null org), and queues
+    the security email. Procedure: (1) a support ticket from the customer; (2)
+    verify the requester's identity out of band (a video call against the
+    account's name and a second contact on file, or a signed request from
+    another owner); (3) a second engineer reviews the ticket; (4) run the command
+    from the bastion with the owner credentials from the secrets manager, never
+    from a laptop; (5) paste the command output into the ticket; (6) the
+    `auth.mfa_break_glass_reset` event is reviewed in the next access review.
+- **TR-23c** SCIM 2.0 provisioning (T-18) at `/scim/v2` (`routes/scim.ts`,
+  `scim/*`): outside `/api/v1` because it uses a bearer token, not cookies (no
+  CSRF, CORS or session middleware; JSON body limit; responses are
+  `application/scim+json`, errors are SCIM `Error` messages).
+  - **Tokens** (`/org/scim`, admin): `slai_scim_` + 32 random bytes, shown once,
+    stored as sha256 in `scim_tokens` (written and resolved by `slai_auth`;
+    `slai_app` sees every column but the hash), revocable (never deleted),
+    `last_used_at` touched at most every 5 minutes, rate limited per token,
+    audited. A token needs a verified SSO domain.
+  - **Users**: a SCIM User is a membership of the token's org (id = membership
+    id, `userName` = email). Create requires an email on the org's verified SSO
+    domains; an existing slai user is linked, otherwise a password-less user is
+    created (they sign in through SSO). 409 `uniqueness` for an existing member.
+    Filters: `userName`, `externalId`, `emails.value`, `id` with `eq`; paging with
+    `startIndex`/`count`. PATCH accepts Okta's (`value: {active:false}`) and
+    Entra's (`path: "active", value: "False"`) shapes; unsupported attributes are
+    ignored; `userName` is immutable (400 `mutability`); the display name changes
+    only for users with no other org. `active: false` sets
+    `memberships.disabled_at` and deletes the user's sessions whose active or
+    SSO org is this org (sessions elsewhere keep working, but can never switch
+    in); `active: true` reactivates; DELETE removes the membership. The last
+    active owner can be neither deactivated nor deleted.
+  - **Groups**: `scim_groups` and `scim_group_members` (members are SCIM Users of
+    the org); create, filter by `displayName`/`externalId`, PATCH members in
+    Okta's (`members[value eq "id"]`) and Entra's (`path: "members", value: [...]`)
+    shapes, PUT, DELETE, `excludedAttributes=members`.
+  - **Group → role** (`scim_group_roles`, set in SSO settings): once an org maps
+    at least one group, the IdP owns the roles of SCIM-managed members: the
+    highest mapped role among their groups, else `member`. Only admin, member and
+    viewer can be mapped; owners are never changed. Roles are recomputed on every
+    membership, group rename or mapping change and audited as
+    `member.role_changed` (`source: "scim"`).
+  - **Decision**: `@better-auth/scim` 1.7.6 exists and was evaluated. It keeps
+    its own global tables (SCIM users, groups, bindings, tombstones, projection
+    grants) outside our RLS model, needs a projection layer to reach
+    memberships, and is ~7.5k lines of new behaviour on the identity path; this
+    minimal subset stores everything in org-scoped tables under FORCE RLS and
+    reuses memberships directly.
+- **TR-23d** Invitations (T-59a, `routes/invitations.ts`):
+  - **Token**: 32 random bytes; the row keeps its sha256 (`token_hash`) and,
+    only until the email is sent, the token sealed with the keyring
+    (`token_ciphertext`, AAD `invitation:<id>`). The invite (and every resend)
+    queues `send-invite-email {orgId, invitationId}` in the same transaction; the
+    worker decrypts, emails `${APP_URL}/invite/<token>`, wipes the sealed copy and
+    audits the delivery. The API never returns a token. 7-day expiry.
+  - **Admin** (`/members/invitations`): list with status (pending, accepted,
+    expired, revoked), resend (a new token and expiry; the old link stops
+    working), revoke. Only owners invite or resend owner invitations.
+  - **Accept page** (`/invite/:token`): `GET /auth/invitations/:token` (public,
+    rate limited; `slai_auth` resolves the hash) says whether the email has an
+    account and whether its domain uses (or enforces) SSO. A new person signs up
+    there (`POST .../signup`: name and password; the email is the invitation's)
+    and lands in mandatory MFA enrollment; they get no org of their own. An
+    existing user signs in normally (password + second factor, passkey or SSO,
+    enforce-SSO applies) and accepts (`POST .../accept`), which needs a session
+    whose MFA is satisfied and the invited email.
+  - **Rules**: single use (an atomic claim: not accepted, not revoked, not
+    expired), 410 `invitation_used|expired|revoked`; enforce-SSO domains can only
+    accept through an SSO session (password signup and a password or passkey
+    session get 403 `sso_required`); an existing member is only ever promoted to
+    the invited role, never demoted; a membership deactivated by SCIM is not
+    reopened by an invitation (403 `membership_deactivated`). Audit:
+    `member.invited`, `member.invitation_resent`, `member.invitation_revoked`,
+    `member.invitation_accepted` (role, signup or sign-in), `notification.sent`.
 - **TR-23a** SOC 2 note on SSO and MFA (decision): an SSO session satisfies
   slai's MFA requirement through the IdP by default, because the customer's IdP
   is where their MFA policy (factors, device posture, conditional access) is
@@ -490,13 +624,27 @@
   without closing a gap the IdP leaves open. The trust is scoped: it applies only
   in the org that owns the IdP (after switching to another org the session must
   pass slai MFA), and each org can turn on "also require slai MFA for SSO users"
-  when its IdP does not enforce MFA. slai does not inspect the IdP's `amr`/`acr`
-  claims yet; customers attest that their IdP requires MFA during onboarding.
+  when its IdP does not enforce MFA. slai records the IdP's `amr`/`acr` (or SAML
+  authentication context) on every SSO session for the audit trail, and an org
+  can require the IdP to assert MFA, which refuses sign-ins without it (TR-23);
+  without that option customers attest during onboarding that their IdP
+  requires MFA. Step-up for sensitive actions always needs a slai factor.
 - **TR-24** CSRF defense: SameSite=Lax, an Origin check, a Sec-Fetch-Site check and
   `X-Requested-With: slai` on mutations, including better-auth's endpoints (our
   middleware runs before its handler). Exempt: signature-verified webhooks and the
   SAML ACS (a cross-site POST from the IdP, verified by the assertion signature
   and InResponseTo). RBAC comes from the membership role.
+  - **SAML POST binding with SameSite=Lax (verified by `test/saml.test.ts`)**: the
+    IdP's auto-submitted form is a cross-site top-level POST without our custom
+    header and without the Lax session cookie; that is fine because the ACS needs
+    neither. Only `/auth/sso/saml2/sp/acs/*` is exempt from the header/Origin/
+    Sec-Fetch-Site checks (better-auth also skips its own origin check there), and
+    the ACS is protected by the assertion signature against the IdP's metadata
+    certificate, audience and recipient, NotBefore/NotOnOrAfter, InResponseTo
+    (a server-side record of our AuthnRequest; IdP-initiated responses are off),
+    the signed RelayState and one-time assertion ids. The new session cookie is
+    set on the ACS response and sent on the redirect back to APP_URL (a same-site
+    top-level GET). SCIM (`/scim/v2`) is outside `/api/v1` and uses bearer tokens.
 - **TR-24a** Client IPs and rate limits behind proxies (T-63):
   - `TRUST_PROXY` is `false` (socket address), a hop count (`true` = 1), or the
     proxies' CIDRs. X-Forwarded-For is read **from the right**: the client is the
@@ -535,6 +683,13 @@
     `slai_worker` no longer touches sessions or writes users.
   - `sso_providers` is org-scoped (FORCE RLS); `slai_app` may read its own org's
     providers (the client secret there is ciphertext) but not write them.
+  - SCIM (TR-23c): `scim_tokens`, `scim_groups`, `scim_group_members` and
+    `scim_group_roles` are org-scoped (FORCE RLS). `slai_auth` may SELECT, INSERT
+    and UPDATE `scim_tokens` (it resolves a token hash to its org before an org is
+    known); `slai_app` reads tokens without `token_hash` and owns the group tables.
+  - Factor resets (TR-23b) run as `slai_auth` (the identity tables); it reads
+    memberships across orgs for the cross-org rule. Break-glass needs the database
+    owner.
 - **TR-27** Secrets (connector credentials, SSO client secrets and SAML keys, Slack
   webhooks) use AES-256-GCM with a key id, so keys can rotate. TOTP secrets,
   backup codes and IdP OAuth tokens are sealed by better-auth under the versioned
@@ -570,10 +725,10 @@
   |---|---|
   | CC6.1 Tenant isolation | FORCE RLS on every org table; `withOrg`; `slai_app` NOBYPASSRLS; `assertInOrg` on client-supplied ids (foreign-key checks skip RLS) |
   | CC6.1 Least privilege | Separate roles: only `slai_auth` can read password hashes, TOTP secrets, sessions, passkeys and SSO configs, and it cannot read org data; `slai_app` has no grant on them; `slai_worker` cannot read ticket content, credentials, or policies |
-  | CC6.1 Authentication and MFA | better-auth; argon2id; a hash for unknown emails and one generic error; **mandatory MFA** enforced server-side by `requireAuth` (403 `mfa_enrollment_required` / `mfa_required`) for every route outside `/auth`; TOTP with replay rejection and lockout, single-use backup codes, WebAuthn passkeys with user verification; no trusted devices; the last factor cannot be removed |
-  | CC6.1 SSO | OIDC/SAML per org; DNS-verified domains; JIT as `member` only on verified domains; enforce-SSO disables password and passkey sign-in; IdP MFA trusted only in the IdP's org and only while the org has not turned on "also require slai MFA" (TR-23a) |
+  | CC6.1 Authentication and MFA | better-auth; argon2id; a hash for unknown emails and one generic error; **mandatory MFA** enforced server-side by `requireAuth` (403 `mfa_enrollment_required` / `mfa_required`) for every route outside `/auth`; TOTP with replay rejection and lockout, single-use backup codes, WebAuthn passkeys with user verification; no trusted devices; the last factor cannot be removed; factor resets need an admin with a fresh TOTP/passkey step-up, never reach owners (admins), the last owner (break-glass only) or members of orgs the admin does not run, revoke every session and are audited and emailed (TR-23b) |
+  | CC6.1 SSO | OIDC/SAML per org; DNS-verified domains; JIT as `member` only on verified domains; enforce-SSO disables password and passkey sign-in; IdP MFA trusted only in the IdP's org and only while the org has not turned on "also require slai MFA" (TR-23a); the IdP's amr/acr recorded on every SSO session, and "require the IdP to assert MFA" per org |
   | CC6.1 Sessions | sha256-only token storage (sealing adapter); signed httpOnly cookie; 12h idle / 7d absolute; a new session on sign-in and on enrollment; server-side logout |
-  | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request |
+  | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request; SCIM deprovisioning disables the membership and revokes its sessions; IdP group → role mapping never grants or touches owner (TR-23c); invitations are single use, expire, are revocable and can join an enforce-SSO domain only through SSO (TR-23d) |
   | CC6.6 Boundary | CSRF (header + Origin + Sec-Fetch-Site) on every mutation including better-auth's; an allowlist of better-auth endpoints; CORS locked to `APP_URL`; body limits; sign-in, 2FA, passkey and webhook rate limits; webhook signatures; IdP URLs must be public https unless allowlisted |
   | CC6.7 Encryption at rest | AES-256-GCM with a key id and context-bound AAD for every secret (SSO client secrets included); better-auth's versioned XChaCha20-Poly1305 for TOTP secrets, backup codes and IdP tokens; secrets masked or write-only in the API |
   | CC6.8 Uploads | Magic-byte sniffing; 20 MB cap; sanitized names; server-generated storage keys |

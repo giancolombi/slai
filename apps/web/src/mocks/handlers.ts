@@ -7,6 +7,8 @@ import type {
   ContractText,
   CustomerAccount,
   FieldMappingTable,
+  Invitation,
+  InvitationPreview,
   KnowledgeArticle,
   KnowledgeSource,
   List,
@@ -16,6 +18,8 @@ import type {
   OrgExport,
   Policy,
   Replay,
+  ScimSettings,
+  ScimTokenCreated,
   SecondFactor,
   SignInDiscovery,
   SignInResult,
@@ -32,6 +36,7 @@ import {
   createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
+  createScimTokenBody,
   createSsoProviderBody,
   creditPackCheckoutBody,
   discoverBody,
@@ -45,8 +50,10 @@ import {
   type PlanId,
   policyPreviewBody,
   rejectActionBody,
+  resetMemberMfaBody,
   savedReplyBody,
   scheduleDeletionBody,
+  scimGroupRoleBody,
   signupBody,
   switchOrgBody,
   TRIAL,
@@ -171,6 +178,17 @@ function ssoProviderFor(email: string) {
 }
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
+const stepUpWindow = () => new Date(Date.now() + 5 * 60_000).toISOString();
+const stepUpFresh = () => {
+  const until = getDb().me.security.stepUpUntil;
+  return until !== null && new Date(until).getTime() > Date.now();
+};
+/** SCIM settings are created lazily (older persisted mock databases have none). */
+function scim(): ScimSettings {
+  const o = org();
+  o.scim ??= { baseUrl: "http://localhost:8787/scim/v2", tokens: [], groupRoles: [] };
+  return o.scim;
+}
 const actor = () => getDb().me.user.name;
 const actorId = () => getDb().me.user.id;
 
@@ -394,7 +412,8 @@ export const handlers = [
     const enrolling = d.session === "in" && !d.me.security.totp;
     d.session = "in";
     d.me.user.mfaEnabled = true;
-    d.me.security = { ...d.me.security, totp: true, mfa: "satisfied" };
+    // A TOTP code (sign-in or step-up) is fresh proof for sensitive actions for 5 minutes.
+    d.me.security = { ...d.me.security, totp: true, mfa: "satisfied", stepUpUntil: stepUpWindow() };
     const member = org().members.find((m) => m.userId === d.me.user.id);
     if (member) member.mfaEnabled = true;
     audit(
@@ -536,6 +555,8 @@ export const handlers = [
       role: "owner",
       mfaEnabled: false,
       lastLoginAt: new Date().toISOString(),
+      active: true,
+      scimManaged: false,
     };
     d.orgs[orgId] = emptyOrg(orgId, body.organizationName, owner, Date.now());
     d.me = {
@@ -548,7 +569,14 @@ export const handlers = [
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
-      security: { authMethod: "password", mfa: "enrollment_required", totp: false, passkeys: 0, hasPassword: true },
+      security: {
+        authMethod: "password",
+        mfa: "enrollment_required",
+        totp: false,
+        passkeys: 0,
+        hasPassword: true,
+        stepUpUntil: null,
+      },
     };
     d.passkeys = [];
     d.session = "in";
@@ -585,6 +613,7 @@ export const handlers = [
           ...o.sso,
           ...(body.enforceSso !== undefined && { enforceSso: body.enforceSso }),
           ...(body.requireMfaForSso !== undefined && { requireMfaForSso: body.requireMfaForSso }),
+          ...(body.requireIdpMfa !== undefined && { requireIdpMfa: body.requireIdpMfa }),
         };
         audit(actor(), "sso.settings_changed", { type: "organization", id: o.settings.id }, body);
         return HttpResponse.json(o.sso);
@@ -776,23 +805,76 @@ export const handlers = [
         const o = org();
         if (o.members.some((m) => m.email === body.email))
           return fail(409, "already_member", `${body.email} is already a member.`);
-        const member: Member = {
-          userId: `u_${crypto.randomUUID().slice(0, 8)}`,
+        const now = Date.now();
+        const invitation: Invitation = {
+          id: crypto.randomUUID(),
           email: body.email,
-          name: body.email
-            .split("@")[0]!
-            .replace(/[._]/g, " ")
-            .replace(/\b\w/g, (c) => c.toUpperCase()),
           role: body.role,
-          mfaEnabled: false,
-          lastLoginAt: null,
+          expiresAt: new Date(now + 7 * 86_400_000).toISOString(),
+          status: "pending",
+          createdAt: new Date(now).toISOString(),
+          invitedBy: actor(),
         };
-        o.members.push(member);
-        audit(actor(), "member.invited", { type: "member", id: member.userId }, body);
-        return HttpResponse.json(member, { status: 201 });
+        o.invitations = [invitation, ...(o.invitations ?? [])];
+        audit(actor(), "member.invited", { type: "invitation", id: invitation.id }, body);
+        return HttpResponse.json(invitation, { status: 201 });
       },
       { admin: true },
     ),
+  ),
+  http.get(
+    url("/members/invitations"),
+    guarded(() => HttpResponse.json(list(org().invitations ?? [])), { admin: true }),
+  ),
+  http.post(
+    url("/members/invitations/:id/resend"),
+    guarded(
+      ({ params }) => {
+        const inv = (org().invitations ?? []).find((i) => i.id === params.id);
+        if (!inv) return fail(404, "not_found", "Invitation not found.");
+        if (inv.status === "accepted" || inv.status === "revoked")
+          return fail(409, "invitation_closed", "This invitation was already used or revoked.");
+        inv.status = "pending";
+        inv.expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+        audit(actor(), "member.invitation_resent", { type: "invitation", id: inv.id }, { email: inv.email });
+        return HttpResponse.json(inv);
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/members/invitations/:id"),
+    guarded(
+      ({ params }) => {
+        const inv = (org().invitations ?? []).find((i) => i.id === params.id && i.status === "pending");
+        if (!inv) return fail(404, "not_found", "Invitation not found.");
+        inv.status = "revoked";
+        audit(actor(), "member.invitation_revoked", { type: "invitation", id: inv.id }, { email: inv.email });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
+  ),
+  // The invitee's page in mock mode: any token previews a pending invitation to the demo org.
+  http.get(url("/auth/invitations/:token"), async () => {
+    await latency();
+    const preview: InvitationPreview = {
+      organization: { name: org().settings.name },
+      email: "new.teammate@example.com",
+      role: "member",
+      invitedBy: getDb().me.user.name,
+      expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+      status: "pending",
+      account: "new",
+      sso: null,
+    };
+    return HttpResponse.json(preview);
+  }),
+  http.post(url("/auth/invitations/:token/signup"), () =>
+    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+  ),
+  http.post(url("/auth/invitations/:token/accept"), () =>
+    fail(501, "mock_mode", "Accepting invitations needs the real API."),
   ),
   http.patch(
     url("/members/:userId"),
@@ -819,6 +901,115 @@ export const handlers = [
         if (m.role === "owner") return fail(409, "last_owner", "The owner can't be removed.");
         o.members = o.members.filter((x) => x !== m);
         audit(actor(), "member.removed", { type: "member", id: m.userId }, { email: m.email });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
+  ),
+
+  http.post(
+    url("/members/:userId/reset-mfa"),
+    guarded(
+      async ({ request, params }) => {
+        const body = await parse(request, resetMemberMfaBody);
+        if (body instanceof Response) return body;
+        if (!stepUpFresh()) {
+          const s = getDb().me.security;
+          const methods: SecondFactor[] = [
+            ...(s.totp ? ["totp" as const] : []),
+            ...(s.passkeys ? ["passkey" as const] : []),
+          ];
+          return fail(403, "step_up_required", "Confirm it's you: enter a code from your authenticator app.", {
+            methods,
+          });
+        }
+        const m = org().members.find((x) => x.userId === params.userId);
+        if (!m) return fail(404, "not_found", "Member not found.");
+        if (m.userId === actorId()) return fail(409, "self_reset", "Use Settings → Security for your own two-factor.");
+        if (m.role === "owner" && getDb().me.role !== "owner") {
+          return fail(403, "cannot_reset_owner", "Only an owner can reset an owner's two-factor.");
+        }
+        const hadTotp = m.mfaEnabled;
+        m.mfaEnabled = false;
+        audit(actor(), "member.mfa_reset", { type: "user", id: m.userId }, { reason: body.reason });
+        return HttpResponse.json({ userId: m.userId, removed: { totp: hadTotp, passkeys: 0 }, sessionsRevoked: 1 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.get(url("/auth/step-up/passkey-options"), () =>
+    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+  ),
+
+  // ------------------------------------------------ SCIM settings (admins)
+  http.get(
+    url("/org/scim"),
+    guarded(() => HttpResponse.json(scim()), { admin: true }),
+  ),
+  http.post(
+    url("/org/scim/tokens"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, createScimTokenBody);
+        if (body instanceof Response) return body;
+        if (!org().sso.providers.some((p) => p.domainVerified)) {
+          return fail(409, "sso_not_ready", "Verify a domain for an SSO provider before turning on SCIM.");
+        }
+        const token = `slai_scim_${crypto.randomUUID().replace(/-/g, "")}mock`;
+        const created: ScimTokenCreated = {
+          id: crypto.randomUUID(),
+          name: body.name,
+          prefix: token.slice(0, 14),
+          createdAt: new Date().toISOString(),
+          lastUsedAt: null,
+          revokedAt: null,
+          token,
+        };
+        const { token: _shownOnce, ...stored } = created;
+        scim().tokens.push(stored);
+        audit(actor(), "scim.token_created", { type: "scim_token", id: created.id }, { name: body.name });
+        return HttpResponse.json(created, { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/org/scim/tokens/:id"),
+    guarded(
+      ({ params }) => {
+        const t = scim().tokens.find((x) => x.id === params.id && !x.revokedAt);
+        if (!t) return fail(404, "not_found", "SCIM token not found.");
+        t.revokedAt = new Date().toISOString();
+        audit(actor(), "scim.token_revoked", { type: "scim_token", id: t.id }, { name: t.name });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/org/scim/group-roles"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, scimGroupRoleBody);
+        if (body instanceof Response) return body;
+        const s = scim();
+        const existing = s.groupRoles.find((g) => g.groupName.toLowerCase() === body.groupName.toLowerCase());
+        const mapping = existing ?? { id: crypto.randomUUID(), groupName: body.groupName, role: body.role };
+        mapping.role = body.role;
+        if (!existing) s.groupRoles.push(mapping);
+        audit(actor(), "scim.group_role_mapped", { type: "scim_group_role", id: mapping.id }, body);
+        return HttpResponse.json(mapping, { status: 201 });
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/org/scim/group-roles/:id"),
+    guarded(
+      ({ params }) => {
+        const s = scim();
+        if (!s.groupRoles.some((g) => g.id === params.id)) return fail(404, "not_found", "Group mapping not found.");
+        s.groupRoles = s.groupRoles.filter((g) => g.id !== params.id);
         return new HttpResponse(null, { status: 204 });
       },
       { admin: true },

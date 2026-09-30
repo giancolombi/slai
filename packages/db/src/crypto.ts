@@ -99,6 +99,8 @@ export const AAD = {
   /** A SAML SP private key inside sso_providers.saml_config. */
   ssoSamlPrivateKey: (providerId: string) => `sso_provider:${providerId}:saml_private_key`,
   notificationTarget: (channelId: string) => `notification_channel:${channelId}`,
+  /** An invitation token, kept only until the invite email is sent (T-59a). */
+  invitationToken: (invitationId: string) => `invitation:${invitationId}`,
 } as const;
 
 export const encryptJson = (value: unknown, opts?: { aad?: string; keyring?: Keyring }) =>
