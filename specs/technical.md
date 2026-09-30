@@ -551,6 +551,32 @@
     memberships, and is ~7.5k lines of new behaviour on the identity path; this
     minimal subset stores everything in org-scoped tables under FORCE RLS and
     reuses memberships directly.
+- **TR-23d** Invitations (T-59a, `routes/invitations.ts`):
+  - **Token**: 32 random bytes; the row keeps its sha256 (`token_hash`) and,
+    only until the email is sent, the token sealed with the keyring
+    (`token_ciphertext`, AAD `invitation:<id>`). The invite (and every resend)
+    queues `send-invite-email {orgId, invitationId}` in the same transaction; the
+    worker decrypts, emails `${APP_URL}/invite/<token>`, wipes the sealed copy and
+    audits the delivery. The API never returns a token. 7-day expiry.
+  - **Admin** (`/members/invitations`): list with status (pending, accepted,
+    expired, revoked), resend (a new token and expiry; the old link stops
+    working), revoke. Only owners invite or resend owner invitations.
+  - **Accept page** (`/invite/:token`): `GET /auth/invitations/:token` (public,
+    rate limited; `slai_auth` resolves the hash) says whether the email has an
+    account and whether its domain uses (or enforces) SSO. A new person signs up
+    there (`POST .../signup`: name and password; the email is the invitation's)
+    and lands in mandatory MFA enrollment; they get no org of their own. An
+    existing user signs in normally (password + second factor, passkey or SSO,
+    enforce-SSO applies) and accepts (`POST .../accept`), which needs a session
+    whose MFA is satisfied and the invited email.
+  - **Rules**: single use (an atomic claim: not accepted, not revoked, not
+    expired), 410 `invitation_used|expired|revoked`; enforce-SSO domains can only
+    accept through an SSO session (password signup and a password or passkey
+    session get 403 `sso_required`); an existing member is only ever promoted to
+    the invited role, never demoted; a membership deactivated by SCIM is not
+    reopened by an invitation (403 `membership_deactivated`). Audit:
+    `member.invited`, `member.invitation_resent`, `member.invitation_revoked`,
+    `member.invitation_accepted` (role, signup or sign-in), `notification.sent`.
 - **TR-23a** SOC 2 note on SSO and MFA (decision): an SSO session satisfies
   slai's MFA requirement through the IdP by default, because the customer's IdP
   is where their MFA policy (factors, device posture, conditional access) is
@@ -625,7 +651,7 @@
   | CC6.1 Authentication and MFA | better-auth; argon2id; a hash for unknown emails and one generic error; **mandatory MFA** enforced server-side by `requireAuth` (403 `mfa_enrollment_required` / `mfa_required`) for every route outside `/auth`; TOTP with replay rejection and lockout, single-use backup codes, WebAuthn passkeys with user verification; no trusted devices; the last factor cannot be removed; factor resets need an admin with a fresh TOTP/passkey step-up, never reach owners (admins), the last owner (break-glass only) or members of orgs the admin does not run, revoke every session and are audited and emailed (TR-23b) |
   | CC6.1 SSO | OIDC/SAML per org; DNS-verified domains; JIT as `member` only on verified domains; enforce-SSO disables password and passkey sign-in; IdP MFA trusted only in the IdP's org and only while the org has not turned on "also require slai MFA" (TR-23a); the IdP's amr/acr recorded on every SSO session, and "require the IdP to assert MFA" per org |
   | CC6.1 Sessions | sha256-only token storage (sealing adapter); signed httpOnly cookie; 12h idle / 7d absolute; a new session on sign-in and on enrollment; server-side logout |
-  | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request; SCIM deprovisioning disables the membership and revokes its sessions; IdP group → role mapping never grants or touches owner (TR-23c) |
+  | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request; SCIM deprovisioning disables the membership and revokes its sessions; IdP group → role mapping never grants or touches owner (TR-23c); invitations are single use, expire, are revocable and can join an enforce-SSO domain only through SSO (TR-23d) |
   | CC6.6 Boundary | CSRF (header + Origin + Sec-Fetch-Site) on every mutation including better-auth's; an allowlist of better-auth endpoints; CORS locked to `APP_URL`; body limits; sign-in, 2FA, passkey and webhook rate limits; webhook signatures; IdP URLs must be public https unless allowlisted |
   | CC6.7 Encryption at rest | AES-256-GCM with a key id and context-bound AAD for every secret (SSO client secrets included); better-auth's versioned XChaCha20-Poly1305 for TOTP secrets, backup codes and IdP tokens; secrets masked or write-only in the API |
   | CC6.8 Uploads | Magic-byte sniffing; 20 MB cap; sanitized names; server-generated storage keys |

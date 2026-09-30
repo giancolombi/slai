@@ -129,6 +129,10 @@ IDs are referenced from `technical.md` and `tasks.md`.
     SCIM token in SSO settings; the IdP creates, updates and deactivates members
     (deactivation signs them out), and IdP groups can be mapped to roles
     (e.g. "slai-admins" → Admin).
+  - **Invitations**: admins invite by email with a role; the invitee gets a
+    one-time link (7 days) to create their account (then set up two-factor) or
+    sign in (through SSO where the domain requires it) and join. Admins see
+    pending invitations on Team and can resend or revoke them.
   - Multiple orgs per user, and roles owner/admin/member/viewer.
 - **PR-25** An audit log of every security-relevant action.
 - **PR-26** SOC 2-ready from day one. Customer data is never used for model

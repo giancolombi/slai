@@ -97,8 +97,9 @@ Each task references the requirements it serves.
       466.6 → 62 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
 - [x] T-59 API contract: `approvedBy`/`uploadedBy`/`decidedBy` documented as user ids, with
       `…ByName` display names on the DTOs; the invite response is the shared `Invitation` DTO
-- [ ] T-59a Invitation email (worker mailer) and accept flow (sign up or sign in, then join the org).
-      Moved to after the better-auth merge (T-15 to T-19); now unblocked
+- [x] T-59a Invitation email (`send-invite-email`, token sealed only until sent) and `/invite/:token`:
+      sign up there (then MFA enrollment) or sign in (SSO/enforce-SSO honoured) and join with the
+      invited role; single use, 7-day expiry, resend/revoke from Team, audited (PR-24, TR-23d)
 
 ## M6: Integration and launch readiness
 - [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
