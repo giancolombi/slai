@@ -138,6 +138,27 @@ IDs are referenced from `technical.md` and `tasks.md`.
 - **PR-26** SOC 2-ready from day one. Customer data is never used for model
   training.
 
+### Onboarding and help
+- **PR-27** In-product onboarding and help, written for a support leader:
+  - A **getting-started checklist** on the dashboard for owners and admins:
+    connect a help desk, upload a contract, approve a policy, assign policies to
+    customers, choose autonomy, set up alerts, and (optional) invite a teammate
+    and run a Breach Replay. Each step is derived from real state (an active
+    connection, an approved policy…), never from clicks, and has a one-line why,
+    a link to the exact place, and a done state, with progress. Anyone can hide it
+    (per user, per organization) and bring it back from Help.
+  - A **Help center** (`/help`, the `?` key, the top bar and the sidebar) with
+    client-side search over short guides: getting started, the SLA clock,
+    reviewing a contract, autonomy, knowledge, approvals, alerts, Breach Replay
+    and money, connections, team and security, billing, a FAQ and a glossary.
+  - **About this page** on every page: what it is for, what to do next, and the
+    relevant guides; "What's this?" tooltips on risk, the SLA bar's thresholds,
+    autonomy levels, ambiguities, citations and tracked tickets.
+  - A **first-run welcome**, once per user per organization: owners and admins
+    are pointed at the checklist; invited members at tickets and approvals;
+    viewers at what they can see.
+  - Every empty state names the next action and links to its guide.
+
 ## 4. Pricing
 
 A platform fee by **SLA-tracked tickets**, plus **prepaid AI credits** at fixed
