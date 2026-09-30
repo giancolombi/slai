@@ -11,6 +11,7 @@ import {
 import { AppLayout } from "./app-layout";
 import { ErrorState } from "./components/page";
 import { isApiError } from "./lib/api";
+import { mfaRedirect } from "./lib/auth-flow";
 import { meQuery } from "./lib/queries";
 import { NotFound } from "./pages/not-found";
 
@@ -30,11 +31,20 @@ async function requireSession(queryClient: QueryClient, href: string) {
   try {
     return await queryClient.ensureQueryData(meQuery);
   } catch (e) {
-    if (isApiError(e) && (e.status === 401 || e.isMfaRequired)) {
+    if (isApiError(e) && e.status === 401) {
       throw redirect({ to: "/login", search: { redirect: href === "/" ? undefined : href } });
     }
     throw e;
   }
+}
+
+/** A session whose second factor is done; otherwise mandatory enrollment or verification first. */
+async function requireMfaSession(queryClient: QueryClient, href: string) {
+  const me = await requireSession(queryClient, href);
+  const to = mfaRedirect(me);
+  if (to === "/mfa/setup") throw redirect({ to });
+  if (to === "/mfa") throw redirect({ to, search: { redirect: href === "/" ? undefined : href } });
+  return me;
 }
 
 // ---------------------------------------------------------------- public: auth + design
@@ -48,7 +58,10 @@ const authLayout = createRoute({
 const loginRoute = createRoute({
   getParentRoute: () => authLayout,
   path: "/login",
-  validateSearch: (s: Record<string, unknown>): { redirect?: string } => ({ redirect: str(s.redirect) }),
+  validateSearch: (s: Record<string, unknown>): { redirect?: string; sso_error?: string } => ({
+    redirect: str(s.redirect),
+    sso_error: str(s.sso_error),
+  }),
   component: lazyRouteComponent(() => import("./pages/auth/login"), "LoginPage"),
 });
 
@@ -89,7 +102,7 @@ const onboardingRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): { step?: OnboardingStep } => ({
     step: ONBOARDING_STEPS.includes(s.step as OnboardingStep) ? (s.step as OnboardingStep) : undefined,
   }),
-  beforeLoad: ({ context, location }) => requireSession(context.queryClient, location.href),
+  beforeLoad: ({ context, location }) => requireMfaSession(context.queryClient, location.href),
   component: lazyRouteComponent(() => import("./pages/onboarding/onboarding"), "OnboardingPage"),
 });
 
@@ -98,7 +111,7 @@ const onboardingRoute = createRoute({
 const appLayout = createRoute({
   getParentRoute: () => rootRoute,
   id: "_app",
-  beforeLoad: async ({ context, location }) => ({ me: await requireSession(context.queryClient, location.href) }),
+  beforeLoad: async ({ context, location }) => ({ me: await requireMfaSession(context.queryClient, location.href) }),
   component: AppLayout,
   errorComponent: ({ error, reset }) => (
     <div className="p-8">

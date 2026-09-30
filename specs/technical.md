@@ -280,14 +280,99 @@
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
   errors as `{error:{code,message}}`, lists as `{items,nextCursor}`, money in cents,
   durations in ms, times as ISO strings.
-- **TR-23** Auth:
-  - argon2id passwords
-  - DB sessions storing only the sha256 of the token; httpOnly cookie
-    `slai_session`, 12h idle / 7d absolute
-  - TOTP MFA (orgs can require it)
-  - login rate limiting and generic errors (no user enumeration)
-- **TR-24** CSRF defense: SameSite=Lax, an Origin check, and `X-Requested-With: slai`
-  on mutations. RBAC comes from the membership role.
+- **TR-23** Auth is **better-auth 1.7** (`better-auth`, with the `twoFactor`
+  plugin, `@better-auth/passkey` and `@better-auth/sso`), configured in
+  `apps/api/src/auth/better-auth.ts`. slai keeps organizations, memberships,
+  roles, RBAC, RLS/`withOrg`, org switching, audit and the MFA gate.
+  - **Mounting.** better-auth's handler sits at `/api/v1/auth/*` behind our
+    request-id, CSRF, CORS, body-limit and session middleware
+    (`auth/handler.ts`). Only an allowlist of endpoints is reachable (sign-in,
+    2FA verify/enable/backup codes/disable, passkeys, SSO sign-in/callback/ACS/
+    metadata); everything else is 404. Responses are normalized to the
+    `@slai/shared` DTOs (`SignInResult`, ...) and `{error:{code,message}}`, and
+    never carry a session token. Our own routes: `/auth/signup`, `/auth/discover`,
+    `/auth/me`, `/auth/logout`, `/auth/switch-org`.
+  - **Storage.** The Drizzle adapter maps better-auth's models onto our tables
+    (user → `users`, session → `sessions`, account → `accounts`, verification →
+    `verifications`, twoFactor → `two_factors`, passkey → `passkeys`,
+    ssoProvider → `sso_providers`) on its own connection as `slai_auth`
+    (TR-26). `sealAdapter` wraps the adapter: session tokens are stored only as
+    sha256 (`sessions.token_hash`), and SSO client secrets / SAML private keys
+    are sealed with our keyring (AES-256-GCM, AAD `sso_provider:<id>:...`).
+  - **Passwords** stay argon2id (`@node-rs/argon2`, OWASP parameters) through
+    better-auth's custom `hash`/`verify`; migration 0005 turned every
+    `users.password_hash` into a `credential` account row. Unknown emails still
+    pay a hash (no timing enumeration) and share one generic error.
+  - **Sessions.** httpOnly cookie `slai_session` (`__Secure-` prefixed and Secure
+    in production), SameSite=Lax, signed with `SESSION_SECRET`; 12h sliding
+    idle expiry (refreshed at most once a minute) and a 7-day absolute limit
+    checked on `created_at`. Disabled users and users without an org are refused.
+    Logout deletes the session server-side. better-auth's cookie cache is off,
+    so revocation is immediate.
+  - **Mandatory MFA (the gate).** Each session records `auth_method` (password,
+    passkey, sso), `mfa_verified` and, for SSO, `sso_org_id`. `mfaState()`
+    (`auth/session.ts`) is: passkey sign-in (with user verification) → satisfied;
+    SSO in the IdP's own org → satisfied unless that org sets
+    `sso_require_mfa`; otherwise the session needs a second factor verified in
+    it, else `enrollment_required` (no factor) or `verification_required`.
+    `requireAuth()` puts every route outside `/auth` behind it with 403
+    `mfa_enrollment_required` / `mfa_required`; better-auth's factor-management
+    endpoints need `satisfied` too. Password sign-in for a TOTP user returns
+    `mfa_required` with only an httpOnly challenge cookie (no session); for a
+    passkey-only user the issued session is revoked and a passkey is required.
+    Trusted devices are disabled (every sign-in needs the factor). The last
+    factor cannot be removed.
+  - **TOTP** is RFC 6238 (SHA-1, 6 digits, 30s, ±1 step). better-auth seals the
+    secret and backup codes (XChaCha20-Poly1305 under the versioned
+    `SESSION_SECRET`; rotate with `SESSION_SECRET_VERSION` and
+    `SESSION_SECRETS_PREVIOUS`). We add replay rejection (a used code is refused
+    for 2 minutes) and better-auth locks TOTP for 15 minutes after 10 failures.
+    Backup codes are single use (atomic compare-and-swap).
+  - **Passkeys**: WebAuthn with rpID = the web app's host, origin = APP_URL,
+    user verification required at registration and checked at authentication.
+  - **SSO**: OIDC (discovery at registration, PKCE, ID token verified against the
+    IdP's JWKS) and SAML (metadata URL or XML; IdP-initiated flows off). Providers
+    are written by `/org/sso/*` (admin/owner, audited), not better-auth's register
+    endpoint. IdP URLs must be https on a public host unless the operator
+    allowlists an internal IdP origin in `SSO_TRUSTED_IDP_ORIGINS`. Domain
+    ownership: a TXT record `_slai-verification.<domain>` =
+    `slai-verification=<token>` (DNS resolver injected for tests); a domain
+    verified by one org cannot be claimed by another. Sign-in resolves the
+    provider from the email's verified domain; JIT (`provisionUser`) adds the user
+    to the provider's org as `member`, and a new user must have an email on that
+    provider's verified domains. `enforce_sso` (needs a verified provider; lifted
+    when the last one is deleted) refuses password and passkey sign-in and
+    signup for those domains with 403 `sso_required`.
+  - **Rate limits**: our token buckets (per IP and per email on password sign-in,
+    per IP on 2FA verification, passkey and SSO starts, discovery and signup).
+    better-auth's built-in limiter is off (it is per-instance memory, like ours,
+    but cannot key by email).
+  - **Audit**: `auth.login` (method, second factor), `auth.login_failed` (reason),
+    `auth.password_verified`, `auth.login_rate_limited`, `auth.logout`,
+    `auth.mfa_setup_started`, `auth.mfa_enabled`, `auth.mfa_verified`,
+    `auth.mfa_failed`, `auth.mfa_disabled`, `auth.backup_code_used`,
+    `auth.backup_codes_regenerated`, `auth.passkey_added`, `auth.passkey_removed`,
+    `sso.provider_created|updated|deleted`, `sso.domain_verified`,
+    `sso.domain_verification_failed`, `sso.enforcement_enabled|disabled`,
+    `sso.mfa_policy_changed`, `sso.jit_provisioned`.
+  - **Demo**: `demo@slai.dev` is pre-enrolled in TOTP with a fixed, dev-only
+    secret printed by the seed; `pnpm demo:otp` prints the current code. No demo
+    SSO provider is seeded (there is no local mock IdP in docker compose; the
+    tests use `oauth2-mock-server`).
+- **TR-23a** SOC 2 note on SSO and MFA (decision): an SSO session satisfies
+  slai's MFA requirement through the IdP by default, because the customer's IdP
+  is where their MFA policy (factors, device posture, conditional access) is
+  enforced and audited, and requiring a second slai factor on top adds friction
+  without closing a gap the IdP leaves open. The trust is scoped: it applies only
+  in the org that owns the IdP (after switching to another org the session must
+  pass slai MFA), and each org can turn on "also require slai MFA for SSO users"
+  when its IdP does not enforce MFA. slai does not inspect the IdP's `amr`/`acr`
+  claims yet; customers attest that their IdP requires MFA during onboarding.
+- **TR-24** CSRF defense: SameSite=Lax, an Origin check, a Sec-Fetch-Site check and
+  `X-Requested-With: slai` on mutations, including better-auth's endpoints (our
+  middleware runs before its handler). Exempt: signature-verified webhooks and the
+  SAML ACS (a cross-site POST from the IdP, verified by the assertion signature
+  and InResponseTo). RBAC comes from the membership role.
 - **TR-25** Uploads are checked by magic bytes (not extension) and sha256-hashed,
   behind a storage-driver interface (local now; GCS/S3 later).
 
@@ -296,8 +381,19 @@
   - `org_id` plus an RLS policy on every org-scoped table, with FORCE RLS
   - the app role is `slai_app` (NOBYPASSRLS)
   - all org queries go through `withOrg`, which sets `app.org_id` per transaction
-- **TR-27** Secrets (connector credentials, MFA secrets, Slack webhooks) use
-  AES-256-GCM with a key id, so keys can rotate. They are never logged, never
+  - the auth role is `slai_auth` (DATABASE_AUTH_URL): better-auth's connection and
+    the only role that can read password hashes, TOTP secrets, sessions,
+    passkeys, verifications and SSO configs. It bypasses RLS (sign-in resolves
+    users, memberships and SSO domains before an org is known) but is granted
+    only the identity tables plus INSERT on organizations, memberships (signup,
+    JIT) and audit_events; it cannot read ticket content, credentials or policies.
+    `slai_worker` no longer touches sessions or writes users.
+  - `sso_providers` is org-scoped (FORCE RLS); `slai_app` may read its own org's
+    providers (the client secret there is ciphertext) but not write them.
+- **TR-27** Secrets (connector credentials, SSO client secrets and SAML keys, Slack
+  webhooks) use AES-256-GCM with a key id, so keys can rotate. TOTP secrets,
+  backup codes and IdP OAuth tokens are sealed by better-auth under the versioned
+  `SESSION_SECRET` (TR-23). They are never logged, never
   returned by the API, and never passed into a sandbox.
 - **TR-28** `audit_events` is append-only: a trigger rejects UPDATE and DELETE. It
   covers auth, membership, connections, policy approvals, autonomy changes, action
@@ -312,12 +408,13 @@
   | Control | Enforced by |
   |---|---|
   | CC6.1 Tenant isolation | FORCE RLS on every org table; `withOrg`; `slai_app` NOBYPASSRLS; `assertInOrg` on client-supplied ids (foreign-key checks skip RLS) |
-  | CC6.1 Least privilege | Column grants: `slai_app` cannot read password hashes, MFA secrets, or sessions; `slai_worker` cannot read ticket content, credentials, or policies |
-  | CC6.1 Authentication and MFA | argon2id; a dummy hash for unknown emails; RFC 6238 TOTP with replay rejection; org `require_mfa` |
-  | CC6.1 Sessions | sha256-only token storage; 12h idle / 7d absolute; the token rotates on MFA; server-side logout |
+  | CC6.1 Least privilege | Separate roles: only `slai_auth` can read password hashes, TOTP secrets, sessions, passkeys and SSO configs, and it cannot read org data; `slai_app` has no grant on them; `slai_worker` cannot read ticket content, credentials, or policies |
+  | CC6.1 Authentication and MFA | better-auth; argon2id; a hash for unknown emails and one generic error; **mandatory MFA** enforced server-side by `requireAuth` (403 `mfa_enrollment_required` / `mfa_required`) for every route outside `/auth`; TOTP with replay rejection and lockout, single-use backup codes, WebAuthn passkeys with user verification; no trusted devices; the last factor cannot be removed |
+  | CC6.1 SSO | OIDC/SAML per org; DNS-verified domains; JIT as `member` only on verified domains; enforce-SSO disables password and passkey sign-in; IdP MFA trusted only in the IdP's org and only while the org has not turned on "also require slai MFA" (TR-23a) |
+  | CC6.1 Sessions | sha256-only token storage (sealing adapter); signed httpOnly cookie; 12h idle / 7d absolute; a new session on sign-in and on enrollment; server-side logout |
   | CC6.3 RBAC | `requireRole`; the last owner is protected; membership is rechecked on every request |
-  | CC6.6 Boundary | CSRF (header + Origin + Sec-Fetch-Site); CORS locked to `APP_URL`; body limits; login and webhook rate limits; webhook signatures |
-  | CC6.7 Encryption at rest | AES-256-GCM with a key id and context-bound AAD for every secret; secrets masked in the API |
+  | CC6.6 Boundary | CSRF (header + Origin + Sec-Fetch-Site) on every mutation including better-auth's; an allowlist of better-auth endpoints; CORS locked to `APP_URL`; body limits; sign-in, 2FA, passkey and webhook rate limits; webhook signatures; IdP URLs must be public https unless allowlisted |
+  | CC6.7 Encryption at rest | AES-256-GCM with a key id and context-bound AAD for every secret (SSO client secrets included); better-auth's versioned XChaCha20-Poly1305 for TOTP secrets, backup codes and IdP tokens; secrets masked or write-only in the API |
   | CC6.8 Uploads | Magic-byte sniffing; 20 MB cap; sanitized names; server-generated storage keys |
   | CC7.2 Audit and logs | `audit()` in the same transaction; a trigger blocks UPDATE/DELETE/TRUNCATE; pino redaction; no request bodies in logs |
   | CC8.1 Change integrity | Policies need `parsePolicy` and admin approval; versions are superseded, never edited in place |

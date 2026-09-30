@@ -29,7 +29,8 @@ pnpm db:migrate && pnpm db:seed
 pnpm dev                             # web :5173 · api :8787 · worker
 ```
 
-Open http://localhost:5173 and sign in as `demo@slai.dev` / `slai-demo-password-1`.
+Open http://localhost:5173 and sign in as `demo@slai.dev` / `slai-demo-password-1`. MFA is mandatory:
+the demo user is pre-enrolled in TOTP with a dev-only secret, and `pnpm demo:otp` prints the current code.
 The seeded **Demo Help Desk** syncs about 450 realistic tickets within a minute. The
 worker evaluates them, and agents draft replies for at-risk tickets under the
 seeded autonomy rules. Alert emails land in Mailpit at http://localhost:8025.

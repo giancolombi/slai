@@ -17,6 +17,8 @@ import type {
   MetricView,
   NotificationChannel,
   OrgSettings,
+  OrgSsoSettings,
+  Passkey,
   Policy,
   Replay,
   Risk,
@@ -38,6 +40,7 @@ import {
   buildMe,
   buildMembers,
   buildOrgSettings,
+  buildOrgSso,
   buildPolicies,
   buildReplays,
   buildRuns,
@@ -54,6 +57,7 @@ import {
 
 export interface OrgData {
   settings: OrgSettings;
+  sso: OrgSsoSettings;
   members: Member[];
   connections: Connection[];
   customers: MockCustomer[];
@@ -75,14 +79,21 @@ export interface OrgData {
 
 export interface MockDb {
   version: number;
-  /** "in" | "out" | "mfa" (password ok, TOTP pending). */
+  /** "in" | "out" | "mfa" (password ok, second factor pending). */
   session: "in" | "out" | "mfa";
   me: Me;
+  /** The demo user's single-use backup codes and passkeys (mock only). */
+  backupCodes: string[];
+  passkeys: Passkey[];
   orgs: Record<string, OrgData>;
 }
 
 const STORAGE_KEY = "slai-mock-db";
-const VERSION = 6;
+// 7: knowledge sources and articles (T-47) on top of the auth changes.
+const VERSION = 7;
+
+/** Mock-mode backup codes (any 6-digit TOTP code except 000000 is accepted). */
+export const MOCK_BACKUP_CODES = Array.from({ length: 10 }, (_, i) => `mock${i}-codes`);
 
 function seedAcme(now: number): OrgData {
   const customers = buildCustomers();
@@ -95,6 +106,7 @@ function seedAcme(now: number): OrgData {
   const knowledge = buildKnowledge(now);
   return {
     settings: buildOrgSettings(),
+    sso: buildOrgSso(),
     members: buildMembers(now),
     connections: buildConnections(now),
     customers,
@@ -115,7 +127,8 @@ function seedAcme(now: number): OrgData {
 
 export function emptyOrg(id: string, name: string, owner: Member, now: number): OrgData {
   return {
-    settings: { id, name, plan: "replay", monthlySpendCapCents: null, requireMfa: false },
+    settings: { id, name, plan: "replay", monthlySpendCapCents: null },
+    sso: { enforceSso: false, requireMfaForSso: false, providers: [] },
     members: [owner],
     connections: [],
     customers: [],
@@ -158,6 +171,16 @@ function seed(): MockDb {
     version: VERSION,
     session: "in",
     me,
+    backupCodes: MOCK_BACKUP_CODES.slice(),
+    passkeys: [
+      {
+        id: "pk_macbook",
+        name: "MacBook Touch ID",
+        deviceType: "multiDevice",
+        backedUp: true,
+        createdAt: new Date(now - 20 * DAY).toISOString(),
+      },
+    ],
     orgs: {
       [ACME_ORG_ID]: seedAcme(now),
       [SANDBOX_ORG_ID]: emptyOrg(SANDBOX_ORG_ID, "Acme Cloud (Sandbox)", sandboxOwner, now),

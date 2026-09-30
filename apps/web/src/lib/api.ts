@@ -14,6 +14,7 @@ import type {
   createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
+  createSsoProviderBody,
   inviteBody,
   loginBody,
   notificationChannelBody,
@@ -24,8 +25,10 @@ import type {
   switchOrgBody,
   updateMemberBody,
   updateOrgBody,
+  updateOrgSsoBody,
   updatePolicyBody,
   updateSavedReplyBody,
+  updateSsoProviderBody,
   upsertCustomerBody,
 } from "@slai/shared";
 import {
@@ -35,6 +38,7 @@ import {
   type ApiError as ApiErrorBody,
   type AuditEvent,
   type AutonomyRule,
+  type BackupCodes,
   type Connection,
   type ConnectorInfo,
   type Contract,
@@ -45,17 +49,22 @@ import {
   type List,
   type Me,
   type Member,
-  type MfaSetup,
   type NotificationChannel,
   type OrgSettings,
+  type OrgSsoSettings,
+  type Passkey,
   type Policy,
   type PolicyPreview,
   type Replay,
   type Risk,
   type Role,
+  type SignInDiscovery,
+  type SignInResult,
+  type SsoProvider,
   type TicketDetail,
   type TicketStatus,
   type TicketSummary,
+  type TotpEnrollment,
   type UsageSummary,
 } from "@slai/shared";
 import type { z } from "zod";
@@ -77,10 +86,15 @@ export class ApiError extends Error {
   }
 
   get isUnauthorized() {
-    return this.status === 401 && this.code !== "mfa_required";
+    return this.status === 401;
   }
+  /** A session exists, but its second factor is not verified yet. */
   get isMfaRequired() {
     return this.code === "mfa_required";
+  }
+  /** A session exists, but the user has no second factor yet (mandatory enrollment). */
+  get isEnrollmentRequired() {
+    return this.code === "mfa_enrollment_required";
   }
   get isForbidden() {
     return this.status === 403;
@@ -256,17 +270,45 @@ export interface KnowledgeArticleQuery {
 export const api = {
   auth: {
     me: () => get<Me>("/auth/me"),
-    login: (body: In<typeof loginBody>) => post<Me>("/auth/login", body),
-    signup: (body: In<typeof signupBody>) => post<Me>("/auth/signup", body),
+    discover: (email: string) => post<SignInDiscovery>("/auth/discover", { email }),
+    signIn: (body: In<typeof loginBody>) => post<SignInResult>("/auth/sign-in/email", body),
+    signup: (body: In<typeof signupBody>) => post<SignInResult>("/auth/signup", body),
+    /** Starts SSO; the browser then navigates to the returned IdP URL. */
+    ssoStart: (body: { email?: string; providerId?: string; redirect?: string }) =>
+      post<{ url: string }>("/auth/sign-in/sso", body),
+    verifyTotp: (code: string) => post<SignInResult>("/auth/two-factor/verify-totp", { code }),
+    verifyBackupCode: (code: string) => post<SignInResult>("/auth/two-factor/verify-backup-code", { code }),
     logout: () => post<void>("/auth/logout"),
-    mfaSetup: () => post<MfaSetup>("/auth/mfa/setup"),
-    mfaVerify: (totp: string) => post<Me>("/auth/mfa/verify", { totp }),
     switchOrg: (organizationId: string) =>
       post<Me>("/auth/switch-org", { organizationId } satisfies In<typeof switchOrgBody>),
+  },
+  totp: {
+    enable: (password?: string) => post<TotpEnrollment>("/auth/two-factor/enable", { password }),
+    regenerateBackupCodes: (password?: string) =>
+      post<BackupCodes>("/auth/two-factor/generate-backup-codes", { password }),
+    disable: (password?: string) => post<void>("/auth/two-factor/disable", { password }),
+  },
+  passkeys: {
+    registerOptions: () => get<unknown>("/auth/passkey/generate-register-options"),
+    register: (response: unknown, name?: string) =>
+      post<Passkey>("/auth/passkey/verify-registration", { response, name }),
+    authenticateOptions: () => get<unknown>("/auth/passkey/generate-authenticate-options"),
+    authenticate: (response: unknown) => post<SignInResult>("/auth/passkey/verify-authentication", { response }),
+    list: () => get<Passkey[]>("/auth/passkey/list-user-passkeys"),
+    remove: (passkeyId: string) => post<void>("/auth/passkey/delete-passkey", { id: passkeyId }),
   },
   org: {
     get: () => get<OrgSettings>("/org"),
     update: (body: In<typeof updateOrgBody>) => patch<OrgSettings>("/org", body),
+  },
+  sso: {
+    get: () => get<OrgSsoSettings>("/org/sso"),
+    update: (body: In<typeof updateOrgSsoBody>) => patch<OrgSsoSettings>("/org/sso", body),
+    create: (body: In<typeof createSsoProviderBody>) => post<SsoProvider>("/org/sso/providers", body),
+    updateProvider: (providerId: string, body: In<typeof updateSsoProviderBody>) =>
+      patch<SsoProvider>(`/org/sso/providers/${id(providerId)}`, body),
+    remove: (providerId: string) => del(`/org/sso/providers/${id(providerId)}`),
+    verifyDomain: (providerId: string) => post<SsoProvider>(`/org/sso/providers/${id(providerId)}/verify-domain`),
   },
   members: {
     list: () => get<List<Member>>("/members"),

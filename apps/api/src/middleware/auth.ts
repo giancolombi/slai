@@ -1,36 +1,62 @@
 import type { Role } from "@slai/shared";
 import type { MiddlewareHandler } from "hono";
-import { getCookie } from "hono/cookie";
-import { type AppDeps, type AppEnv, ROLE_RANK } from "../context.js";
+import { deleteCookie, getCookie } from "hono/cookie";
+import type { Auth } from "../auth/better-auth.js";
+import { SESSION_COOKIE } from "../auth/better-auth.js";
+import { resolveAuth } from "../auth/session.js";
+import { type AppDeps, type AppEnv, type AuthContext, ROLE_RANK } from "../context.js";
 import { ApiError, forbidden, unauthorized } from "../errors.js";
-import { resolveSession, SESSION_COOKIE } from "../sessions.js";
 
-/** Loads the session (if any) from the `slai_session` cookie into `c.var.auth`. */
-export function loadSession(deps: Pick<AppDeps, "systemDb" | "now">): MiddlewareHandler<AppEnv> {
+/**
+ * Loads the better-auth session (if any) into `c.var.auth`, forwarding the
+ * sliding-expiry cookie refresh. An unusable session (absolute limit, disabled
+ * user, no organization) is revoked and its cookie cleared.
+ */
+export function loadSession(deps: Pick<AppDeps, "authDb" | "now" | "env">, auth: Auth): MiddlewareHandler<AppEnv> {
+  const cookieName = deps.env.NODE_ENV === "production" ? `__Secure-${SESSION_COOKIE}` : SESSION_COOKIE;
   return async (c, next) => {
-    const token = getCookie(c, SESSION_COOKIE);
-    if (token) c.set("auth", await resolveSession(deps.systemDb.db, token, deps.now()));
+    if (!getCookie(c, cookieName)) return next();
+    const { ctx, setCookies } = await resolveAuth(deps, auth, c.req.raw.headers);
+    c.set("auth", ctx);
     await next();
+    // The handler's own session cookie (sign-in, sign-out, rotation) wins over the refresh.
+    const handlerSetsSession = c.res.headers.getSetCookie().some((v) => v.startsWith(`${cookieName}=`));
+    if (handlerSetsSession) return;
+    for (const cookie of setCookies) c.res.headers.append("set-cookie", cookie);
+    if (!ctx && setCookies.length === 0) deleteCookie(c, cookieName, { path: "/" });
   };
+}
+
+/** 403 for a session whose second factor is still missing. */
+export function mfaError(a: AuthContext): ApiError {
+  return a.mfa === "enrollment_required"
+    ? new ApiError(
+        403,
+        "mfa_enrollment_required",
+        "Set up two-factor authentication (an authenticator app or a passkey) to continue.",
+      )
+    : new ApiError(403, "mfa_required", "Verify your second factor to continue.");
 }
 
 /**
- * Requires a signed-in user. Unless `allowMfaPending`, a session that has not
- * completed MFA (when the user has MFA, or the org requires it) is refused with
- * 403 `mfa_setup_required`, so the only things it can do are set up MFA, read
- * /auth/me, switch org, and log out.
+ * Requires a signed-in user whose session satisfies MFA. This is the server-side
+ * enrollment gate: everything outside /auth is mounted behind it, so a session
+ * without a second factor can only reach /auth (me, enrollment, sign-out).
  */
-export function requireAuth(opts: { allowMfaPending?: boolean } = {}): MiddlewareHandler<AppEnv> {
+export function requireAuth(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const a = c.get("auth");
     if (!a) throw unauthorized();
-    const needsMfa = (a.user.mfaEnabled || a.orgRequiresMfa) && !a.mfaVerified;
-    if (needsMfa && !opts.allowMfaPending) {
-      throw new ApiError(403, "mfa_setup_required", "This organization requires two-factor authentication.");
-    }
+    if (a.mfa !== "satisfied") throw mfaError(a);
     await next();
   };
 }
+
+/** Signed in, MFA state not checked (the /auth routes that enrollment needs). */
+export const requireSession: MiddlewareHandler<AppEnv> = async (c, next) => {
+  if (!c.get("auth")) throw unauthorized();
+  await next();
+};
 
 /** RBAC: requires at least `min` in the active organization. */
 export function requireRole(min: Role): MiddlewareHandler<AppEnv> {

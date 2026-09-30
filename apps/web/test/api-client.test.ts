@@ -94,13 +94,17 @@ describe("api client: errors", () => {
     });
   });
 
-  it("distinguishes mfa_required from an expired session", async () => {
+  it("distinguishes the MFA gate (403) from an expired session (401)", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: { code: "mfa_required", message: "Enter your code." } }, 401),
+      jsonResponse({ error: { code: "mfa_enrollment_required", message: "Set up two-factor." } }, 403),
     );
-    const mfa = (await api.auth.login({ email: "a@b.co", password: "x" }).catch((e: unknown) => e)) as ApiError;
-    expect(mfa.isMfaRequired).toBe(true);
-    expect(mfa.isUnauthorized).toBe(false);
+    const gate = (await api.dashboard.get().catch((e: unknown) => e)) as ApiError;
+    expect(gate.isEnrollmentRequired).toBe(true);
+    expect(gate.isUnauthorized).toBe(false);
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: { code: "mfa_required", message: "Verify." } }, 403));
+    const verify = (await api.dashboard.get().catch((e: unknown) => e)) as ApiError;
+    expect(verify.isMfaRequired).toBe(true);
 
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: { code: "unauthorized", message: "Please sign in." } }, 401));
     const expired = (await api.auth.me().catch((e: unknown) => e)) as ApiError;

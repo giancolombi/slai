@@ -99,8 +99,22 @@ IDs are referenced from `technical.md` and `tasks.md`.
   spend cap.
 
 ### Accounts and trust
-- **PR-24** Email/password sign-up and login, TOTP MFA (orgs can require it),
-  multiple orgs per user, and roles owner/admin/member/viewer.
+- **PR-24** Identity and access:
+  - Email/password sign-up and sign-in, email first: the email's domain decides
+    between a password and the organization's SSO.
+  - **MFA is mandatory for every password account.** After the first sign-in the
+    user must enroll a second factor (an authenticator app with ten single-use
+    backup codes, or a passkey) before anything else works, and every sign-in
+    asks for it (TOTP, a backup code, or a passkey). There is no org toggle.
+    Existing users are forced into enrollment at their next sign-in.
+  - **SSO per organization** (OIDC or SAML), set up by admins and owners: provider
+    details (the client secret is write-only), DNS TXT domain verification, JIT
+    provisioning of new users as `member`, an **enforce SSO** switch that disables
+    password and passkey sign-in on the verified domains, and an "also require slai
+    MFA for SSO users" switch (off by default: the IdP's MFA counts).
+  - Settings → Security lets users manage their authenticator app, regenerate
+    backup codes, and add or remove passkeys (never the last factor).
+  - Multiple orgs per user, and roles owner/admin/member/viewer.
 - **PR-25** An audit log of every security-relevant action.
 - **PR-26** SOC 2-ready from day one. Customer data is never used for model
   training.
