@@ -16,14 +16,3 @@ export async function verifyPassword(passwordHash: string, password: string): Pr
     return false;
   }
 }
-
-let dummy: Promise<string> | null = null;
-/**
- * Verifies against a throwaway hash so that a login for an unknown email costs
- * the same as one for a known email (no user enumeration by timing).
- */
-export async function burnPasswordCheck(password: string): Promise<false> {
-  dummy ??= hashPassword("slai-timing-equalizer-not-a-password");
-  await verifyPassword(await dummy, password);
-  return false;
-}

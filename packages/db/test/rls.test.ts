@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { ORG_SCOPED_TABLES, organizations, tickets, users } from "../src/schema.js";
+import { accounts, ORG_SCOPED_TABLES, organizations, ssoProviders, tickets, twoFactors } from "../src/schema.js";
 import { failure, openDbs, seedOrg } from "./helpers.js";
 
-const { owner, app, system } = openDbs();
+const { owner, app, system, auth } = openDbs();
 let a: Awaited<ReturnType<typeof seedOrg>>;
 let b: Awaited<ReturnType<typeof seedOrg>>;
 
@@ -100,10 +100,28 @@ describe("the app role cannot bypass RLS", () => {
     expect(await failure(app.client`set role slai`)).toMatch(/permission denied/);
   });
 
-  it("cannot read password hashes, MFA secrets, or sessions", async () => {
-    expect(await failure(app.db.select({ h: users.passwordHash }).from(users))).toMatch(/permission denied/);
-    expect(await failure(app.db.select({ s: users.mfaSecret }).from(users))).toMatch(/permission denied/);
+  it("cannot read password hashes, TOTP secrets, sessions, passkeys, or auth verifications", async () => {
+    expect(await failure(app.db.select({ h: accounts.password }).from(accounts))).toMatch(/permission denied/);
+    expect(await failure(app.db.select({ s: twoFactors.secret }).from(twoFactors))).toMatch(/permission denied/);
     expect(await failure(app.client`select * from sessions`)).toMatch(/permission denied/);
+    expect(await failure(app.client`select * from passkeys`)).toMatch(/permission denied/);
+    expect(await failure(app.client`select * from verifications`)).toMatch(/permission denied/);
+  });
+
+  it("can read its own org's SSO providers but not write them", async () => {
+    await owner.db.insert(ssoProviders).values({
+      orgId: a.orgId,
+      providerId: `p-${a.orgId}`,
+      issuer: "https://idp.example",
+      domain: "a.example",
+    });
+    expect(await app.withOrg(a.orgId, (tx) => tx.select().from(ssoProviders))).toHaveLength(1);
+    expect(await app.withOrg(b.orgId, (tx) => tx.select().from(ssoProviders))).toHaveLength(0);
+    expect(
+      await failure(
+        app.withOrg(a.orgId, (tx) => tx.update(ssoProviders).set({ domainVerified: true })),
+      ),
+    ).toMatch(/permission denied/);
   });
 
   it("every org-scoped table has forced RLS and the org_isolation policy", async () => {
@@ -123,6 +141,18 @@ describe("the app role cannot bypass RLS", () => {
   });
 });
 
+describe("the auth role (slai_auth)", () => {
+  it("reads the identity tables but no org data", async () => {
+    expect(await auth.client`select count(*) from accounts`).toHaveLength(1);
+    expect(await auth.client`select count(*) from two_factors`).toHaveLength(1);
+    expect(await failure(auth.client`select subject from tickets`)).toMatch(/permission denied/);
+    expect(await failure(auth.client`select credentials from connections`)).toMatch(/permission denied/);
+    expect(await failure(auth.client`select * from sla_policies`)).toMatch(/permission denied/);
+    expect(await failure(auth.client`update organizations set name = 'x'`)).toMatch(/permission denied/);
+    expect(await failure(auth.client`select * from audit_events`)).toMatch(/permission denied/);
+  });
+});
+
 describe("the system role (systemDb)", () => {
   it("can run the cross-org timer sweep", async () => {
     const due = await system.db
@@ -136,5 +166,11 @@ describe("the system role (systemDb)", () => {
     expect(await failure(system.db.select({ s: tickets.subject }).from(tickets))).toMatch(/permission denied/);
     expect(await failure(system.client`select credentials from connections`)).toMatch(/permission denied/);
     expect(await failure(system.client`select * from sla_policies`)).toMatch(/permission denied/);
+  });
+
+  it("no longer touches sessions or auth secrets", async () => {
+    expect(await failure(system.client`select * from sessions`)).toMatch(/permission denied/);
+    expect(await failure(system.client`select * from accounts`)).toMatch(/permission denied/);
+    expect(await failure(system.client`select * from two_factors`)).toMatch(/permission denied/);
   });
 });
