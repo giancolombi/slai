@@ -21,6 +21,8 @@ export const JOB_PAYLOADS = {
   "execute-action": z.object({ orgId: uuid, actionId: uuid }),
   "run-replay": z.object({ orgId: uuid, replayId: uuid }),
   "evaluate-ticket": z.object({ orgId: uuid, ticketId: uuid }),
+  /** Fetch one ticket's history from the help desk and ingest it (from sync and webhooks). */
+  "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
 } as const;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -35,6 +37,7 @@ export const QUEUE = {
   executeAction: "execute-action",
   runReplay: "run-replay",
   evaluateTicket: "evaluate-ticket",
+  ingestTicket: "ingest-ticket",
 } as const satisfies Record<string, JobName>;
 
 /** Parses a job's data in the worker (trust boundary). */

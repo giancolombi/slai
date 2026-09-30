@@ -197,6 +197,11 @@ export const connections = pgTable(
     syncCursor: text("sync_cursor"),
     lastSyncAt: ts("last_sync_at"),
     lastError: text("last_error"),
+    /** Raw statuses/priorities the mapping did not recognise (set by the worker's sync; shown in the UI). */
+    mappingIssues: jsonb("mapping_issues")
+      .$type<{ field: "status" | "priority"; raw: string }[]>()
+      .notNull()
+      .default([]),
     createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

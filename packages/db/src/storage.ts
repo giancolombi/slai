@@ -4,7 +4,8 @@
  * slai, never taken from user input.
  */
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, isAbsolute, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface StorageDriver {
   put(key: string, data: Uint8Array, meta: { contentType: string; sha256: string }): Promise<void>;
@@ -47,8 +48,19 @@ export function createLocalStorage(root: string): StorageDriver {
  * - credentials from workload identity, never from env keys.
  */
 export function createStorage(opts: { driver: string; localDir: string }): StorageDriver {
-  if (opts.driver === "local") return createLocalStorage(opts.localDir);
+  if (opts.driver === "local") return createLocalStorage(resolveFromRepoRoot(opts.localDir));
   throw new Error(`storage driver "${opts.driver}" is not implemented (see TODO in packages/db/src/storage.ts)`);
+}
+
+const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+
+/**
+ * Relative STORAGE_LOCAL_DIR values are taken from the repo root (where .env
+ * lives), so the API and the worker, which run from different package
+ * directories, read and write the same files.
+ */
+export function resolveFromRepoRoot(dir: string): string {
+  return isAbsolute(dir) ? dir : resolve(REPO_ROOT, dir);
 }
 
 export const contractStorageKey = (orgId: string, contractId: string) => `${orgId}/contracts/${contractId}`;
