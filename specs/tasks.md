@@ -51,6 +51,11 @@ Each task references the requirements it serves.
 - [x] T-45 Breach Replay job (PR-22) and policy preview (PR-5)
 - [x] T-46 Metering to `usage_ledger`; spend-cap degradation (PR-23, TR-30)
 
+- [ ] T-47 Knowledge sources (help-center articles and saved replies per connection) fed into drafts.
+      Without them, drafts flag `unsureOfFacts` and autopilot correctly holds every reply (PR-15, PR-17)
+- [ ] T-48 First-connect guard: don't dispatch agents for tickets that were already long breached at first
+      sync (avoids a burst of drafts and credit spend on connect)
+- [ ] T-49 Make help-desk writes and their action record idempotent across retries (no double send)
 ## M5: Web
 - [x] T-50 Design system: tokens (light/dark), components, SlaClock, SlaBar, TicketTimeline,
       CitationQuote, and the `/design` style guide (TR-3)
@@ -66,7 +71,7 @@ Each task references the requirements it serves.
 - [ ] T-59 API contract: document that `approvedBy`/`uploadedBy`/`decidedBy` are user ids; type the invite response; invitation email and accept endpoint
 
 ## M6: Integration and launch readiness
-- [ ] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
+- [x] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
       approve → sent (with an automated e2e test)
 - [ ] T-61 E2B template built and pinned; a real run with API keys
 - [ ] T-62 A real Zendesk sandbox account and a verified live sync
