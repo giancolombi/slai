@@ -1,0 +1,128 @@
+{
+  "_embedded": {
+    "conversations": [
+      {
+        "id": 7001,
+        "number": 1042,
+        "threads": 9,
+        "type": "email",
+        "folderId": 4410,
+        "status": "active",
+        "state": "published",
+        "subject": "Invoices export times out for March",
+        "preview": "Invoices export times out for March",
+        "mailboxId": 3100,
+        "assignee": {
+          "id": 802,
+          "type": "user",
+          "first": "Tess",
+          "last": "Moreno",
+          "email": "tess.moreno@acmesupport.example"
+        },
+        "createdBy": {
+          "id": 5501,
+          "type": "customer",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "createdAt": "2026-09-28T09:00:00Z",
+        "userUpdatedAt": "2026-09-28T14:05:00Z",
+        "customerWaitingSince": {
+          "time": "2026-09-28T14:05:00Z",
+          "friendly": "1 hour ago"
+        },
+        "source": {
+          "type": "email",
+          "via": "customer"
+        },
+        "tags": [
+          {
+            "id": 9100,
+            "color": "#929499",
+            "tag": "priority-high"
+          },
+          {
+            "id": 9101,
+            "color": "#929499",
+            "tag": "billing"
+          }
+        ],
+        "primaryCustomer": {
+          "id": 5501,
+          "type": "customer",
+          "first": "Priya",
+          "last": "Raman",
+          "email": "priya.raman@lumenfield.example"
+        },
+        "_links": {
+          "self": {
+            "href": "https://api.helpscout.net/v2/conversations/7001"
+          },
+          "web": {
+            "href": "https://secure.helpscout.net/conversation/7001/1042"
+          }
+        }
+      },
+      {
+        "id": 7002,
+        "number": 1043,
+        "threads": 9,
+        "type": "email",
+        "folderId": 4410,
+        "status": "closed",
+        "state": "published",
+        "subject": "Change billing contact",
+        "preview": "Change billing contact",
+        "mailboxId": 3100,
+        "assignee": null,
+        "createdBy": {
+          "id": 5502,
+          "type": "customer",
+          "email": "marco@quillhaven.example"
+        },
+        "createdAt": "2026-09-27T15:00:00Z",
+        "userUpdatedAt": "2026-09-28T08:00:00Z",
+        "customerWaitingSince": {
+          "time": "2026-09-28T08:00:00Z",
+          "friendly": "1 hour ago"
+        },
+        "source": {
+          "type": "email",
+          "via": "customer"
+        },
+        "tags": [
+          {
+            "id": 9100,
+            "color": "#929499",
+            "tag": "billing"
+          }
+        ],
+        "primaryCustomer": {
+          "id": 5502,
+          "type": "customer",
+          "first": "Marco",
+          "last": "Bellini",
+          "email": "marco@quillhaven.example"
+        },
+        "_links": {
+          "self": {
+            "href": "https://api.helpscout.net/v2/conversations/7002"
+          },
+          "web": {
+            "href": "https://secure.helpscout.net/conversation/7002/1043"
+          }
+        }
+      }
+    ]
+  },
+  "_links": {
+    "self": {
+      "href": "https://api.helpscout.net/v2/conversations?page=1"
+    }
+  },
+  "page": {
+    "size": 2,
+    "totalElements": 3,
+    "totalPages": 2,
+    "number": 1
+  }
+}

@@ -1,0 +1,211 @@
+/*
+ * @slai/ui stylesheet. Import once from the app entry CSS:
+ *   @import "@slai/ui/styles.css";
+ * It loads Tailwind 4, the tokens, and maps tokens to utilities via @theme.
+ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Scan the design system's own components for class names. */
+@source "../";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme inline {
+  /* Only slai tokens: the default Tailwind palette is removed on purpose. */
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-hover: var(--hover-tint);
+  --color-active: var(--active-tint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--text);
+  --color-ink-muted: var(--text-muted);
+  --color-ink-subtle: var(--text-subtle);
+  --color-ink-inverse: var(--text-inverse);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-text: var(--accent-text);
+  --color-on-accent: var(--on-accent);
+  --color-focus: var(--focus);
+
+  --color-ok: var(--risk-ok-solid);
+  --color-ok-text: var(--risk-ok-text);
+  --color-ok-subtle: var(--risk-ok-subtle);
+  --color-ok-border: var(--risk-ok-border);
+  --color-warning: var(--risk-warning-solid);
+  --color-warning-text: var(--risk-warning-text);
+  --color-warning-subtle: var(--risk-warning-subtle);
+  --color-warning-border: var(--risk-warning-border);
+  --color-at-risk: var(--risk-at_risk-solid);
+  --color-at-risk-text: var(--risk-at_risk-text);
+  --color-at-risk-subtle: var(--risk-at_risk-subtle);
+  --color-at-risk-border: var(--risk-at_risk-border);
+  --color-breached: var(--risk-breached-solid);
+  --color-breached-text: var(--risk-breached-text);
+  --color-breached-subtle: var(--risk-breached-subtle);
+  --color-breached-border: var(--risk-breached-border);
+  --color-on-breached: var(--on-breached);
+
+  --font-sans: var(--typeface-sans);
+  --font-mono: var(--typeface-mono);
+  --font-serif: var(--typeface-serif);
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-md: 15px;
+  --text-md--line-height: 24px;
+  --text-lg: 17px;
+  --text-lg--line-height: 26px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+  --text-4xl: 38px;
+  --text-4xl--line-height: 44px;
+
+  --radius-xs: var(--corner-xs);
+  --radius-sm: var(--corner-sm);
+  --radius-md: var(--corner-md);
+  --radius-lg: var(--corner-lg);
+  --radius-xl: var(--corner-xl);
+
+  --shadow-xs: var(--elev-xs);
+  --shadow-sm: var(--elev-sm);
+  --shadow-md: var(--elev-md);
+  --shadow-lg: var(--elev-lg);
+  --shadow-focus: var(--elev-focus);
+
+  --default-transition-duration: var(--duration-fast);
+  --default-transition-timing-function: var(--easing-out);
+  --ease-out: var(--easing-out);
+  --ease-in-out: var(--easing-in-out);
+
+  --animate-fade-in: slai-fade-in var(--duration-base) var(--easing-out);
+  --animate-pop-in: slai-pop-in var(--duration-base) var(--easing-out);
+  --animate-slide-in-right: slai-slide-in-right var(--duration-slow) var(--easing-out);
+  --animate-slide-up: slai-slide-up var(--duration-base) var(--easing-out);
+  --animate-shimmer: slai-shimmer 1.6s linear infinite;
+  --animate-pulse-ring: slai-pulse-ring 2s var(--easing-out) infinite;
+}
+
+@keyframes slai-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes slai-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+@keyframes slai-slide-in-right {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes slai-slide-up {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+@keyframes slai-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+@keyframes slai-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--text);
+    font-family: var(--typeface-sans);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "cv11";
+  }
+  body {
+    background: var(--canvas);
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 25%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--corner-xs);
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-subtle);
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+  }
+  kbd {
+    font-family: var(--typeface-mono);
+  }
+}
+
+@layer utilities {
+  /* Tabular figures for any number that updates or lines up in a column. */
+  .tnum {
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: "tnum", "zero";
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+/*
+ * Reduced motion: every transition and entrance animation reads its duration from the
+ * --duration-* tokens, which tokens.css sets to 0ms. Looping decoration stops outright.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer,
+  .animate-pulse-ring {
+    animation: none;
+  }
+}

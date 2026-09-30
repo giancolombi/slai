@@ -1,0 +1,186 @@
+{
+  "data": {
+    "organization": {
+      "urlKey": "northwind"
+    },
+    "issue": {
+      "id": "c0a8e1f4-6b2d-4e9a-9f31-7d5e2b8a4c10",
+      "identifier": "ESC-142",
+      "title": "Harborline: shipment webhooks delayed by 20+ minutes",
+      "description": "Our dispatch board is showing shipment updates 20-30 minutes late since this morning.\n\nThis is blocking our cut-off for the 14:00 trucks.",
+      "url": "https://linear.app/northwind/issue/ESC-142",
+      "priority": 2,
+      "priorityLabel": "High",
+      "createdAt": "2026-09-28T09:00:00.000Z",
+      "updatedAt": "2026-09-28T14:05:00.000Z",
+      "integrationSourceType": "slack",
+      "state": {
+        "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+        "name": "In Progress",
+        "type": "started"
+      },
+      "team": {
+        "id": "5d1e7a9c-2b4f-4c6d-8e0a-1b3c5d7e9f44",
+        "key": "ESC"
+      },
+      "assignee": {
+        "id": "3f6a1c2e-9d84-4b7a-a1e5-0c2d9b7f8e11",
+        "name": "Marco Bellini",
+        "email": "marco.bellini@northwind.example"
+      },
+      "creator": null,
+      "botActor": null,
+      "externalUserCreator": {
+        "id": "e7c9a1b3-5d2f-4a6e-8b0c-1d3f5a7b9c33",
+        "name": "Priya Raman",
+        "email": "priya.raman@harborline.example"
+      },
+      "asksRequester": null,
+      "asksExternalUserRequester": null,
+      "labels": {
+        "nodes": [
+          {
+            "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c77",
+            "name": "customer-impact"
+          }
+        ]
+      },
+      "needs": {
+        "nodes": [
+          {
+            "comment": {
+              "id": "d4000000-0000-4000-8000-000000000004"
+            },
+            "customer": {
+              "id": "c4d5e6f7-8a9b-4c0d-9e1f-2a3b4c5d6e66",
+              "name": "Harborline Freight"
+            }
+          }
+        ]
+      },
+      "history": {
+        "nodes": [
+          {
+            "id": "a1000001-0000-4000-8000-000000000001",
+            "createdAt": "2026-09-28T09:20:00.000Z",
+            "fromState": null,
+            "toState": null,
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": "3f6a1c2e-9d84-4b7a-a1e5-0c2d9b7f8e11",
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000002-0000-4000-8000-000000000002",
+            "createdAt": "2026-09-28T09:45:00.000Z",
+            "fromState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a01",
+              "name": "Triage",
+              "type": "triage"
+            },
+            "toState": {
+              "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a02",
+              "name": "In Progress",
+              "type": "started"
+            },
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000003-0000-4000-8000-000000000003",
+            "createdAt": "2026-09-28T10:00:00.000Z",
+            "fromState": null,
+            "toState": null,
+            "fromPriority": 3,
+            "toPriority": 2,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": null,
+            "removedLabels": null
+          },
+          {
+            "id": "a1000004-0000-4000-8000-000000000004",
+            "createdAt": "2026-09-28T10:00:00.000Z",
+            "fromState": null,
+            "toState": null,
+            "fromPriority": null,
+            "toPriority": null,
+            "fromAssigneeId": null,
+            "toAssigneeId": null,
+            "addedLabels": [
+              {
+                "name": "customer-impact"
+              }
+            ],
+            "removedLabels": []
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": true,
+          "endCursor": "aGlzdG9yeS1wYWdlLTI"
+        }
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "d1000000-0000-4000-8000-000000000001",
+            "body": "Reproduced: the webhook queue for Harborline is backed up behind a retry storm from one bad endpoint.",
+            "createdAt": "2026-09-28T09:30:00.000Z",
+            "user": {
+              "id": "3f6a1c2e-9d84-4b7a-a1e5-0c2d9b7f8e11",
+              "name": "Marco Bellini",
+              "email": "marco.bellini@northwind.example"
+            },
+            "botActor": null,
+            "externalUser": null
+          },
+          {
+            "id": "d2000000-0000-4000-8000-000000000002",
+            "body": "Pull request opened: **fix(webhooks): isolate retry queues per endpoint** (#4821)",
+            "createdAt": "2026-09-28T10:30:00.000Z",
+            "user": null,
+            "botActor": {
+              "id": "b0751e2a-6c3d-4f8e-9a1b-2c3d4e5f6a55",
+              "name": "GitHub"
+            },
+            "externalUser": null
+          },
+          {
+            "id": "d3000000-0000-4000-8000-000000000003",
+            "body": "Updates are arriving on time again on our side, thanks. We'll keep watching.",
+            "createdAt": "2026-09-28T12:00:00.000Z",
+            "user": null,
+            "botActor": null,
+            "externalUser": {
+              "id": "e7c9a1b3-5d2f-4a6e-8b0c-1d3f5a7b9c33",
+              "name": "Priya Raman",
+              "email": "priya.raman@harborline.example"
+            }
+          },
+          {
+            "id": "d4000000-0000-4000-8000-000000000004",
+            "body": "From Harborline (via their CSM): the delay is back for the Rotterdam depot as of 13:50.",
+            "createdAt": "2026-09-28T14:00:00.000Z",
+            "user": {
+              "id": "8b2d4e6f-1a3c-4d5e-9f70-2b4c6d8e0a22",
+              "name": "Lena Hoffmann",
+              "email": "lena.hoffmann@northwind.example"
+            },
+            "botActor": null,
+            "externalUser": null
+          }
+        ],
+        "pageInfo": {
+          "hasNextPage": false,
+          "endCursor": "d4000000-0000-4000-8000-000000000004"
+        }
+      }
+    }
+  }
+}

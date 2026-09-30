@@ -1,0 +1,99 @@
+{
+  "object": "list",
+  "uri": "/api/events?object_type=Ticket&object_id=7301",
+  "data": [
+    {
+      "id": 660001,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-created",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0001",
+      "user_id": null,
+      "data": null,
+      "created_datetime": "2026-09-28T09:00:00.000000"
+    },
+    {
+      "id": 660002,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-message-created",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0002",
+      "user_id": null,
+      "data": { "message_id": 910002 },
+      "created_datetime": "2026-09-28T09:05:00.000000"
+    },
+    {
+      "id": 660003,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-assigned",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0003",
+      "user_id": 88,
+      "data": { "assignee_user": { "id": 88, "name": "Marco Villa" } },
+      "created_datetime": "2026-09-28T09:20:00.000000"
+    },
+    {
+      "id": 660004,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-viewed",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0004",
+      "user_id": 88,
+      "data": null,
+      "created_datetime": "2026-09-28T09:21:00.000000"
+    },
+    {
+      "id": 660005,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-snoozed",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0005",
+      "user_id": 88,
+      "data": { "snooze_datetime": "2026-09-30T10:31:00" },
+      "created_datetime": "2026-09-28T10:31:00.000000"
+    },
+    {
+      "id": 660006,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-closed",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0005",
+      "user_id": 88,
+      "data": null,
+      "created_datetime": "2026-09-28T10:31:00.000000"
+    },
+    {
+      "id": 660007,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-reopened",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0007",
+      "user_id": null,
+      "data": null,
+      "created_datetime": "2026-09-28T12:00:00.000000"
+    },
+    {
+      "id": 660008,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-updated",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0008",
+      "user_id": 88,
+      "data": { "priority": { "old": "normal", "new": "high" } },
+      "created_datetime": "2026-09-28T13:00:00.000000"
+    },
+    {
+      "id": 660009,
+      "object_id": 7301,
+      "object_type": "Ticket",
+      "type": "ticket-tags-added",
+      "context": "5d0c7a2e-1f7b-4c1e-9a55-1c1a8f7e0008",
+      "user_id": 88,
+      "data": {
+        "tags": [{ "id": 31, "name": "damaged-item" }, { "id": 32, "name": "vip" }]
+      },
+      "created_datetime": "2026-09-28T13:00:00.000000"
+    }
+  ],
+  "meta": { "prev_cursor": null, "next_cursor": null, "total_resources": null }
+}

@@ -1,0 +1,58 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "f1e2d3c4-b5a6-4978-8a6b-5c4d3e2f1a03",
+          "identifier": "ESC-144",
+          "title": "SSO login loop for Oakridge Clinics admins",
+          "description": null,
+          "url": "https://linear.app/northwind/issue/ESC-144",
+          "priority": 1,
+          "priorityLabel": "Urgent",
+          "createdAt": "2026-09-28T15:20:00.000Z",
+          "updatedAt": "2026-09-28T15:40:00.000Z",
+          "integrationSourceType": null,
+          "state": {
+            "id": "0e1f2a3b-4c5d-4e6f-8a7b-9c0d1e2f3a05",
+            "name": "In Review",
+            "type": "started"
+          },
+          "team": {
+            "id": "5d1e7a9c-2b4f-4c6d-8e0a-1b3c5d7e9f44",
+            "key": "ESC"
+          },
+          "assignee": {
+            "id": "3f6a1c2e-9d84-4b7a-a1e5-0c2d9b7f8e11",
+            "name": "Marco Bellini",
+            "email": "marco.bellini@northwind.example"
+          },
+          "creator": {
+            "id": "8b2d4e6f-1a3c-4d5e-9f70-2b4c6d8e0a22",
+            "name": "Lena Hoffmann",
+            "email": "lena.hoffmann@northwind.example"
+          },
+          "botActor": null,
+          "externalUserCreator": null,
+          "asksRequester": null,
+          "asksExternalUserRequester": null,
+          "labels": {
+            "nodes": [
+              {
+                "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c88",
+                "name": "sso"
+              }
+            ]
+          },
+          "needs": {
+            "nodes": []
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "aXNzdWVzLWVuZA"
+      }
+    }
+  }
+}

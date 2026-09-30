@@ -1,3 +1,45 @@
+# Zammad (profile "zammad") is the live SLA conformance fixture (T-24, TR-14).
+# It is adapted from the official stack, https://github.com/zammad/zammad-docker-compose
+# (docker-compose.yml, 2026-09): init, railsserver, websocket, scheduler and nginx
+# share one image, backed by Elasticsearch, Memcached, Redis and PostgreSQL. The
+# backup service and the upstream superuser/app-role split are left out; this is a
+# throwaway local fixture, not a deployment. Start it with:
+#   docker compose --profile zammad up -d
+# then open http://localhost:${ZAMMAD_PORT:-8080}, create the admin, create a token
+# (Profile → Token Access, permissions admin + ticket.agent), and run
+#   ZAMMAD_LIVE_URL=http://localhost:8080 ZAMMAD_LIVE_TOKEN=… pnpm --filter @slai/connectors test
+x-zammad-service: &zammad-service
+  image: ghcr.io/zammad/zammad:${ZAMMAD_VERSION:-7.2.0-0011}
+  profiles: [zammad]
+  init: true
+  restart: unless-stopped
+  environment:
+    MEMCACHE_SERVERS: zammad-memcached:11211
+    POSTGRESQL_HOST: zammad-postgresql
+    POSTGRESQL_PORT: 5432
+    POSTGRESQL_DB: zammad_production
+    POSTGRESQL_USER: zammad
+    POSTGRESQL_PASS: zammad
+    POSTGRESQL_OPTIONS: "?pool=50"
+    # The database is created by the postgres image below.
+    POSTGRESQL_DB_CREATE: "false"
+    REDIS_URL: redis://zammad-redis:6379
+    ELASTICSEARCH_ENABLED: "true"
+    ELASTICSEARCH_HOST: zammad-elasticsearch
+    ELASTICSEARCH_PORT: 9200
+    ELASTICSEARCH_SCHEMA: http
+    # SLA timestamps are compared in UTC by the live conformance test.
+    TZ: UTC
+  volumes:
+    - zammad-storage:/opt/zammad/storage
+  depends_on:
+    zammad-memcached:
+      condition: service_healthy
+    zammad-postgresql:
+      condition: service_healthy
+    zammad-redis:
+      condition: service_healthy
+
 services:
   postgres:
     image: postgres:18
@@ -15,5 +57,86 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports: ["1025:1025", "8025:8025"]
+
+  zammad-init:
+    <<: *zammad-service
+    command: ["zammad-init"]
+    restart: on-failure
+    user: 0:0
+  zammad-railsserver:
+    <<: *zammad-service
+    command: ["zammad-railsserver"]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:3000"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+  zammad-scheduler:
+    <<: *zammad-service
+    command: ["zammad-scheduler"]
+  zammad-websocket:
+    <<: *zammad-service
+    command: ["zammad-websocket"]
+  zammad-nginx:
+    <<: *zammad-service
+    command: ["zammad-nginx"]
+    init: false
+    expose: ["8080"]
+    ports: ["${ZAMMAD_PORT:-8080}:8080"]
+    depends_on:
+      zammad-railsserver:
+        condition: service_healthy
+  zammad-elasticsearch:
+    image: elasticsearch:${ZAMMAD_ELASTICSEARCH_VERSION:-9.5.3}
+    profiles: [zammad]
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms1g -Xmx1g
+    volumes: [zammad-elasticsearch:/usr/share/elasticsearch/data]
+  zammad-memcached:
+    image: memcached:1.6.45-alpine
+    profiles: [zammad]
+    command: memcached -m 256M
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "11211"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+  zammad-postgresql:
+    image: postgres:17.11-alpine
+    profiles: [zammad]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zammad
+      POSTGRES_PASSWORD: zammad
+      POSTGRES_DB: zammad_production
+    volumes: [zammad-postgresql:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zammad -d zammad_production"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+  zammad-redis:
+    image: redis:8.10.2-alpine
+    profiles: [zammad]
+    restart: unless-stopped
+    volumes: [zammad-redis:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+
 volumes:
   pgdata:
+  zammad-storage:
+  zammad-elasticsearch:
+  zammad-postgresql:
+  zammad-redis:

@@ -1,0 +1,13 @@
+{
+  "data": {
+    "viewer": {
+      "id": "3f6a1c2e-9d84-4b7a-a1e5-0c2d9b7f8e11",
+      "name": "Marco Bellini"
+    },
+    "organization": {
+      "id": "6e7f8a9b-0c1d-4e2f-8a3b-4c5d6e7f8a99",
+      "name": "Northwind Support",
+      "urlKey": "northwind"
+    }
+  }
+}

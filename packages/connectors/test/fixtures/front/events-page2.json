@@ -1,0 +1,91 @@
+{
+  "_pagination": {
+    "next": null
+  },
+  "_links": {
+    "self": "https://api2.frontapp.com/events"
+  },
+  "_results": [
+    {
+      "_links": {
+        "self": "https://api2.frontapp.com/events/evt_300"
+      },
+      "id": "evt_300",
+      "type": "archive",
+      "emitted_at": 1790595060,
+      "source": {
+        "_meta": {
+          "type": "rule"
+        },
+        "data": {
+          "id": "rul_close"
+        }
+      },
+      "target": null,
+      "conversation": {
+        "_links": {
+          "self": "https://api2.frontapp.com/conversations/cnv_4d8x2",
+          "related": {
+            "events": "https://api2.frontapp.com/conversations/cnv_4d8x2/events",
+            "messages": "https://api2.frontapp.com/conversations/cnv_4d8x2/messages",
+            "comments": "https://api2.frontapp.com/conversations/cnv_4d8x2/comments",
+            "inboxes": "https://api2.frontapp.com/conversations/cnv_4d8x2/inboxes"
+          }
+        },
+        "id": "cnv_4d8x2",
+        "subject": "Feature request: CSV delimiter",
+        "status": "archived",
+        "status_id": null,
+        "status_category": null,
+        "ticket_ids": [],
+        "assignee": null,
+        "recipient": {
+          "_links": {
+            "related": {
+              "contact": null
+            }
+          },
+          "name": null,
+          "handle": "+15550100",
+          "role": "from"
+        },
+        "tags": [
+          {
+            "_links": {
+              "self": "https://api2.frontapp.com/tags/tag_p2c"
+            },
+            "id": "tag_p2c",
+            "name": "priority: p2-custom",
+            "description": null,
+            "highlight": null,
+            "is_private": false,
+            "is_visible_in_conversation_lists": true,
+            "created_at": 1768003200,
+            "updated_at": 1768003200
+          },
+          {
+            "_links": {
+              "self": "https://api2.frontapp.com/tags/tag_fr"
+            },
+            "id": "tag_fr",
+            "name": "feature-request",
+            "description": null,
+            "highlight": null,
+            "is_private": false,
+            "is_visible_in_conversation_lists": true,
+            "created_at": 1768003200,
+            "updated_at": 1768003200
+          }
+        ],
+        "links": [],
+        "custom_fields": {},
+        "created_at": 1790517600,
+        "updated_at": 1790595060,
+        "waiting_since": 1790600400,
+        "is_private": false,
+        "scheduled_reminders": [],
+        "metadata": {}
+      }
+    }
+  ]
+}

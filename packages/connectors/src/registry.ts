@@ -1,10 +1,18 @@
 import { demo } from "./connectors/demo/index.js";
 import { freshdesk } from "./connectors/freshdesk.js";
+import { front } from "./connectors/front.js";
+import { github } from "./connectors/github.js";
+import { gorgias } from "./connectors/gorgias.js";
+import { helpScout } from "./connectors/help-scout.js";
 import { hubspot } from "./connectors/hubspot.js";
 import { intercom } from "./connectors/intercom.js";
 import { jiraServiceManagement } from "./connectors/jira-service-management.js";
+import { linear } from "./connectors/linear.js";
+import { salesforce } from "./connectors/salesforce.js";
+import { servicenow } from "./connectors/servicenow.js";
 import { zammad } from "./connectors/zammad.js";
 import { zendesk } from "./connectors/zendesk.js";
+import { zohoDesk } from "./connectors/zoho-desk.js";
 import type { ConnectorDefinition, ProviderId } from "./types.js";
 
 /** Every implemented connector, keyed by provider. Add new connectors here. */
@@ -16,6 +24,14 @@ const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   jira_service_management: jiraServiceManagement,
   hubspot,
   zammad,
+  salesforce,
+  servicenow,
+  zoho_desk: zohoDesk,
+  front,
+  help_scout: helpScout,
+  gorgias,
+  linear,
+  github,
   demo,
 };
 

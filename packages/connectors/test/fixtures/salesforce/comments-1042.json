@@ -1,0 +1,63 @@
+{
+  "totalSize": 3,
+  "done": true,
+  "records": [
+    {
+      "attributes": {
+        "type": "CaseComment",
+        "url": "/services/data/v66.0/sobjects/CaseComment/00aHs00000Cmt01AAA"
+      },
+      "Id": "00aHs00000Cmt01AAA",
+      "IsPublished": true,
+      "CommentBody": "Thanks for contacting Northwind Support. Your case 00001042 is in our queue.",
+      "CreatedDate": "2026-09-28T09:05:00.000+0000",
+      "CreatedById": "005Hs00000Auto1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Auto1AAA"
+        },
+        "Name": "Automated Process",
+        "UserType": "AutomatedProcess"
+      }
+    },
+    {
+      "attributes": {
+        "type": "CaseComment",
+        "url": "/services/data/v66.0/sobjects/CaseComment/00aHs00000Cmt02AAA"
+      },
+      "Id": "00aHs00000Cmt02AAA",
+      "IsPublished": false,
+      "CommentBody": "Looks like the export batch size regression from 2.14. Checking with the platform team.",
+      "CreatedDate": "2026-09-28T09:45:00.000+0000",
+      "CreatedById": "005Hs00000Agnt1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman",
+        "UserType": "Standard"
+      }
+    },
+    {
+      "attributes": {
+        "type": "CaseComment",
+        "url": "/services/data/v66.0/sobjects/CaseComment/00aHs00000Cmt03AAA"
+      },
+      "Id": "00aHs00000Cmt03AAA",
+      "IsPublished": true,
+      "CommentBody": "We've deployed a fix for the export timeout. Tonight's run should complete.",
+      "CreatedDate": "2026-09-28T14:10:00.000+0000",
+      "CreatedById": "005Hs00000Agnt1AAA",
+      "CreatedBy": {
+        "attributes": {
+          "type": "User",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman",
+        "UserType": "Standard"
+      }
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "totalSize": 4,
+  "done": false,
+  "nextRecordsUrl": "/services/data/v66.0/query/0r8Hs00000Qry01AAA-2",
+  "records": [
+    {
+      "attributes": {
+        "type": "Case",
+        "url": "/services/data/v66.0/sobjects/Case/500Hs00001XyZ1AAAA"
+      },
+      "Id": "500Hs00001XyZ1AAAA",
+      "CaseNumber": "00001042",
+      "Subject": "Nightly invoice export fails since 2.14 upgrade",
+      "Description": "Since the 2.14 upgrade our nightly invoice export stops at 80% with a timeout.\n\nThis blocks month-end close.",
+      "Status": "Working",
+      "Priority": "High",
+      "IsClosed": false,
+      "Origin": "Web",
+      "OwnerId": "005Hs00000Agnt1AAA",
+      "Owner": {
+        "attributes": {
+          "type": "Name",
+          "url": "/services/data/v66.0/sobjects/User/005Hs00000Agnt1AAA"
+        },
+        "Name": "Priya Raman"
+      },
+      "ContactId": "003Hs00000Cont1AAA",
+      "ContactEmail": "tomas.lindqvist@harborline.example",
+      "Contact": {
+        "attributes": {
+          "type": "Contact",
+          "url": "/services/data/v66.0/sobjects/Contact/003Hs00000Cont1AAA"
+        },
+        "Name": "Tomas Lindqvist"
+      },
+      "AccountId": "001Hs00000Acct1AAA",
+      "Account": {
+        "attributes": {
+          "type": "Account",
+          "url": "/services/data/v66.0/sobjects/Account/001Hs00000Acct1AAA"
+        },
+        "Name": "Harborline Freight"
+      },
+      "CreatedDate": "2026-09-28T09:00:00.000+0000",
+      "SystemModstamp": "2026-09-28T15:00:00.000+0000"
+    },
+    {
+      "attributes": {
+        "type": "Case",
+        "url": "/services/data/v66.0/sobjects/Case/500Hs00001XyZ2AAAA"
+      },
+      "Id": "500Hs00001XyZ2AAAA",
+      "CaseNumber": "00001043",
+      "Subject": "How do I add a second billing contact?",
+      "Description": null,
+      "Status": "New",
+      "Priority": "Low",
+      "IsClosed": false,
+      "Origin": "Email",
+      "OwnerId": "00GHs00000Tier1AAA",
+      "Owner": {
+        "attributes": {
+          "type": "Name",
+          "url": "/services/data/v66.0/sobjects/Group/00GHs00000Tier1AAA"
+        },
+        "Name": "Tier 1 Support"
+      },
+      "ContactId": "003Hs00000Cont2AAA",
+      "ContactEmail": "amara.osei@kitefield.example",
+      "Contact": {
+        "attributes": {
+          "type": "Contact",
+          "url": "/services/data/v66.0/sobjects/Contact/003Hs00000Cont2AAA"
+        },
+        "Name": "Amara Osei"
+      },
+      "AccountId": "001Hs00000Acct2AAA",
+      "Account": {
+        "attributes": {
+          "type": "Account",
+          "url": "/services/data/v66.0/sobjects/Account/001Hs00000Acct2AAA"
+        },
+        "Name": "Kitefield Labs"
+      },
+      "CreatedDate": "2026-09-28T15:20:00.000+0000",
+      "SystemModstamp": "2026-09-28T15:21:00.000+0000"
+    }
+  ]
+}

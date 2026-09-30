@@ -28,8 +28,9 @@ Each task references the requirements it serves.
 - [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)
 - [x] T-21 Demo connector: deterministic simulated help desk with live ticket flow (PR-9)
 - [x] T-22 Zendesk, Freshdesk, Intercom, Jira SM, HubSpot, Zammad (PR-6, TR-14)
-- [ ] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
-- [ ] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
+- [x] T-23 Salesforce, ServiceNow, Zoho Desk, Front, Gorgias, Help Scout, Linear, GitHub (PR-6)
+- [x] T-24 Zammad in docker compose as a live SLA conformance fixture (TR-14)
+- [ ] T-26 Move duplicated OAuth token, rate-limit detection, and 401-refresh helpers from tier-2 connectors into `lib/http.ts`
 - [ ] T-25 Status/priority mapping override UI and API (PR-8)
 
 ## M3: Agents
@@ -51,13 +52,18 @@ Each task references the requirements it serves.
 - [x] T-46 Metering to `usage_ledger`; spend-cap degradation (PR-23, TR-30)
 
 ## M5: Web
-- [~] T-50 Design system: tokens (light/dark), components, SlaClock, SlaBar, TicketTimeline,
+- [x] T-50 Design system: tokens (light/dark), components, SlaClock, SlaBar, TicketTimeline,
       CitationQuote, and the `/design` style guide (TR-3)
-- [~] T-51 App shell, API client, mock API mode (MSW) (TR-32)
-- [~] T-52 Auth and MFA pages; onboarding wizard (connect → upload → review → replay)
-- [~] T-53 Dashboard, tickets list and detail, approvals inbox (PR-11, PR-18, PR-21)
-- [~] T-54 Contracts and the contract review screen (citations; ambiguity gating on approve) (PR-3, PR-4)
-- [~] T-55 Policies, customers, connections, autonomy rules, replay report, usage, audit, team, settings
+- [x] T-51 App shell, API client, mock API mode (MSW) (TR-32)
+- [x] T-52 Auth and MFA pages; onboarding wizard (connect → upload → review → replay)
+- [x] T-53 Dashboard, tickets list and detail, approvals inbox (PR-11, PR-18, PR-21)
+- [x] T-54 Contracts and the contract review screen (citations; ambiguity gating on approve) (PR-3, PR-4)
+- [x] T-55 Policies, customers, connections, autonomy rules, replay report, usage, audit, team, settings
+
+- [ ] T-56 Wire SSE live updates (replace polling)
+- [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
+- [ ] T-58 MFA QR code; inline contract text on the review screen; bundle splitting
+- [ ] T-59 API contract: document that `approvedBy`/`uploadedBy`/`decidedBy` are user ids; type the invite response; invitation email and accept endpoint
 
 ## M6: Integration and launch readiness
 - [ ] T-60 End-to-end local run: seed → demo connector → tickets evaluated → at-risk → draft →
