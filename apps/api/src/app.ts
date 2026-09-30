@@ -20,6 +20,7 @@ import { customerRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
+import { knowledgeRoutes } from "./routes/knowledge.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
@@ -91,6 +92,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/policies", policyRoutes(deps));
   authed.route("/tickets", ticketRoutes(deps));
   authed.route("/", actionRoutes(deps));
+  authed.route("/", knowledgeRoutes(deps));
   authed.route("/notification-channels", notificationRoutes(deps));
   authed.route("/", dashboardRoutes(deps));
   authed.route("/replays", replayRoutes(deps));
