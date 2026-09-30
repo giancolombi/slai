@@ -30,7 +30,7 @@ function strength(p: string): { score: number; label: string } {
   return { score, label };
 }
 
-function PasswordHint({ password, id }: { password: string; id: string }) {
+export function PasswordHint({ password, id }: { password: string; id: string }) {
   const s = strength(password);
   return (
     <div id={id} className="flex flex-col gap-2">

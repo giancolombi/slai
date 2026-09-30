@@ -23,6 +23,7 @@ export const qk = {
   scim: ["org-scim"] as const,
   passkeys: ["passkeys"] as const,
   members: ["members"] as const,
+  invitations: ["members", "invitations"] as const,
   connectors: ["connectors"] as const,
   connections: ["connections"] as const,
   connection: (id: string) => ["connections", id] as const,
@@ -83,6 +84,8 @@ export const useOrgSso = (enabled = true) => useQuery({ queryKey: qk.sso, queryF
 export const useOrgScim = (enabled = true) => useQuery({ queryKey: qk.scim, queryFn: api.scim.get, enabled });
 export const usePasskeys = () => useQuery({ queryKey: qk.passkeys, queryFn: api.passkeys.list });
 export const useMembers = () => useQuery({ queryKey: qk.members, queryFn: api.members.list });
+export const useInvitations = (enabled = true) =>
+  useQuery({ queryKey: qk.invitations, queryFn: api.members.invitations, enabled });
 export const useConnectors = () =>
   useQuery({ queryKey: qk.connectors, queryFn: api.connectors.list, staleTime: 10 * 60_000 });
 export const useConnections = () => useQuery({ queryKey: qk.connections, queryFn: api.connections.list });

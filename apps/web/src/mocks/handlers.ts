@@ -7,6 +7,8 @@ import type {
   ContractText,
   CustomerAccount,
   FieldMappingTable,
+  Invitation,
+  InvitationPreview,
   KnowledgeArticle,
   KnowledgeSource,
   List,
@@ -734,25 +736,76 @@ export const handlers = [
         const o = org();
         if (o.members.some((m) => m.email === body.email))
           return fail(409, "already_member", `${body.email} is already a member.`);
-        const member: Member = {
-          userId: `u_${crypto.randomUUID().slice(0, 8)}`,
+        const now = Date.now();
+        const invitation: Invitation = {
+          id: crypto.randomUUID(),
           email: body.email,
-          name: body.email
-            .split("@")[0]!
-            .replace(/[._]/g, " ")
-            .replace(/\b\w/g, (c) => c.toUpperCase()),
           role: body.role,
-          mfaEnabled: false,
-          lastLoginAt: null,
-          active: true,
-          scimManaged: false,
+          expiresAt: new Date(now + 7 * 86_400_000).toISOString(),
+          status: "pending",
+          createdAt: new Date(now).toISOString(),
+          invitedBy: actor(),
         };
-        o.members.push(member);
-        audit(actor(), "member.invited", { type: "member", id: member.userId }, body);
-        return HttpResponse.json(member, { status: 201 });
+        o.invitations = [invitation, ...(o.invitations ?? [])];
+        audit(actor(), "member.invited", { type: "invitation", id: invitation.id }, body);
+        return HttpResponse.json(invitation, { status: 201 });
       },
       { admin: true },
     ),
+  ),
+  http.get(
+    url("/members/invitations"),
+    guarded(() => HttpResponse.json(list(org().invitations ?? [])), { admin: true }),
+  ),
+  http.post(
+    url("/members/invitations/:id/resend"),
+    guarded(
+      ({ params }) => {
+        const inv = (org().invitations ?? []).find((i) => i.id === params.id);
+        if (!inv) return fail(404, "not_found", "Invitation not found.");
+        if (inv.status === "accepted" || inv.status === "revoked")
+          return fail(409, "invitation_closed", "This invitation was already used or revoked.");
+        inv.status = "pending";
+        inv.expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
+        audit(actor(), "member.invitation_resent", { type: "invitation", id: inv.id }, { email: inv.email });
+        return HttpResponse.json(inv);
+      },
+      { admin: true },
+    ),
+  ),
+  http.delete(
+    url("/members/invitations/:id"),
+    guarded(
+      ({ params }) => {
+        const inv = (org().invitations ?? []).find((i) => i.id === params.id && i.status === "pending");
+        if (!inv) return fail(404, "not_found", "Invitation not found.");
+        inv.status = "revoked";
+        audit(actor(), "member.invitation_revoked", { type: "invitation", id: inv.id }, { email: inv.email });
+        return new HttpResponse(null, { status: 204 });
+      },
+      { admin: true },
+    ),
+  ),
+  // The invitee's page in mock mode: any token previews a pending invitation to the demo org.
+  http.get(url("/auth/invitations/:token"), async () => {
+    await latency();
+    const preview: InvitationPreview = {
+      organization: { name: org().settings.name },
+      email: "new.teammate@example.com",
+      role: "member",
+      invitedBy: getDb().me.user.name,
+      expiresAt: new Date(Date.now() + 6 * 86_400_000).toISOString(),
+      status: "pending",
+      account: "new",
+      sso: null,
+    };
+    return HttpResponse.json(preview);
+  }),
+  http.post(url("/auth/invitations/:token/signup"), () =>
+    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+  ),
+  http.post(url("/auth/invitations/:token/accept"), () =>
+    fail(501, "mock_mode", "Accepting invitations needs the real API."),
   ),
   http.patch(
     url("/members/:userId"),

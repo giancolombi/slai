@@ -8,6 +8,7 @@
  */
 
 import type {
+  acceptInvitationSignupBody,
   approveActionBody,
   autonomyRuleBody,
   billingCheckoutBody,
@@ -56,6 +57,7 @@ import {
   type CustomerAccount,
   type DashboardSummary,
   type Invitation,
+  type InvitationPreview,
   type KnowledgeArticle,
   type KnowledgeSource,
   type List,
@@ -340,6 +342,16 @@ export const api = {
     remove: (userId: string) => del(`/members/${id(userId)}`),
     resetMfa: (userId: string, reason: string) =>
       post<MfaResetResult>(`/members/${id(userId)}/reset-mfa`, { reason } satisfies In<typeof resetMemberMfaBody>),
+    invitations: () => get<List<Invitation>>("/members/invitations"),
+    resendInvitation: (invitationId: string) => post<Invitation>(`/members/invitations/${id(invitationId)}/resend`),
+    revokeInvitation: (invitationId: string) => del(`/members/invitations/${id(invitationId)}`),
+  },
+  /** The invitee's side. The token is the secret: it only ever travels path-encoded. */
+  invitations: {
+    preview: (token: string) => get<InvitationPreview>(`/auth/invitations/${encodeURIComponent(token)}`),
+    signup: (token: string, body: In<typeof acceptInvitationSignupBody>) =>
+      post<SignInResult>(`/auth/invitations/${encodeURIComponent(token)}/signup`, body),
+    accept: (token: string) => post<Me>(`/auth/invitations/${encodeURIComponent(token)}/accept`),
   },
   connectors: {
     list: () => get<ConnectorInfo[]>("/connectors"),

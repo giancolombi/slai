@@ -18,7 +18,15 @@ describe("RBAC", () => {
     const owner = await signup(ctx);
     const res = await owner.client.post<Invitation>("/members/invite", { email: "new@b.co", role: "member" });
     expect(res.status).toBe(201);
-    expect(Object.keys(res.body).sort()).toEqual(["email", "expiresAt", "id", "role"]);
+    expect(Object.keys(res.body).sort()).toEqual([
+      "createdAt",
+      "email",
+      "expiresAt",
+      "id",
+      "invitedBy",
+      "role",
+      "status",
+    ]);
     expect(res.body).toMatchObject({ email: "new@b.co", role: "member" });
     expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });

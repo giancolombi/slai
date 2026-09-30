@@ -12,6 +12,7 @@ import type {
   Connection,
   Contract,
   DashboardSummary,
+  Invitation,
   KnowledgeArticle,
   Me,
   Member,
@@ -65,6 +66,8 @@ export interface OrgData {
   /** SCIM provisioning settings (created lazily by the handlers). */
   scim?: ScimSettings;
   members: Member[];
+  /** Invitations (created lazily; older persisted mock databases have none). */
+  invitations?: Invitation[];
   connections: Connection[];
   customers: MockCustomer[];
   contracts: Contract[];

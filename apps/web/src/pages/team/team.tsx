@@ -28,14 +28,14 @@ import {
   toast,
 } from "@slai/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, MoreHorizontal, ShieldAlert, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { KeyRound, Mail, MoreHorizontal, ShieldAlert, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { StepUp } from "../../components/step-up";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { canResetMfa, stepUpFresh } from "../../lib/auth-flow";
 import { ROLE_HELP, ROLE_LABEL } from "../../lib/labels";
-import { qk, useMe, useMembers } from "../../lib/queries";
+import { qk, useInvitations, useMe, useMembers } from "../../lib/queries";
 
 const ASSIGNABLE: Role[] = ROLES.filter((r) => r !== "owner");
 
@@ -211,6 +211,97 @@ function ResetMfaDialog({ member, onClose }: { member: Member | null; onClose: (
   );
 }
 
+/** Invitations that have not been accepted yet (T-59a): resend (a new link, 7 more days) or revoke. */
+function PendingInvitations() {
+  const invitations = useInvitations();
+  const queryClient = useQueryClient();
+  const refresh = () => queryClient.invalidateQueries({ queryKey: qk.invitations });
+  const resend = useMutation({
+    mutationFn: api.members.resendInvitation,
+    onSuccess: (inv) => {
+      void refresh();
+      toast({ tone: "success", title: "Invitation sent again", description: `A new link went to ${inv.email}.` });
+    },
+    onError: (e) => toast({ tone: "error", title: "Couldn't resend", description: errorMessage(e) }),
+  });
+  const revoke = useMutation({
+    mutationFn: api.members.revokeInvitation,
+    onSuccess: () => {
+      void refresh();
+      toast({ tone: "success", title: "Invitation revoked" });
+    },
+    onError: (e) => toast({ tone: "error", title: "Couldn't revoke", description: errorMessage(e) }),
+  });
+  const open = (invitations.data?.items ?? []).filter((i) => i.status === "pending" || i.status === "expired");
+  if (open.length === 0) return null;
+  return (
+    <Card>
+      <Table aria-label="Pending invitations">
+        <THead>
+          <tr>
+            <TH>Invited</TH>
+            <TH className="w-56">Role</TH>
+            <TH>Status</TH>
+            <TH className="w-48">
+              <span className="sr-only">Actions</span>
+            </TH>
+          </tr>
+        </THead>
+        <TBody>
+          {open.map((i) => (
+            <TR key={i.id}>
+              <TD>
+                <div className="flex items-center gap-3">
+                  <Mail className="size-4 text-ink-muted" aria-hidden />
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-ink">{i.email}</div>
+                    <div className="truncate text-xs text-ink-muted">
+                      {i.invitedBy ? `by ${i.invitedBy}, ` : ""}
+                      {formatRelative(i.createdAt)}
+                    </div>
+                  </div>
+                </div>
+              </TD>
+              <TD className="text-sm text-ink">{ROLE_LABEL[i.role]}</TD>
+              <TD>
+                {i.status === "pending" ? (
+                  <Badge tone="outline" size="sm">
+                    Expires {formatRelative(i.expiresAt)}
+                  </Badge>
+                ) : (
+                  <Badge tone="warning" size="sm">
+                    Expired
+                  </Badge>
+                )}
+              </TD>
+              <TD>
+                <div className="flex justify-end gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={resend.isPending && resend.variables === i.id}
+                    onClick={() => resend.mutate(i.id)}
+                  >
+                    Resend
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    loading={revoke.isPending && revoke.variables === i.id}
+                    onClick={() => revoke.mutate(i.id)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </Table>
+    </Card>
+  );
+}
+
 export function TeamPage() {
   const members = useMembers();
   const { data: me } = useMe();
@@ -382,6 +473,7 @@ export function TeamPage() {
           </>
         )}
       </Card>
+      {isAdmin && <PendingInvitations />}
       <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       <RemoveDialog member={removing} onClose={() => setRemoving(null)} />
       <ResetMfaDialog member={resetting} onClose={() => setResetting(null)} />
