@@ -178,6 +178,9 @@ async function upsertPolicy(tx: Tx, orgId: string, def: Omit<PolicyInput, "id">,
   return id;
 }
 
+/** The demo org runs Scale in manual billing mode (no Stripe), so autopilot works locally (T-65). */
+const DEMO_BILLING = { plan: "scale", billingStatus: "active" as const, trialEndsAt: null };
+
 export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecrets?: AuthSecret[] } = {}) {
   const secrets = opts.authSecrets ?? authSecretsFromEnv();
   const { db, close } = connect(ownerUrl, { max: 1, applicationName: "slai-seed" });
@@ -186,8 +189,8 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring; authSecr
       // Session-scoped org setting is not needed: the owner role bypasses RLS for seeding.
       const [org] = await tx
         .insert(organizations)
-        .values({ name: DEMO.orgName, slug: DEMO.orgSlug, plan: "growth", monthlySpendCapCents: 50_000 })
-        .onConflictDoUpdate({ target: organizations.slug, set: { name: DEMO.orgName } })
+        .values({ name: DEMO.orgName, slug: DEMO.orgSlug, monthlySpendCapCents: 50_000, ...DEMO_BILLING })
+        .onConflictDoUpdate({ target: organizations.slug, set: { name: DEMO.orgName, ...DEMO_BILLING } })
         .returning();
       const orgId = org!.id;
 

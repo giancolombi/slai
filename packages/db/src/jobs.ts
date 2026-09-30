@@ -25,6 +25,8 @@ export const JOB_PAYLOADS = {
   "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
   /** Page through one knowledge source's articles and upsert them (T-47). */
   "sync-knowledge": z.object({ orgId: uuid, sourceId: uuid }),
+  /** Refresh the org's billing period snapshot, close the previous one, send billing notices (T-65). */
+  "billing-snapshot": z.object({ orgId: uuid }),
 } as const;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -41,6 +43,7 @@ export const QUEUE = {
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
   syncKnowledge: "sync-knowledge",
+  billingSnapshot: "billing-snapshot",
 } as const satisfies Record<string, JobName>;
 
 /** Parses a job's data in the worker (trust boundary). */

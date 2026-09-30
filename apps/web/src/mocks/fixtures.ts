@@ -25,6 +25,7 @@ import type {
   Replay,
   TicketStatus,
 } from "@slai/shared";
+import { type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
 import {
   KESTREL_DOC,
   kestrelAmbiguities,
@@ -1322,13 +1323,58 @@ export function buildAudit(now: number): AuditEvent[] {
   return events;
 }
 
-export const PLAN_LIMITS: Record<string, number> = {
-  replay: 0,
-  starter: 1_500,
-  growth: 7_500,
-  scale: 25_000,
-  enterprise: 100_000,
-};
+// ---------------------------------------------------------------- billing (T-65)
+
+/** The stored billing facts for a mock org; `billing()` in db.ts derives the BillingSummary. */
+export interface MockBilling {
+  mode: "stripe" | "manual";
+  plan: PlanId;
+  status: BillingStatus;
+  trialEndsAt: string | null;
+  pastDueSince: string | null;
+  /** Credit packs bought and not yet used. */
+  purchasedCredits: number;
+  hasCustomer: boolean;
+  hasSubscription: boolean;
+  invoices: BillingInvoice[];
+}
+
+/** A new org: the 14-day Growth trial, `daysLeft` from now (Acme starts with 9). */
+export function buildTrialBilling(now: number, daysLeft: number = TRIAL.days): MockBilling {
+  return {
+    mode: "stripe",
+    plan: TRIAL.plan,
+    status: "trialing",
+    // A little under the whole days, so "days left" reads exactly `daysLeft`.
+    trialEndsAt: new Date(now + daysLeft * DAY - HOUR).toISOString(),
+    pastDueSince: null,
+    purchasedCredits: 0,
+    hasCustomer: false,
+    hasSubscription: false,
+    invoices: [],
+  };
+}
+
+/** Paid invoices for a subscription started this month (and one the month before). */
+export function buildInvoices(now: number, priceCents: number): BillingInvoice[] {
+  return [0, 1].map((monthsAgo) => {
+    const at = new Date(now);
+    at.setUTCDate(1);
+    at.setUTCHours(0, 5, 0, 0);
+    at.setUTCMonth(at.getUTCMonth() - monthsAgo);
+    const n = 1042 - monthsAgo;
+    return {
+      id: `in_mock_${n}`,
+      number: `ACME-${n}`,
+      status: "paid",
+      amountDueCents: priceCents,
+      amountPaidCents: priceCents,
+      createdAt: at.toISOString(),
+      hostedUrl: null,
+      pdfUrl: null,
+    };
+  });
+}
 
 // ---------------------------------------------------------------- knowledge (T-47)
 

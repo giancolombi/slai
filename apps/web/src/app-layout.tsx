@@ -45,6 +45,7 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef } from "react";
+import { BillingBanner } from "./components/billing-banner";
 import { LiveIndicator } from "./components/live-indicator";
 import { api, errorMessage } from "./lib/api";
 import { useLiveUpdates } from "./lib/live";
@@ -98,7 +99,7 @@ function Nav() {
       </SidebarSection>
       <SidebarSection title="Insights">
         {item("/replay", <History />, "Breach Replay")}
-        {item("/usage", <Receipt />, "Usage & billing")}
+        {item("/billing", <Receipt />, "Billing")}
         {item("/audit", <ShieldCheck />, "Audit log")}
       </SidebarSection>
       <SidebarSection title="Organization">
@@ -262,6 +263,7 @@ export function AppLayout() {
         </TopBar>
       }
     >
+      <BillingBanner />
       <Outlet />
     </AppShell>
   );

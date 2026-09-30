@@ -1,6 +1,7 @@
 import type { AgentRuntime, TicketContext } from "@slai/agents";
 import type { ConnectorDefinition } from "@slai/connectors";
 import type { Database, Keyring, OrgDatabase, StorageDriver } from "@slai/db";
+import type { UsageReporter } from "./billing.js";
 import type { Clock } from "./clock.js";
 import { FIRST_SEEN_GRACE_MS, SEND_RECONCILE_AFTER_MS } from "./decide.js";
 import type { Logger } from "./logger.js";
@@ -24,6 +25,10 @@ export interface WorkerConfig {
   sendReconcileMs: number;
   /** A help-desk knowledge source is re-synced when its last sync is older than this (T-47). */
   knowledgeSyncIntervalMs: number;
+  /** Stripe Billing Meter event names for overage (T-65). */
+  meters?: { trackedTickets: string; credits: string };
+  /** How often each org's billing snapshot is refreshed (T-65). */
+  billingIntervalMs?: number;
 }
 
 export interface TicketResources extends Pick<TicketContext, "knowledge" | "assignees"> {
@@ -55,6 +60,8 @@ export interface WorkerDeps {
   logger: Logger;
   resources: ResourceLoader;
   config: WorkerConfig;
+  /** Stripe usage reporting; absent or null in manual billing mode (no Stripe keys) (T-65). */
+  usageReporter?: UsageReporter | null;
 }
 
 export const noResources: ResourceLoader = async () => ({ knowledge: [], assignees: [] });

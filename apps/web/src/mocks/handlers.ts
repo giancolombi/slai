@@ -22,21 +22,28 @@ import {
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
+  billingCheckoutBody,
+  CREDIT_PACKS,
   createConnectionBody,
   createKnowledgeSourceBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   discoverBody,
   inviteBody,
   knowledgeArticleQuery,
   loginBody,
+  manualBillingBody,
   notificationChannelBody,
+  PLANS,
+  type PlanId,
   policyPreviewBody,
   rejectActionBody,
   savedReplyBody,
   signupBody,
   switchOrgBody,
+  TRIAL,
   updateKnowledgeArticleBody,
   updateMemberBody,
   updateOrgBody,
@@ -52,6 +59,7 @@ import type { z } from "zod";
 import { matchesArticle } from "../lib/knowledge";
 import {
   audit,
+  billing,
   dashboard,
   emptyOrg,
   getDb,
@@ -65,6 +73,7 @@ import {
 } from "./db";
 import {
   buildCustomers,
+  buildInvoices,
   buildTickets,
   CONNECTORS,
   knowledgeRefsFor,
@@ -265,6 +274,31 @@ function customerView(c: ReturnType<typeof org>["customers"][number], now: numbe
 }
 
 // ---------------------------------------------------------------- handlers
+
+/** Sets the org's plan everywhere the app reads it (settings, the session). */
+function setPlan(plan: PlanId) {
+  const o = org();
+  o.billing.plan = plan;
+  o.settings.plan = plan;
+  getDb().me.organization.plan = plan;
+}
+
+/**
+ * The mock stands in for Stripe: checkout "completes" at once and the
+ * redirect stays in the app (the real API returns a Stripe-hosted URL).
+ */
+function subscribe(plan: PlanId) {
+  const o = org();
+  setPlan(plan);
+  Object.assign(o.billing, {
+    status: "active",
+    trialEndsAt: null,
+    pastDueSince: null,
+    hasCustomer: true,
+    hasSubscription: true,
+  });
+  if (o.billing.invoices.length === 0) o.billing.invoices = buildInvoices(Date.now(), PLANS[plan].priceCents ?? 0);
+}
 
 export const handlers = [
   // ------------------------------------------------ auth (mirrors the API's step results and MFA gate)
@@ -478,7 +512,7 @@ export const handlers = [
         id: orgId,
         name: body.organizationName,
         slug: body.organizationName.toLowerCase().replace(/\W+/g, "-"),
-        plan: "replay",
+        plan: TRIAL.plan,
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
@@ -1508,6 +1542,79 @@ export const handlers = [
   http.get(
     url("/usage"),
     guarded(() => HttpResponse.json(usage(Date.now()))),
+  ),
+
+  // ------------------------------------------------ billing (T-65)
+  http.get(
+    url("/billing"),
+    guarded(() => HttpResponse.json(billing(Date.now()))),
+  ),
+  http.post(
+    url("/billing/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, billingCheckoutBody);
+        if (body instanceof Response) return body;
+        subscribe(body.plan);
+        audit(actor(), "billing.checkout_completed", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json({ url: "/billing?checkout=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/credit-packs/checkout"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, creditPackCheckoutBody);
+        if (body instanceof Response) return body;
+        const pack = CREDIT_PACKS.find((p) => p.id === body.pack);
+        if (!pack) return fail(400, "validation_failed", "Unknown credit pack.");
+        const o = org();
+        o.billing.purchasedCredits += pack.credits;
+        o.billing.hasCustomer = true;
+        audit(actor(), "billing.credits_purchased", { type: "organization", id: o.settings.id }, body);
+        return HttpResponse.json({ url: "/billing?credits=success" });
+      },
+      { admin: true },
+    ),
+  ),
+  http.post(
+    url("/billing/portal"),
+    guarded(
+      () => {
+        if (!org().billing.hasCustomer) return fail(409, "no_customer", "Choose a plan first.");
+        return HttpResponse.json({ url: "/billing?portal=return" });
+      },
+      { admin: true },
+    ),
+  ),
+  // The mock accepts this in any mode so the demo can show every billing state.
+  http.post(
+    url("/billing/manual"),
+    guarded(
+      async ({ request }) => {
+        const body = await parse(request, manualBillingBody);
+        if (body instanceof Response) return body;
+        const b = org().billing;
+        if (body.plan) setPlan(body.plan);
+        if (body.status) {
+          b.status = body.status;
+          b.pastDueSince = body.status === "past_due" ? (b.pastDueSince ?? new Date().toISOString()) : null;
+          if (body.status !== "trialing") {
+            b.hasCustomer = true;
+            b.hasSubscription = body.status !== "canceled";
+            if (b.invoices.length === 0) b.invoices = buildInvoices(Date.now(), PLANS[b.plan].priceCents ?? 0);
+          }
+        }
+        if (body.trialEndsAt !== undefined) b.trialEndsAt = body.trialEndsAt;
+        if (body.pastDueSince !== undefined) b.pastDueSince = body.pastDueSince;
+        if (body.grantCredits) b.purchasedCredits += body.grantCredits;
+        audit(actor(), "billing.manual_update", { type: "organization", id: org().settings.id }, body);
+        return HttpResponse.json(billing(Date.now()));
+      },
+      { admin: true },
+    ),
   ),
   http.get(
     url("/audit-events"),

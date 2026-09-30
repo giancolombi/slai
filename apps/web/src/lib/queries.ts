@@ -1,5 +1,13 @@
-import { keepPreviousData, QueryCache, QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
-import { api, isApiError, type KnowledgeArticleQuery, type TicketQuery } from "./api";
+import {
+  keepPreviousData,
+  QueryCache,
+  QueryClient,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { api, errorMessage, isApiError, type KnowledgeArticleQuery, type TicketQuery } from "./api";
 import { useLivePolling } from "./live";
 
 /**
@@ -32,6 +40,7 @@ export const qk = {
   replays: ["replays"] as const,
   replay: (id: string) => ["replays", id] as const,
   usage: ["usage"] as const,
+  billing: ["billing"] as const,
   audit: ["audit"] as const,
   knowledgeSources: ["knowledge", "sources"] as const,
   knowledgeArticles: (q: KnowledgeArticleQuery = {}) => ["knowledge", "articles", q] as const,
@@ -152,3 +161,45 @@ export const useKnowledgeArticles = (q: KnowledgeArticleQuery, enabled = true) =
     enabled,
   });
 export const useUsage = () => useQuery({ queryKey: qk.usage, queryFn: api.usage.get });
+export const useBilling = () => useQuery({ queryKey: qk.billing, queryFn: api.billing.get, staleTime: 60_000 });
+
+/** Sends the browser to a Stripe-hosted page (Checkout or the Customer Portal). */
+function redirectTo({ url }: { url: string }) {
+  window.location.assign(url);
+}
+
+export interface RedirectMutationOptions {
+  onError?: (message: string) => void;
+}
+
+export const useCheckout = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.checkout,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+export const useCreditPackCheckout = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.creditPackCheckout,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+export const useBillingPortal = (o: RedirectMutationOptions = {}) =>
+  useMutation({
+    mutationFn: api.billing.portal,
+    onSuccess: redirectTo,
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+/** Manual mode (local dev, and the mock API): set the plan, status or trial directly. */
+export const useManualBilling = (o: RedirectMutationOptions = {}) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.billing.manual,
+    onSuccess: (next) => {
+      queryClient.setQueryData(qk.billing, next);
+      void queryClient.invalidateQueries({ queryKey: qk.me });
+      void queryClient.invalidateQueries({ queryKey: qk.org });
+    },
+    onError: (e) => o.onError?.(errorMessage(e)),
+  });
+};

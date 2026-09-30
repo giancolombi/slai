@@ -18,6 +18,15 @@
  * reuses them for forms). Responses are plain TypeScript types.
  */
 import { z } from "zod";
+import {
+  type AgentCeiling,
+  BILLING_STATUSES,
+  type BillingState,
+  type BillingStatus,
+  CHECKOUT_PLANS,
+  PLAN_IDS,
+  type PlanId,
+} from "./plans.js";
 
 // ---------- enums ----------
 
@@ -600,6 +609,71 @@ export interface UsageSummary {
   trackedTickets: number;
 }
 
+// ---------- billing (T-65) ----------
+
+export interface BillingInvoice {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountDueCents: number;
+  amountPaidCents: number;
+  createdAt: string;
+  hostedUrl: string | null;
+  pdfUrl: string | null;
+}
+
+export interface BillingSummary {
+  /** "stripe" when Stripe keys are configured; "manual" means plans are set by an admin (local dev). */
+  mode: "stripe" | "manual";
+  plan: PlanId;
+  status: BillingStatus;
+  /** Derived from status and time: what the org may do now. */
+  state: BillingState;
+  /** The most an agent may do on this plan and state. Monitoring and alerts are never limited. */
+  ceiling: AgentCeiling;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  pastDueSince: string | null;
+  graceEndsAt: string | null;
+  hasSubscription: boolean;
+  /** Whether a Stripe customer exists (the Customer Portal needs one). */
+  hasCustomer: boolean;
+  period: { start: string; end: string };
+  trackedTickets: { used: number; limit: number | null; overage: number; overageCents: number };
+  credits: {
+    used: number;
+    included: number;
+    purchasedAvailable: number;
+    fromIncluded: number;
+    fromPurchased: number;
+    overage: number;
+    overageCents: number;
+    /** The spend cap in credits (1 credit = 1 cent). */
+    cap: number;
+    /** The owner's explicit cap, or null for the default (included + purchased + 50% of included). */
+    capOverrideCents: number | null;
+    remaining: number;
+  };
+  /** Overage (tickets and credits) is billed only on a paid plan; otherwise it is flagged. */
+  overageBilled: boolean;
+  invoices: BillingInvoice[];
+}
+
+export const billingCheckoutBody = z.object({ plan: z.enum(CHECKOUT_PLANS) });
+export const creditPackCheckoutBody = z.object({ pack: z.string().min(1).max(40) });
+/** Manual mode only (no Stripe keys, not production): an admin sets the plan directly. */
+export const manualBillingBody = z.object({
+  plan: z.enum(PLAN_IDS).optional(),
+  status: z.enum(BILLING_STATUSES).optional(),
+  trialEndsAt: z.iso.datetime().nullable().optional(),
+  pastDueSince: z.iso.datetime().nullable().optional(),
+  grantCredits: z.number().int().positive().max(10_000_000).optional(),
+});
+/** `url` is where to send the browser (Stripe Checkout or the Customer Portal). */
+export interface BillingRedirect {
+  url: string;
+}
+
 export interface AuditEvent {
   id: string;
   at: string;
@@ -701,6 +775,12 @@ export const notificationChannelBody = z.object({
  *   GET    /dashboard              → DashboardSummary
  *   POST   /replays                createReplayBody → Replay     GET /replays, /replays/:id
  *   GET    /usage                  → UsageSummary
+ *   GET    /billing                → BillingSummary
+ *   POST   /billing/checkout       billingCheckoutBody → BillingRedirect (owner/admin)
+ *   POST   /billing/portal         → BillingRedirect (owner/admin)
+ *   POST   /billing/credit-packs/checkout  creditPackCheckoutBody → BillingRedirect (owner/admin)
+ *   POST   /billing/manual         manualBillingBody → BillingSummary (owner/admin; manual mode, not production)
+ *   POST   /billing/webhook        (public; Stripe-Signature verified over the raw body)
  *   GET    /audit-events?cursor=   → List<AuditEvent> (admin)
  *   GET    /events                 Server-Sent Events: `ticket.updated`, `action.created`, `replay.progress`
  *   GET    /healthz, /readyz       (unauthenticated)

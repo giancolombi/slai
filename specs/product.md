@@ -95,8 +95,11 @@ IDs are referenced from `technical.md` and `tasks.md`.
   - breaches and attainment
   - dollar exposure from the credit clauses, per customer and per metric
   - the median warning slai would have given
-- **PR-23** Usage and billing: credits used, cost by kind, tracked tickets, and a
-  spend cap.
+- **PR-23** Usage and billing: the plan and its status, a trial banner, tracked
+  tickets against the plan's limit, credits against included + purchased and the
+  spend cap, cost by kind, invoices, upgrade (Stripe Checkout), buy credit packs,
+  and manage payment methods (Stripe Customer Portal). Owners and admins make
+  changes; everyone in the org can see it. Pricing specifics are in §4.
 
 ### Accounts and trust
 - **PR-24** Identity and access:
@@ -134,17 +137,46 @@ There is no per-seat pricing, because autopilot reduces seats. We don't use a
 share-of-savings model, because attribution is disputable. It appears only as an
 Enterprise guarantee.
 
-| Tier | Price | Includes |
-|---|---|---|
-| Replay | Free | One-time 90-day Breach Replay; read-only connection; no card |
-| Starter | $299/mo | 1,500 tracked tickets; observe + triage |
-| Growth | $999/mo | 7,500 tracked tickets; assist |
-| Scale | $2,499/mo | 25,000 tracked tickets; autopilot |
-| Enterprise | from ~$50k/yr | Committed credits, SSO, optional breach-prevention guarantee |
+| Tier | Price | Tracked tickets / mo | Included credits / mo | Agents may |
+|---|---|---|---|---|
+| Replay | Free | (Replay only) | 0 | observe; one-time 90-day Breach Replay, read-only connection, no card |
+| Starter | $299/mo | 1,500 | 5,000 ($50) | observe + triage |
+| Growth | $999/mo | 7,500 | 20,000 ($200) | assist (drafts for approval) |
+| Scale | $2,499/mo | 25,000 | 60,000 ($600) | autopilot |
+| Enterprise | from ~$50k/yr | by contract | 250,000 by default, committed | autopilot; SSO; optional breach-prevention guarantee |
 
-- The spend cap defaults to included credits + 50%, with alerts at 50%, 80%, and 100%.
-- At the cap, autonomy degrades: autopilot → assist → observe.
-- **SLA monitoring and alerts are never throttled.**
+The plans are code: `packages/shared/src/plans.ts` is the single source for
+prices, limits, credits and agent ceilings (API, worker and web all read it).
+
+**Why these credit allowances.** At the per-action prices, model and sandbox cost
+is 25–50% of the credit price (50–75% margin), so included credits cost us
+$12–25 on Starter, $50–100 on Growth and $150–300 on Scale: 4–12% of the fee. Each allowance covers the plan's intended use:
+Starter triages every tracked ticket once (1,500 × 3 = 4,500); Growth drafts for
+about 1,000 at-risk tickets; Scale sends about 1,000 autopilot replies (or 3,000
+drafts). Heavier use buys credit packs or runs into the overage allowance.
+
+- **Tracked tickets.** A ticket counts once in a calendar month (UTC) if any of its
+  SLA cycles was live during it (started before the month ended, not stopped
+  before it began). Over the limit, **monitoring never stops**: the overage is
+  flagged on the billing page, the owner is emailed once a month, and each extra
+  ticket is billed at **$0.20** in arrears (just above Starter's per-ticket
+  price, so a larger plan is cheaper for sustained use). Nothing is blocked.
+- **Credits.** Consumption draws on included credits first, then purchased
+  credits, then overage. Purchased credits come in packs (10,000 for $100; 50,000
+  for $450), never expire, and carry over. Overage credits are billed at 1 cent
+  each in arrears.
+- **Spend cap.** By default: included + purchased + 50% of included (the overage
+  allowance), with alerts at 50%, 80%, and 100%. The owner or an admin can set an
+  explicit monthly cap instead. At the cap, agents degrade to observe until the
+  next month or until the cap is raised.
+- **Trial.** Every new org starts on a **14-day Growth trial**: drafts for
+  approval, **autopilot off**, 5,000 credits, no card, no overage (the cap is
+  the allowance). The owner is emailed at 3 days left. At expiry with no
+  subscription, agents drop to observe-only; monitoring and alerts continue.
+- **Failed payments.** A past-due subscription keeps its plan for a **7-day grace
+  period**, then agents degrade to observe until the invoice is paid. Canceled is
+  observe-only.
+- **SLA monitoring and alerts are never throttled**, in any plan or state.
 - Go-to-market: free Replay → 14-day Growth trial (autopilot off) → sales-assisted
   above 25k tickets or more than $25k per quarter of exposure found.
 

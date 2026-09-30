@@ -214,10 +214,32 @@ const replayRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/replay/replay-report"), "ReplayReportPage"),
 });
 
+/** Where Stripe Checkout and the Customer Portal send the browser back (`?checkout=success|canceled`). */
+export interface BillingSearch {
+  checkout?: "success" | "canceled";
+  credits?: "success" | "canceled";
+  portal?: "return";
+}
+const outcome = (v: unknown) => (v === "success" || v === "canceled" ? v : undefined);
+
+const billingRoute = createRoute({
+  getParentRoute: () => appLayout,
+  path: "/billing",
+  validateSearch: (s: Record<string, unknown>): BillingSearch => ({
+    checkout: outcome(s.checkout),
+    credits: outcome(s.credits),
+    portal: s.portal === "return" ? "return" : undefined,
+  }),
+  component: lazyRouteComponent(() => import("./pages/usage/usage"), "BillingPage"),
+});
+
+/** The page used to be "Usage & billing" at /usage. */
 const usageRoute = createRoute({
   getParentRoute: () => appLayout,
   path: "/usage",
-  component: lazyRouteComponent(() => import("./pages/usage/usage"), "UsagePage"),
+  beforeLoad: () => {
+    throw redirect({ to: "/billing", replace: true });
+  },
 });
 
 const auditRoute = createRoute({
@@ -256,6 +278,7 @@ const routeTree = rootRoute.addChildren([
     knowledgeRoute,
     replaysRoute,
     replayRoute,
+    billingRoute,
     usageRoute,
     auditRoute,
     teamRoute,
