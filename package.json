@@ -13,7 +13,7 @@
     "test": "pnpm -r test",
     "lint": "biome check .",
     "format": "biome format --write .",
-    "ci": "pnpm lint && pnpm typecheck && pnpm test",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:up": "docker compose up -d postgres mailpit",
     "db:migrate": "pnpm --filter @slai/db migrate",
     "db:seed": "pnpm --filter @slai/db seed"

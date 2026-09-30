@@ -33,7 +33,7 @@ Read `docs/ARCHITECTURE.md` and the ADRs in `docs/adr/` first.
 - Money is integer cents; model cost is integer micro-dollars. Durations are ms.
 - Times are `Date` in code, ISO strings on the wire, and `timestamptz` in Postgres.
 - Keep modules small and names plain. No speculative abstractions.
-- `pnpm ci` (lint, typecheck, test) must pass before any commit to `main`.
+- `pnpm check` (lint, typecheck, test) must pass before any commit to `main`.
 
 ## Layout
 
