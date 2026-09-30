@@ -41,7 +41,9 @@ export const TEST_DB_SUFFIX =
     .slice(0, 8);
 
 export function testDbName(base: string): string {
-  return base.endsWith(`_${TEST_DB_SUFFIX}`) ? base : `${base}_${TEST_DB_SUFFIX}`;
+  // Only test databases are per checkout; "postgres" (the admin database) is shared.
+  if (!base.startsWith("slai_test_") || base.endsWith(`_${TEST_DB_SUFFIX}`)) return base;
+  return `${base}_${TEST_DB_SUFFIX}`;
 }
 
 export function testDbUrls(baseName: string, ownerBase = process.env.DATABASE_URL ?? DEFAULT_OWNER_URL): TestDbUrls {
