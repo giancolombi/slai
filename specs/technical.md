@@ -133,13 +133,19 @@
 - **TR-15** Contract: `packages/agents/src/types.ts`. **Agents propose; the worker
   disposes.** Agent code never writes to the DB or the help desk, and every output
   is zod-validated.
-- **TR-16** Model routing:
-  - triage → Haiku class
-  - drafts → Sonnet class
-  - contract extraction → the strongest model, with native PDF input
+- **TR-16** Model routing (prices per million tokens, input/output):
 
-  OpenAI is the fallback on provider errors. A `mock` provider runs everything
-  deterministically with no keys.
+  | Task | Anthropic (primary) | OpenAI (fallback) |
+  |---|---|---|
+  | triage | `claude-haiku-4-5`, $1/$5 | `gpt-6-luna` |
+  | draft | `claude-sonnet-5-5`, $2/$10 | `gpt-6.1-sol` |
+  | contract extraction | `claude-opus-5-5`, $4/$20, native PDF | `gpt-6-astra` |
+
+  - Fable 5.1 would be stronger for extraction, but it is not offered under zero
+    data retention, so it is not used.
+  - Retries use jittered backoff. The fallback is used only for provider errors,
+    never for invalid output.
+  - A `mock` provider runs everything deterministically with no keys.
 - **TR-17** **Commercial API keys only.** Claude Max and ChatGPT/Codex subscriptions
   are consumer plans: they are not licensed to run a multi-tenant product on third
   parties' data, and they can't carry the no-training/DPA/ZDR commitments SOC 2
@@ -169,6 +175,21 @@
   - a concurrency limiter (default 20)
 
   For local development, `AGENT_RUNTIME=local` runs the same agent code in-process.
+- **TR-21a** E2B specifics:
+  - Egress: `network.allowOut` is set to the model hosts and `denyOut` to all
+    other traffic. Domain filtering only works for HTTP on 80 and TLS on 443.
+  - Model keys are injected by the E2B egress proxy using per-host `network.rules`
+    header transforms (public beta). The sandbox only ever sees a placeholder key.
+  - Residual risk: the raw key lives in E2B's per-sandbox network config, which
+    can be read with our E2B API key. The plan is to move to E2B Secrets once
+    granted (private beta). The fallback of passing the key as an environment
+    variable stays off.
+  - Templates are built with the v2 `Template().fromDockerfile()` (v1 CLI builds
+    stopped on 2026-08-01) and always referenced as `name:<buildId>`. The runtime
+    rejects unpinned references.
+  - Cost is recomputed on the host from reported usage, never trusted from the
+    sandbox. Known gap: if a run hits its wall-time limit, the model usage inside
+    it is lost.
 
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,

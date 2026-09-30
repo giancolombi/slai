@@ -33,11 +33,11 @@ Each task references the requirements it serves.
 - [ ] T-25 Status/priority mapping override UI and API (PR-8)
 
 ## M3: Agents
-- [~] T-30 Providers: Anthropic, OpenAI, and mock; routing, fallback, retries, usage and cost (TR-16, TR-30)
-- [~] T-31 Contract extraction with citation verification, ambiguities, and repair (PR-2, PR-3, TR-18)
-- [~] T-32 Triage and draft agents with prompt-injection hardening (PR-16, PR-17, TR-19)
-- [~] T-33 Guardrails: `decideAutopilot` (TR-20)
-- [~] T-34 Runtimes: local and E2B (template, runner, bounds, concurrency, always-kill) (PR-19, TR-21)
+- [x] T-30 Providers: Anthropic, OpenAI, and mock; routing, fallback, retries, usage and cost (TR-16, TR-30)
+- [x] T-31 Contract extraction with citation verification, ambiguities, and repair (PR-2, PR-3, TR-18)
+- [x] T-32 Triage and draft agents with prompt-injection hardening (PR-16, PR-17, TR-19)
+- [x] T-33 Guardrails: `decideAutopilot` (TR-20)
+- [x] T-34 Runtimes: local and E2B (template, runner, bounds, concurrency, always-kill) (PR-19, TR-21)
 
 ## M4: Worker
 - [ ] T-40 pg-boss setup, queues, and the 15s timer sweep with `SKIP LOCKED` (TR-2, PR-12)
