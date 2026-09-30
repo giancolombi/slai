@@ -123,7 +123,7 @@ export function AuthLayout() {
           <LiveBoard />
         </div>
         <p className="relative text-xs text-white/45">
-          Clocks are computed by a deterministic engine. Models never decide whether you breached.
+          SLA clocks are calculated exactly from your contracts, never guessed by AI.
         </p>
       </aside>
       <main className="relative flex flex-col items-center justify-center px-4 py-12 sm:px-8">

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { useAccess } from "../../lib/access";
 import { api, errorMessage } from "../../lib/api";
 import { METRIC_LABEL, PRIORITY_LABEL } from "../../lib/labels";
 import { useActions, useTicket } from "../../lib/queries";
@@ -12,6 +13,7 @@ import { ApprovalsInbox } from "./inbox";
 export function ApprovalsPage() {
   const proposed = useActions("proposed");
   const blocked = useActions("blocked");
+  const { canWork } = useAccess();
   const queryClient = useQueryClient();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -48,7 +50,12 @@ export function ApprovalsPage() {
     onSuccess: (_res, { item }) => {
       toast({
         tone: "success",
-        title: item.kind === "public_reply" ? `Reply sent on ${item.ticketKey}` : `Note posted on ${item.ticketKey}`,
+        title:
+          item.kind === "public_reply"
+            ? `Reply sent on ${item.ticketKey}`
+            : item.kind === "internal_note"
+              ? `Note posted on ${item.ticketKey}`
+              : `Change applied on ${item.ticketKey}`,
         description: item.ticketSubject,
       });
       refresh(item.ticketId);
@@ -112,6 +119,7 @@ export function ApprovalsPage() {
         <ApprovalsInbox
           items={items}
           pendingId={pendingId}
+          readOnly={!canWork}
           onApprove={(item, body) => approve.mutate({ item, body })}
           onReject={(item, reason) => reject.mutate({ item, reason })}
           renderContext={(item) => <TicketContext ticketId={item.ticketId} />}

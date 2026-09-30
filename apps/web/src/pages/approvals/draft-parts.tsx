@@ -1,9 +1,9 @@
-import type { ActionKind, ActionStatus, KnowledgeRef } from "@slai/shared";
+import type { ActionKind, ActionStatus, AgentAction, KnowledgeRef, Priority } from "@slai/shared";
 import { Badge, type BadgeTone, Button, cn, Dialog, Field, Textarea } from "@slai/ui";
 import { Ban, BookOpen, Check, ExternalLink, Globe, Lock, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { safeHref, uniqueRefs, urlHost } from "../../lib/knowledge";
-import { ACTION_STATUS_LABEL } from "../../lib/labels";
+import { ACTION_STATUS_LABEL, PRIORITY_LABEL } from "../../lib/labels";
 
 const STATUS_TONE: Record<ActionStatus, BadgeTone> = {
   proposed: "accent",
@@ -54,7 +54,7 @@ export function ActionKindLabel({ kind }: { kind: ActionKind }) {
   );
 }
 
-/** Model confidence as a thin meter with the number beside it. */
+/** How confident the agent is in its draft, as a thin meter with the number beside it. */
 export function ConfidenceMeter({ value, className }: { value: number | null; className?: string }) {
   if (value === null) return <span className="text-xs text-ink-subtle">No confidence score</span>;
   const pct = Math.round(value * 100);
@@ -63,7 +63,7 @@ export function ConfidenceMeter({ value, className }: { value: number | null; cl
       {/* biome-ignore lint/a11y/useSemanticElements: styled meter; native <meter> can't be themed consistently */}
       <span
         role="meter"
-        aria-label="Model confidence"
+        aria-label="Agent confidence"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
@@ -73,6 +73,37 @@ export function ConfidenceMeter({ value, className }: { value: number | null; cl
       </span>
       <span className="font-mono text-xs text-ink-muted tnum">{pct}%</span>
     </span>
+  );
+}
+
+/** Replies and notes carry text to edit; priority and assignee changes don't. */
+export function isTextAction(kind: ActionKind): boolean {
+  return kind === "public_reply" || kind === "internal_note";
+}
+
+const priorityName = (p: unknown) =>
+  typeof p === "string" && p in PRIORITY_LABEL ? PRIORITY_LABEL[p as Priority].toLowerCase() : null;
+
+/** A plain sentence for a proposed ticket change (priority or assignee), with the agent's reason. */
+export function ProposedChange({ action }: { action: Pick<AgentAction, "kind" | "payload"> }) {
+  const p = (action.payload ?? {}) as { priority?: unknown; from?: unknown; reason?: unknown };
+  let what: string;
+  if (action.kind === "set_priority") {
+    const to = priorityName(p.priority);
+    const from = priorityName(p.from);
+    what = to
+      ? from
+        ? `Change the priority from ${from} to ${to}.`
+        : `Set the priority to ${to}.`
+      : "Change the ticket's priority.";
+  } else {
+    what = "Assign the ticket to the teammate the agent suggests, in your help desk.";
+  }
+  return (
+    <div className="rounded-md border border-line bg-sunken/40 px-3 py-2.5 text-sm">
+      <p className="font-medium text-ink">{what}</p>
+      {typeof p.reason === "string" && p.reason.trim() && <p className="mt-1 text-ink-muted">{p.reason}</p>}
+    </div>
   );
 }
 

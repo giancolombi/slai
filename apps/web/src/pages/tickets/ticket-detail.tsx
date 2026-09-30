@@ -10,7 +10,6 @@ import {
   EmptyState,
   formatDateTime,
   formatDuration,
-  formatMoney,
   formatRelative,
   Label,
   RiskBadge,
@@ -28,6 +27,7 @@ import { ArrowLeft, Bot, ExternalLink, FileQuestion, PenLine, ShieldAlert, Spark
 import { useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { WhatsThis } from "../../help/whats-this";
+import { useAccess } from "../../lib/access";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { METRIC_LABEL, providerLabel, STATUS_LABEL } from "../../lib/labels";
 import { deciderLabel } from "../../lib/people";
@@ -36,6 +36,8 @@ import {
   ActionKindLabel,
   ActionStatusBadge,
   ConfidenceMeter,
+  isTextAction,
+  ProposedChange,
   RejectDialog,
   UsedKnowledge,
 } from "../approvals/draft-parts";
@@ -94,6 +96,7 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
       ? (def.warnAt as number[])
       : [0.5, 0.8];
   const [newestFirst, setNewestFirst] = useState(true);
+  const { canWork } = useAccess();
   const queryClient = useQueryClient();
   const drafts = t.actions.filter((a) => a.status === "proposed" || a.status === "blocked");
   const decided = t.actions.filter((a) => a.status !== "proposed" && a.status !== "blocked");
@@ -109,7 +112,12 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
       void queryClient.invalidateQueries({ queryKey: ["ticket", t.id] });
       void queryClient.invalidateQueries({ queryKey: ["actions"] });
     },
-    onError: (e) => toast({ tone: "error", title: "The agent run failed", description: errorMessage(e) }),
+    onError: (e, kind) =>
+      toast({
+        tone: "error",
+        title: kind === "triage" ? "Couldn't triage this ticket" : "Couldn't draft a reply",
+        description: errorMessage(e),
+      }),
   });
 
   const live = t.metrics
@@ -137,24 +145,28 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            leadingIcon={<Sparkles aria-hidden />}
-            loading={run.isPending && run.variables === "triage"}
-            disabled={run.isPending}
-            onClick={() => run.mutate("triage")}
-          >
-            Run triage
-          </Button>
-          <Button
-            size="sm"
-            leadingIcon={<PenLine aria-hidden />}
-            loading={run.isPending && run.variables === "draft_reply"}
-            disabled={run.isPending}
-            onClick={() => run.mutate("draft_reply")}
-          >
-            Draft reply
-          </Button>
+          {canWork && (
+            <>
+              <Button
+                size="sm"
+                leadingIcon={<Sparkles aria-hidden />}
+                loading={run.isPending && run.variables === "triage"}
+                disabled={run.isPending}
+                onClick={() => run.mutate("triage")}
+              >
+                Run triage
+              </Button>
+              <Button
+                size="sm"
+                leadingIcon={<PenLine aria-hidden />}
+                loading={run.isPending && run.variables === "draft_reply"}
+                disabled={run.isPending}
+                onClick={() => run.mutate("draft_reply")}
+              >
+                Draft reply
+              </Button>
+            </>
+          )}
           {t.url && (
             <Button asChild size="sm" variant="ghost">
               <a href={t.url} target="_blank" rel="noreferrer">
@@ -190,7 +202,7 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
                 Drafts awaiting approval
               </h2>
               {drafts.map((a) => (
-                <DraftCard key={a.id} action={a} ticketId={t.id} />
+                <DraftCard key={a.id} action={a} ticketId={t.id} canDecide={canWork} />
               ))}
             </section>
           )}
@@ -267,7 +279,11 @@ function TicketView({ ticket: t }: { ticket: TicketDetail }) {
           </Card>
 
           <Card>
-            <CardHeader title="Agent runs" as="h2" description="Each run is sandboxed and metered." />
+            <CardHeader
+              title="Agent activity"
+              as="h2"
+              description="What slai's agents did on this ticket, and the credits they used."
+            />
             {t.agentRuns.length ? (
               <ul className="border-t border-line">
                 {[...t.agentRuns].reverse().map((r) => (
@@ -368,10 +384,39 @@ function MetricCard({ metric: m, warnAt, primary }: { metric: MetricView; warnAt
   );
 }
 
+const RUN_WHAT: Record<AgentRun["kind"], string> = {
+  triage: "Triage",
+  draft_reply: "Draft reply",
+  contract_extraction: "Contract reading",
+};
+const RUN_DONE: Record<AgentRun["kind"], string> = {
+  triage: "Triaged the ticket",
+  draft_reply: "Drafted a reply",
+  contract_extraction: "Read the contract",
+};
+const RUN_STATUS: Record<AgentRun["status"], { label: string; tone: "ok" | "breached" | "accent" | "neutral" }> = {
+  queued: { label: "Waiting", tone: "neutral" },
+  running: { label: "Working", tone: "accent" },
+  succeeded: { label: "Done", tone: "ok" },
+  failed: { label: "Didn't finish", tone: "breached" },
+};
+
+/**
+ * What an agent did on this ticket, for a support lead: what, when, the outcome and the credits it used.
+ * Models, costs, tokens and timings stay in the API for internal use; they are not shown here.
+ */
 function AgentRunRow({ run: r }: { run: AgentRun }) {
-  const duration =
-    r.startedAt && r.finishedAt ? new Date(r.finishedAt).getTime() - new Date(r.startedAt).getTime() : null;
-  const kind = r.kind === "triage" ? "Triage" : r.kind === "draft_reply" ? "Draft reply" : "Contract extraction";
+  const status = RUN_STATUS[r.status];
+  const outcome =
+    r.status === "succeeded"
+      ? RUN_DONE[r.kind]
+      : r.status === "failed"
+        ? (r.error ?? "The agent couldn't finish this. Try again, or handle the ticket yourself.")
+        : r.status === "running"
+          ? "In progress"
+          : "Starting soon";
+  const credits = r.credits ?? 0;
+  const when = r.finishedAt ?? r.startedAt;
   return (
     <li className="flex items-start gap-3 border-b border-line px-5 py-3 last:border-b-0">
       <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-sunken text-ink-muted">
@@ -379,29 +424,28 @@ function AgentRunRow({ run: r }: { run: AgentRun }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-ink">{kind}</span>
-          <Badge size="sm" tone={r.status === "succeeded" ? "ok" : r.status === "failed" ? "breached" : "accent"}>
-            {r.status}
+          <span className="text-sm font-medium text-ink">{RUN_WHAT[r.kind]}</span>
+          <Badge size="sm" tone={status.tone}>
+            {status.label}
           </Badge>
         </div>
-        <p className="mt-0.5 font-mono text-2xs text-ink-muted tnum">
+        <p className={cn("mt-0.5 text-xs", r.status === "failed" ? "text-breached-text" : "text-ink-muted")}>
+          {outcome}
+        </p>
+        <p className="text-2xs text-ink-subtle">
           {[
-            r.model,
-            formatMoney(r.costCents, "exact"),
-            r.sandboxSeconds !== null ? `${r.sandboxSeconds.toFixed(1)}s sandbox` : null,
-            duration !== null ? `${formatDuration(duration)} wall` : null,
+            when ? formatRelative(when) : null,
+            credits > 0 ? `${credits.toLocaleString()} credit${credits === 1 ? "" : "s"}` : null,
           ]
             .filter(Boolean)
             .join(" · ")}
         </p>
-        {r.startedAt && <p className="text-2xs text-ink-subtle">{formatRelative(r.startedAt)}</p>}
-        {r.error && <p className="mt-1 text-xs text-breached-text">{r.error}</p>}
       </div>
     </li>
   );
 }
 
-function DraftCard({ action: a, ticketId }: { action: AgentAction; ticketId: string }) {
+function DraftCard({ action: a, ticketId, canDecide }: { action: AgentAction; ticketId: string; canDecide: boolean }) {
   const [body, setBody] = useState(a.body ?? "");
   const [rejecting, setRejecting] = useState(false);
   const queryClient = useQueryClient();
@@ -414,7 +458,10 @@ function DraftCard({ action: a, ticketId }: { action: AgentAction; ticketId: str
   const approve = useMutation({
     mutationFn: () => api.actions.approve(a.id, body !== a.body ? { body } : {}),
     onSuccess: () => {
-      toast({ tone: "success", title: a.kind === "public_reply" ? "Reply sent" : "Note posted" });
+      toast({
+        tone: "success",
+        title: a.kind === "public_reply" ? "Reply sent" : a.kind === "internal_note" ? "Note posted" : "Change applied",
+      });
       refresh();
     },
     onError: (e) => toast({ tone: "error", title: "Couldn't send the draft", description: errorMessage(e) }),
@@ -457,28 +504,38 @@ function DraftCard({ action: a, ticketId }: { action: AgentAction; ticketId: str
         <Label htmlFor={id} className="sr-only">
           Draft body
         </Label>
-        <Textarea id={id} value={body} onChange={(e) => setBody(e.target.value)} rows={7} />
+        {isTextAction(a.kind) ? (
+          <Textarea id={id} value={body} onChange={(e) => setBody(e.target.value)} rows={7} readOnly={!canDecide} />
+        ) : (
+          <ProposedChange action={a} />
+        )}
         {a.kind === "public_reply" && <UsedKnowledge refs={a.usedKnowledge} />}
       </div>
-      <div className="flex items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
-        {body !== (a.body ?? "") && (
-          <Button variant="ghost" size="sm" onClick={() => setBody(a.body ?? "")}>
-            Discard edits
+      {canDecide && (
+        <div className="flex items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
+          {body !== (a.body ?? "") && (
+            <Button variant="ghost" size="sm" onClick={() => setBody(a.body ?? "")}>
+              Discard edits
+            </Button>
+          )}
+          <Button size="sm" onClick={() => setRejecting(true)} disabled={approve.isPending}>
+            Reject…
           </Button>
-        )}
-        <Button size="sm" onClick={() => setRejecting(true)} disabled={approve.isPending}>
-          Reject…
-        </Button>
-        <Button
-          size="sm"
-          variant="primary"
-          loading={approve.isPending}
-          disabled={!body.trim() || reject.isPending}
-          onClick={() => approve.mutate()}
-        >
-          {a.kind === "public_reply" ? "Approve & send" : "Approve & post"}
-        </Button>
-      </div>
+          <Button
+            size="sm"
+            variant="primary"
+            loading={approve.isPending}
+            disabled={(isTextAction(a.kind) && !body.trim()) || reject.isPending}
+            onClick={() => approve.mutate()}
+          >
+            {a.kind === "public_reply"
+              ? "Approve & send"
+              : a.kind === "internal_note"
+                ? "Approve & post"
+                : "Approve & apply"}
+          </Button>
+        </div>
+      )}
       <RejectDialog
         open={rejecting}
         onOpenChange={setRejecting}

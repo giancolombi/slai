@@ -142,10 +142,11 @@ function ContractsTable({
   const retry = useMutation({
     mutationFn: (id: string) => api.contracts.extract(id),
     onSuccess: () => {
-      toast({ tone: "success", title: "Extraction restarted" });
+      toast({ tone: "success", title: "Reading the contract again" });
       void queryClient.invalidateQueries({ queryKey: qk.contracts });
     },
-    onError: (e) => toast({ tone: "error", title: "Couldn't restart extraction", description: errorMessage(e) }),
+    onError: (e) =>
+      toast({ tone: "error", title: "Couldn't start reading the contract again", description: errorMessage(e) }),
   });
   const order: Record<ContractStatus, number> = {
     needs_review: 0,
@@ -221,7 +222,7 @@ function ContractsTable({
                     </span>
                   </span>
                 ) : c.status === "failed" ? (
-                  <Tooltip content={c.error ?? "Extraction failed"}>
+                  <Tooltip content={c.error ?? "We couldn't read this contract."}>
                     <button type="button" className="line-clamp-1 max-w-64 cursor-help text-left text-breached-text">
                       {c.error}
                     </button>

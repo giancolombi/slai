@@ -25,7 +25,7 @@ import type {
   Replay,
   TicketStatus,
 } from "@slai/shared";
-import { type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
+import { ACTION_CREDITS, type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
 import {
   KESTREL_DOC,
   kestrelAmbiguities,
@@ -1143,6 +1143,7 @@ export function buildRuns(now: number, ticket: MockTicket, hasDraft: boolean): A
       model: "claude-haiku",
       costCents: 1,
       sandboxSeconds: 4.2,
+      credits: ACTION_CREDITS.triage,
       startedAt: new Date(ticket.createdAt + 40_000).toISOString(),
       finishedAt: new Date(ticket.createdAt + 46_000).toISOString(),
       error: null,
@@ -1157,6 +1158,7 @@ export function buildRuns(now: number, ticket: MockTicket, hasDraft: boolean): A
       model: "claude-sonnet",
       costCents: 6,
       sandboxSeconds: 11.8,
+      credits: ACTION_CREDITS.draft_reply,
       startedAt: new Date(now - 14 * MIN).toISOString(),
       finishedAt: new Date(now - 13.5 * MIN).toISOString(),
       error: null,

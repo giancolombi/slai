@@ -29,6 +29,7 @@ import type {
   TotpEnrollment,
 } from "@slai/shared";
 import {
+  ACTION_CREDITS,
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
@@ -1486,13 +1487,14 @@ export const handlers = [
         model: kind === "triage" ? "claude-haiku" : "claude-sonnet",
         costCents: kind === "triage" ? 1 : 6,
         sandboxSeconds: kind === "triage" ? 3.9 : 12.4,
+        credits: kind === "triage" ? ACTION_CREDITS.triage : ACTION_CREDITS.draft_reply,
         startedAt: new Date(now - 12_000).toISOString(),
         finishedAt: new Date(now).toISOString(),
         error: null,
         output: { confidence: 0.87 },
       } as const;
       t.agentRuns.push({ ...run });
-      o.usageExtraCents += run.costCents;
+      o.usageExtraCents += run.credits;
       if (kind === "draft_reply") {
         const first = t.requester.name?.split(" ")[0] ?? "there";
         o.actions.unshift({
