@@ -1,0 +1,20 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "deploy/docker/worker.Dockerfile",
+    "watchPatterns": [
+      "apps/worker/**",
+      "packages/**",
+      "deploy/docker/worker.Dockerfile",
+      "deploy/bundle.mjs",
+      "pnpm-lock.yaml"
+    ]
+  },
+  "deploy": {
+    "healthcheckPath": "/healthz",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ALWAYS",
+    "drainingSeconds": 30
+  }
+}

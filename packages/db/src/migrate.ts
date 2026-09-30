@@ -42,6 +42,8 @@ export async function syncRolePasswords(ownerUrl: string, runtimeUrls: string[])
 export async function runMigrations(ownerUrl: string): Promise<void> {
   const client = postgres(ownerUrl, { max: 1, onnotice: () => {} });
   try {
+    // One migration runner at a time (e.g. overlapping deploys' pre-deploy commands); released when the session ends.
+    await client`select pg_advisory_lock(hashtext('slai_migrate'))`;
     await migrate(drizzle(client), { migrationsFolder: MIGRATIONS_DIR });
     await installJobQueues(ownerUrl);
     const s = client(PGBOSS_SCHEMA);

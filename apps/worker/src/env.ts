@@ -45,7 +45,7 @@ export const envSchema = z.object({
   /** Archived contracts (row and file) are hard-deleted this many days after archiving. */
   RETENTION_ARCHIVED_CONTRACT_DAYS: z.coerce.number().int().min(1).default(30),
   RETENTION_INTERVAL_SECONDS: seconds(3600),
-  /** GET /healthz on this port answers 200 while the sweep loop is healthy (container healthchecks). 0 disables. */
+  /** GET /healthz on this port (default $PORT, else 8788) answers 200 while the sweep loop is healthy. 0 disables. */
   HEALTH_PORT: z.coerce.number().int().nonnegative().default(8788),
 });
 
@@ -54,9 +54,10 @@ export type Env = z.infer<typeof envSchema>;
 /** Parses env and fails fast with every problem listed (never echoing values). */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   assertProductionEnv(source, "worker");
-  const parsed = envSchema.safeParse(
-    Object.fromEntries(Object.entries(source).map(([k, v]) => [k, v === "" ? undefined : v])),
-  );
+  const clean = Object.fromEntries(Object.entries(source).map(([k, v]) => [k, v === "" ? undefined : v]));
+  // Platforms that health-check $PORT (e.g. Railway) get the health server there.
+  clean.HEALTH_PORT ??= clean.PORT;
+  const parsed = envSchema.safeParse(clean);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);
     throw new Error(`invalid environment:\n${lines.join("\n")}`);

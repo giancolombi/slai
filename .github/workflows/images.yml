@@ -1,0 +1,112 @@
+name: Images
+# T-63: build the production images on every PR; on main, also push them to
+# GHCR (ghcr.io/giancolombi/slai-<name>). Every image is scanned with Trivy
+# (critical findings fail the build) and gets a CycloneDX SBOM.
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The services are bundled, so an image scan cannot see the npm dependencies
+  # inside the bundle: scan the lockfile they come from.
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Trivy (pnpm-lock.yaml)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: pnpm-lock.yaml
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: SBOM (source dependencies)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: cyclonedx
+          output: sbom-source.cdx.json
+      - uses: actions/upload-artifact@v4
+        with: { name: sbom-source, path: sbom-source.cdx.json }
+
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: api, dockerfile: deploy/docker/api.Dockerfile, target: api }
+          - { name: worker, dockerfile: deploy/docker/worker.Dockerfile, target: worker }
+          - { name: web, dockerfile: deploy/docker/web.Dockerfile, target: web }
+          - { name: backup, dockerfile: deploy/docker/backup.Dockerfile, target: backup }
+    env:
+      IMAGE: ghcr.io/giancolombi/slai-${{ matrix.name }}
+      PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=main,enable=${{ env.PUSH }}
+            type=ref,event=pr
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          load: true
+          tags: ${{ env.IMAGE }}:scan
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Trivy (image, fail on critical)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: SBOM (image)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          format: cyclonedx
+          output: sbom-${{ matrix.name }}.cdx.json
+      - uses: actions/upload-artifact@v4
+        with: { name: "sbom-${{ matrix.name }}", path: "sbom-${{ matrix.name }}.cdx.json" }
+      - name: Log in to GHCR
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Same build (from cache), pushed with BuildKit's SBOM and provenance attestations.
+      - name: Push
+        if: env.PUSH == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.name }}

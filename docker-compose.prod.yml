@@ -1,0 +1,155 @@
+# Staging-like stack from the production images (T-63): Postgres, MinIO (the
+# s3 storage driver), Mailpit, a one-shot migrate job, the API, the worker and
+# the web server. Images are hardened as in production (read-only root
+# filesystem, no capabilities, non-root); the only relaxations are
+# DEPLOY_ENV=staging (mock AI, in-process agents, plain HTTP inside the network).
+#
+#   docker build -f deploy/docker/api.Dockerfile -t slai-api:local .     (and worker, web, backup)
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml run --rm seed
+#   open http://localhost:8480   (demo@slai.dev; `pnpm demo:otp` for the code)
+#
+# ENCRYPTION_KEY and SESSION_SECRET are read from the environment or the repo's
+# .env (`pnpm setup:env`). Images default to the local tags; set SLAI_IMAGE_PREFIX
+# and SLAI_IMAGE_TAG to run the GHCR builds, e.g. ghcr.io/giancolombi/slai- and sha-abc1234.
+name: slai-prod
+
+x-hardened: &hardened
+  read_only: true
+  tmpfs: ["/tmp"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DEPLOY_ENV: staging
+  LOG_LEVEL: info
+  APP_URL: http://localhost:8480
+  API_URL: http://localhost:8480
+  DATABASE_APP_URL: postgres://slai_app:${SLAI_APP_DB_PASSWORD:-staging-app-3f9c}@postgres:5432/slai
+  DATABASE_SYSTEM_URL: postgres://slai_worker:${SLAI_WORKER_DB_PASSWORD:-staging-worker-8b1d}@postgres:5432/slai
+  DATABASE_AUTH_URL: postgres://slai_auth:${SLAI_AUTH_DB_PASSWORD:-staging-auth-51ea}@postgres:5432/slai
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY (pnpm setup:env writes one to .env)}
+  ENCRYPTION_KEY_ID: ${ENCRYPTION_KEY_ID:-k1}
+  SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET (pnpm setup:env writes one to .env)}
+  STORAGE_DRIVER: s3
+  S3_BUCKET: slai-staging
+  S3_REGION: us-east-1
+  S3_ENDPOINT: http://minio:9000
+  S3_FORCE_PATH_STYLE: "true"
+  S3_ACCESS_KEY_ID: slai-minio
+  S3_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-slai-minio-secret}
+  S3_SSE: AES256
+  # The web server is the only proxy in front of the API.
+  TRUST_PROXY: "1"
+  RATE_LIMIT_STORE: postgres
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: slai
+      POSTGRES_PASSWORD: ${SLAI_OWNER_DB_PASSWORD:-staging-owner-c2e7}
+      POSTGRES_DB: slai
+    volumes: [pgdata-prod:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slai"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  minio:
+    # MinIO no longer publishes community images to Docker Hub; Chainguard's build is public.
+    image: cgr.dev/chainguard/minio:latest
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: slai-minio
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-slai-minio-secret}
+      # A static KMS key enables SSE-S3 (S3_SSE=AES256), as on AWS.
+      MINIO_KMS_SECRET_KEY: slai-kms:c2xhaS1zdGFnaW5nLWttcy1rZXktMzItYnl0ZXMhISE=
+    volumes: [minio-prod:/data]
+    ports: ["9480:9000"]
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8481:8025"]
+    restart: unless-stopped
+
+  migrate:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}api:${SLAI_IMAGE_TAG:-local}
+    command: ["node", "dist/migrate.mjs"]
+    <<: *hardened
+    restart: on-failure:5
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgres://slai:${SLAI_OWNER_DB_PASSWORD:-staging-owner-c2e7}@postgres:5432/slai
+      # Runtime role passwords come from their URLs, never the migrations' dev defaults.
+      MIGRATE_SET_ROLE_PASSWORDS: "true"
+      STORAGE_ENSURE_BUCKET: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_started }
+
+  seed:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}api:${SLAI_IMAGE_TAG:-local}
+    command: ["node", "dist/seed.mjs"]
+    profiles: [seed]
+    <<: *hardened
+    restart: "no"
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgres://slai:${SLAI_OWNER_DB_PASSWORD:-staging-owner-c2e7}@postgres:5432/slai
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  api:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}api:${SLAI_IMAGE_TAG:-local}
+    <<: *hardened
+    environment:
+      <<: *app-env
+      PORT: "8787"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  worker:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}worker:${SLAI_IMAGE_TAG:-local}
+    <<: *hardened
+    environment:
+      <<: *app-env
+      SMTP_URL: smtp://mailpit:1025
+      EMAIL_FROM: "slai staging <alerts@slai.local>"
+      MODEL_PROVIDER: mock
+      AGENT_RUNTIME: local
+      SWEEP_INTERVAL_SECONDS: "15"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  web:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}web:${SLAI_IMAGE_TAG:-local}
+    <<: *hardened
+    environment:
+      API_UPSTREAM: http://api:8787
+    ports: ["8480:8080"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  # One-shot backup to MinIO: docker compose -f docker-compose.prod.yml run --rm backup
+  backup:
+    image: ${SLAI_IMAGE_PREFIX:-slai-}backup:${SLAI_IMAGE_TAG:-local}
+    profiles: [backup]
+    <<: *hardened
+    restart: "no"
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgres://slai:${SLAI_OWNER_DB_PASSWORD:-staging-owner-c2e7}@postgres:5432/slai
+      BACKUP_S3_BUCKET: slai-staging
+      BACKUP_S3_PREFIX: backups/
+    depends_on:
+      postgres: { condition: service_healthy }
+
+volumes:
+  pgdata-prod:
+  minio-prod:
