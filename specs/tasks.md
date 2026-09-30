@@ -32,10 +32,15 @@ Each task references the requirements it serves.
 - [x] T-17 SSO per org (OIDC and SAML): admin routes, DNS TXT domain verification, email-domain
       discovery, JIT as member, enforce SSO, "also require slai MFA for SSO users"; tests against
       `oauth2-mock-server` and a software WebAuthn authenticator (PR-24, TR-23, TR-23a)
-- [ ] T-18 SCIM provisioning and deprovisioning; group-to-role mapping from the IdP
-- [ ] T-19 Check the IdP's `amr`/`acr` claims for MFA; admin reset of a member's second factor;
-      recovery flow for users who lose every factor (today an admin must help out of band)
-- [ ] T-19a SAML end-to-end test against a local IdP, and a SAML POST-binding check with SameSite=Lax cookies
+- [x] T-18 SCIM 2.0 at `/scim/v2` (Users, Groups; Okta and Entra shapes): per-org hashed tokens,
+      deactivation disables the membership and revokes sessions, group-to-role mapping in SSO
+      settings; minimal subset instead of `@better-auth/scim` (PR-24, TR-23c)
+- [x] T-19 IdP `amr`/`acr` recorded on SSO sessions and "require the IdP to assert MFA"; admin reset
+      of a member's second factors from Team (step-up, reason, email, audit; no owners by admins,
+      no last owner, cross-org rule); `pnpm auth:break-glass` for the last owner (PR-24, TR-23b)
+- [x] T-19a SAML end to end against in-test signed assertions (signature, audience, expiry,
+      InResponseTo, RelayState, replay, JIT) and the POST binding with SameSite=Lax + CSRF; fixed
+      `verifications.id` (uuid → text), which broke every SAML sign-in (TR-23, TR-24)
 
 ## M2: Connectors
 - [x] T-20 Shared HTTP, mapping, HMAC, and pagination helpers; rate-limit errors (TR-11, TR-13)

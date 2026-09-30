@@ -114,9 +114,21 @@ IDs are referenced from `technical.md` and `tasks.md`.
     details (the client secret is write-only), DNS TXT domain verification, JIT
     provisioning of new users as `member`, an **enforce SSO** switch that disables
     password and passkey sign-in on the verified domains, and an "also require slai
-    MFA for SSO users" switch (off by default: the IdP's MFA counts).
+    MFA for SSO users" switch (off by default: the IdP's MFA counts), and a
+    "require the IdP to assert MFA" switch that refuses SSO sign-ins whose IdP
+    does not say it used MFA.
   - Settings → Security lets users manage their authenticator app, regenerate
     backup codes, and add or remove passkeys (never the last factor).
+  - **Factor recovery.** A member who lost their device and backup codes asks an
+    admin: Team → member menu → "Reset two-factor" (a reason, and the admin's own
+    fresh TOTP or passkey). It removes the member's factors, signs them out
+    everywhere, emails them, and they enroll again at the next sign-in. Admins
+    cannot reset owners, nobody resets themselves this way, and an org's only
+    owner is recovered by slai support through the break-glass procedure.
+  - **SCIM provisioning** for SSO customers (Okta, Entra ID): admins generate a
+    SCIM token in SSO settings; the IdP creates, updates and deactivates members
+    (deactivation signs them out), and IdP groups can be mapped to roles
+    (e.g. "slai-admins" → Admin).
   - Multiple orgs per user, and roles owner/admin/member/viewer.
 - **PR-25** An audit log of every security-relevant action.
 - **PR-26** SOC 2-ready from day one. Customer data is never used for model
