@@ -32,6 +32,7 @@
 | `apps/worker` | Sync, ingest, evaluation, timer sweep, agent dispatch, write-back, replay, metering | everything |
 | `apps/web` | Product UI; a mock API mode (MSW) for demos | API |
 | `sandbox/` | E2B template and the runner executed inside the sandbox | model APIs |
+| `deploy/` | Dockerfiles, the service bundler, nginx config for web, Railway config as code (TR-36, TR-40) | none |
 
 ### Data flow for one ticket
 1. A webhook or the catch-up poll reports that ticket T changed.
@@ -457,8 +458,29 @@
   middleware runs before its handler). Exempt: signature-verified webhooks and the
   SAML ACS (a cross-site POST from the IdP, verified by the assertion signature
   and InResponseTo). RBAC comes from the membership role.
+- **TR-24a** Client IPs and rate limits behind proxies (T-63):
+  - `TRUST_PROXY` is `false` (socket address), a hop count (`true` = 1), or the
+    proxies' CIDRs. X-Forwarded-For is read **from the right**: the client is the
+    first address that is not one of our proxies; the left end is client-supplied
+    and never believed (`apps/api/src/client-ip.ts`).
+  - The login, signup and webhook limits are in-memory token buckets, **per
+    process**: with N API replicas a client gets N times the budget. Before running
+    more than one replica set `RATE_LIMIT_STORE=postgres`: every POST under `/auth`
+    (per IP) and every webhook delivery (per connection) then also draws from a
+    shared bucket in the unlogged `rate_limit_buckets` table (one atomic upsert per
+    request). The per-email login limit stays per process.
 - **TR-25** Uploads are checked by magic bytes (not extension) and sha256-hashed,
-  behind a storage-driver interface (local now; GCS/S3 later).
+  behind a storage-driver interface: `local` (development) or `s3` (TR-25a).
+- **TR-25a** The `s3` driver (`packages/db/src/storage.ts`) speaks the S3 API, so it
+  covers AWS S3, GCS (XML API interop with HMAC keys), Cloudflare R2, Railway
+  buckets and MinIO. Objects carry Content-Type and a `sha256` metadata field;
+  puts are write-once (`If-None-Match: *`, `S3_WRITE_ONCE=false` where a provider
+  lacks it). Server-side encryption: `S3_SSE=AES256` (SSE-S3), `aws:kms` with
+  `S3_SSE_KMS_KEY_ID`, or `provider` for stores that always encrypt at rest and
+  reject the AWS header (GCS, R2, Railway). On AWS leave the access keys unset
+  and the SDK uses the task/pod role. Buckets: private, versioned where supported,
+  with a lifecycle rule expiring noncurrent versions after 30 days (so a delete is
+  final within 30 days); created by infrastructure, not the app.
 
 ### Security and SOC 2 (PR-26)
 - **TR-26** Tenant isolation lives in Postgres:
@@ -479,6 +501,22 @@
   backup codes and IdP OAuth tokens are sealed by better-auth under the versioned
   `SESSION_SECRET` (TR-23). They are never logged, never
   returned by the API, and never passed into a sandbox.
+- **TR-27a** Key rotation (`ENCRYPTION_KEY` keyring). Yearly, and at once after
+  suspected exposure or when someone with access leaves:
+  1. Generate a key (`openssl rand -base64 32`) and store it in the secrets manager.
+  2. Deploy API and worker with `ENCRYPTION_KEY=<new>`, `ENCRYPTION_KEY_ID=<new id>`,
+     `ENCRYPTION_KEYS_PREVIOUS=<old id>:<old key>`. New writes use the new key;
+     reads find the key named in each ciphertext.
+  3. `pnpm keys:rotate --dry-run`, then `pnpm keys:rotate` (owner role;
+     `DATABASE_URL` and `DATABASE_SYSTEM_URL`). It re-encrypts every column in
+     `SECRET_COLUMNS` (connection credentials and webhook secrets, Slack
+     webhooks, SSO client secrets and SAML keys) org by org, in batches, with the
+     same AAD, and reports what is left on each old key id. Unreadable values are
+     counted and left untouched, never logged.
+  4. When nothing is left, remove the old key from `ENCRYPTION_KEYS_PREVIOUS`,
+     redeploy, and destroy it. Record the rotation in the access-review log (TR-44).
+  `SESSION_SECRET` rotates the same way through `SESSION_SECRET_VERSION` and
+  `SESSION_SECRETS_PREVIOUS` (TR-23); better-auth re-seals on write.
 - **TR-28** `audit_events` is append-only: a trigger rejects UPDATE and DELETE. It
   covers auth, membership, connections, policy approvals, autonomy changes, action
   approvals, and every help-desk write.
@@ -503,9 +541,47 @@
   | CC7.2 Audit and logs | `audit()` in the same transaction; a trigger blocks UPDATE/DELETE/TRUNCATE; pino redaction; no request bodies in logs |
   | CC8.1 Change integrity | Policies need `parsePolicy` and admin approval; versions are superseded, never edited in place |
   | PI1 Billing integrity | Append-only `usage_ledger` and `credit_grants`; money figures come only from the engine; plans and billing rules are pure code (`plans.ts`); Stripe webhooks signature-verified and applied once per event (`billing_events`); overage reported once per closed month |
+  | CC6.7 Encryption in transit | Production guard (TR-37): https URLs, `sslmode` on every database URL, SMTP over TLS, https object storage; HSTS on web and API |
+  | CC6.1 Key management | Keyring with key ids; `pnpm keys:rotate` re-encrypts under the new key (TR-27a) |
+  | CC6.8 Supply chain | Images built in CI; Trivy fails the build on critical findings in images and the lockfile; CycloneDX SBOMs; BuildKit provenance on pushed images (TR-39) |
+  | CC7.4 Incident response | TR-43; audit trail survives org deletion |
+  | A1.2 Backups and recovery | Managed PITR plus nightly `db:backup --upload` with grandfather retention; restore tested in CI (TR-38) |
+  | C1.2 / P4.3 Retention and disposal | Hourly retention job; export and scheduled, cancellable, audited org deletion that removes stored files (TR-30b, TR-30c) |
+  | CC6.1 Access reviews | Quarterly procedure over members, owners, roles and infrastructure access (TR-44) |
 
-- **TR-31** CI (lint, typecheck, test against Postgres) must pass before merging to
-  main.
+- **TR-30b** Retention (T-64). The worker's hourly `run-retention` job (a pg-boss
+  singleton, so one run at a time across workers; `apps/worker/src/retention.ts`):
+
+  | Data | Kept | Then |
+  |---|---|---|
+  | Ticket comment bodies, agent run outputs, finished action bodies | `RETENTION_CONTENT_DAYS` (400) | blanked (`ticket_comments.redacted_at`); tickets, events and `sla_outcomes` stay, so attainment and credits are unchanged |
+  | Archived contracts (row and file) | `RETENTION_ARCHIVED_CONTRACT_DAYS` (30) after `archived_at` | hard-deleted (file first), audited `contract.purged` |
+  | Export bundles | 7 days | file and row deleted |
+  | Expired sessions, verification tokens, unaccepted expired invitations, idle rate-limit buckets | until expiry | deleted (`slai_purge_expired_auth()` checks which auth tables exist) |
+  | `audit_events`, `usage_ledger`, `credit_grants` | **at least 1 year**; never deleted by any job | append-only (trigger); no foreign key to `organizations`, so they survive an org delete. Pruning older rows is a manual, owner-role procedure after the retention commitment |
+
+  Each purge is audited per org (`retention.purged` with counts). Knowledge
+  articles live as long as their source.
+- **TR-30c** Org offboarding (owner only; `apps/api/src/routes/offboarding.ts`,
+  `apps/worker/src/offboarding.ts`, Settings → Organization):
+  - Export: `POST /org/exports` queues `export-org`, which writes a tar.gz to
+    storage: `manifest.json`, `data/<table>.json` for every org table, and each
+    contract file. Secrets are excluded (credentials, webhook secrets, Slack
+    URLs, SSO configs, tokens). One export at a time; download for 7 days;
+    requested, completed and downloaded are audited. The bundle is built in
+    memory: fine to a few hundred MB; stream it (multipart upload) before
+    orgs outgrow that.
+  - Delete: `POST /org/deletion` (typing the org name) schedules a hard delete 7
+    days out and enqueues `delete-org` for then; any owner can cancel
+    (`DELETE /org/deletion`). Scheduled and cancelled are audited. When due, the
+    worker deletes the org's files, then calls `slai_delete_org(id)`, a SECURITY
+    DEFINER function that deletes only if `deletion_scheduled_for <= now()` by
+    the database clock (so neither a wrong worker clock nor a retried job can
+    delete early or after a cancel); every org table cascades. `org.deleted`
+    is audited by the system role. User accounts are kept (they may belong to
+    other orgs).
+- **TR-31** CI (lint, typecheck, test against Postgres and MinIO) must pass before
+  merging to main. The Images workflow (TR-39) must pass too.
 
 ### Billing (PR-23, T-65)
 - **TR-33** Plans, entitlements and credits are pure code in
@@ -567,6 +643,202 @@
     `invoice.paid` (past due → active) and `invoice.payment_failed` (→ past due,
     keeping the first failure time). Every applied event is audited
     (`billing.<type>` with from/to).
+
+### Deployment and operations (T-63, T-64)
+- **TR-36** Images (`deploy/docker/*.Dockerfile`, built from the repo root). Any
+  container platform runs them; nothing is provider-specific.
+
+  | Image | Runs | Port / health |
+  |---|---|---|
+  | `slai-api` | `node dist/api.mjs`; also `node dist/migrate.mjs`, `seed.mjs`, `keys-rotate.mjs` (the `migrate` target is the same image) | 8787 (`$PORT`), `/readyz` |
+  | `slai-worker` | `node dist/worker.mjs`; not public | `/healthz` on `$HEALTH_PORT`, else `$PORT`, else 8788 (sweep liveness) |
+  | `slai-web` | unprivileged nginx: the Vite build, SPA fallback, `/assets` cached immutable, `index.html` no-cache, `/api` proxied to `API_UPSTREAM` | 8080 (`$PORT`), `/healthz` |
+  | `slai-backup` | `node dist/backup.mjs --upload` with pg_dump 18 | one-shot / cron |
+
+  - Multi-stage: `pnpm fetch` + offline install, then esbuild bundles each service
+    (`deploy/bundle.mjs`) so the runtime holds only node, the bundle and the
+    argon2 native addon. npm, corepack and yarn are removed; OS packages upgraded.
+  - Non-root; files owned by root, so the root filesystem can be read-only
+    (writes go to `/tmp` only); no capabilities needed.
+  - The web CSP: scripts from self only (the theme bootstrap is `/theme-init.js`,
+    not inline), styles self + `'unsafe-inline'` (Radix style tags) + Google Fonts,
+    fonts from gstatic, `connect-src 'self'` (the API is same-origin through the
+    proxy), `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'none'`; plus
+    HSTS, nosniff, DENY framing, COOP/CORP and a restrictive Permissions-Policy.
+    Source maps and the MSW worker are not shipped.
+  - Migrations run exactly once per release, before new code serves traffic, as
+    the owner role (`DATABASE_URL`). A Postgres advisory lock serializes
+    concurrent runners. With `MIGRATE_SET_ROLE_PASSWORDS=true` the migrate job sets
+    `slai_app`, `slai_worker` and `slai_auth` passwords from their runtime URLs,
+    so the development passwords in the migrations never survive a deploy.
+  - `docker-compose.prod.yml` runs the stack from the images (Postgres, MinIO,
+    Mailpit, migrate, api, worker, web; `seed` and `backup` profiles) hardened as
+    in production (read-only, `cap_drop: [ALL]`, `no-new-privileges`), with
+    `DEPLOY_ENV=staging`.
+- **TR-37** Production guard (`packages/db/src/prod-env.ts`). With
+  `DEPLOY_ENV=production` (or `NODE_ENV=production` and no `DEPLOY_ENV`) the api,
+  worker and migrate refuse to start, listing every problem by name, when:
+  `MODEL_PROVIDER=mock`, `AGENT_RUNTIME` is not `e2b` or `E2B_TEMPLATE` is not
+  pinned, a provider key is missing, `STORAGE_DRIVER` is not `s3` or `S3_SSE` is
+  unset, `APP_URL`/`API_URL`/`S3_ENDPOINT` are not https, a database URL has no
+  `sslmode=require|verify-ca|verify-full` (a Unix-socket host is exempt), SMTP is
+  not TLS (`smtps://` or `requireTLS=true`), a role password is a development
+  default (`slai`, `slai_app`, `slai_worker`, `slai_auth`, …) or equals the role
+  name, or `ENCRYPTION_KEY` equals `SESSION_SECRET`. `DEPLOY_ENV=staging` runs a
+  production build with mocks allowed.
+- **TR-38** Backups and disaster recovery.
+  - Primary: the managed database's automated backups with point-in-time
+    recovery, retained at least 14 days (RPO minutes).
+  - Secondary, provider-independent: `pnpm db:backup` (pg_dump custom format,
+    `--no-owner`, with a `.sha256`) run nightly by the `slai-backup` image with
+    `--upload` to a separate bucket (`BACKUP_S3_BUCKET`, versioned/immutable where
+    the provider allows). Retention: every backup for 35 days, then the first of
+    each month for 12 months (`BACKUP_KEEP_DAILY_DAYS`,
+    `BACKUP_KEEP_MONTHLY_MONTHS`); pruned by the same job. Backups hold customer
+    data: encrypted at rest, access limited to the owner role's operators.
+  - Restore: `pnpm db:restore <file> [--target <url>] [--clean]` verifies the
+    checksum, creates the runtime roles if missing (NOLOGIN), restores in one
+    transaction, and refuses a non-empty target without `--clean`. Then set role
+    passwords (`migrate` with `MIGRATE_SET_ROLE_PASSWORDS=true`, which also
+    confirms the schema is current) and point the services at it.
+  - pg_dump must match the server's major version: the tools run locally when new
+    enough, otherwise from `postgres:<major>` (`PG_TOOLS=local|docker`).
+  - Tested: `packages/db/test/backup.test.ts` round-trips a database (data, RLS,
+    grants, the append-only trigger). Restore drill quarterly into a scratch
+    database; RTO target 2 hours. Object storage (contracts) is covered by bucket
+    versioning, not by the dump.
+- **TR-39** CI for images (`.github/workflows/images.yml`): every PR builds the
+  four images and scans them with Trivy (critical findings fail); because the
+  services are bundled, `pnpm-lock.yaml` is scanned too. CycloneDX SBOMs (source
+  and each image) are uploaded as artifacts. On `main` the images are pushed to
+  `ghcr.io/giancolombi/slai-{api,worker,web,backup}` (tags `sha-<short>` and `main`)
+  with `GITHUB_TOKEN`, carrying BuildKit SBOM and provenance attestations.
+- **TR-40** Deploying to Railway (the chosen initial host). Deploy-ready; not yet
+  deployed (T-67). Config as code: `deploy/railway/{api,worker,web,backup}.json`
+  (each service's "Config file" setting points at its file). Railway is SOC 2 Type
+  II (trust.railway.com).
+  - Services: `Postgres` (Railway's template: the official image with SSL; its
+    `postgres` user is a superuser, so the migrations' `CREATE ROLE` works), a
+    `Bucket` for contracts and one for backups, `api` (public domain; pre-deploy
+    command `node dist/migrate.mjs`, run once per deploy in its own container),
+    `worker` (no public domain), `web` (public domain), `backup` (cron
+    `17 3 * * *`).
+  - Networking: the browser only talks to `web`, which proxies `/api` to the api's
+    public HTTPS domain (`API_UPSTREAM`), so cookies are host-only on the web
+    domain, CORS/CSRF see `Origin = APP_URL`, and no cookie domain is set.
+    `API_URL` is the api's own domain (webhooks and SSO callbacks go there
+    directly). Postgres is reached over the private network
+    (`postgres.railway.internal`, WireGuard-encrypted) with `sslmode=require`
+    (Railway's certificate is self-signed, so not `verify-full`). Buckets are
+    public-endpoint only (https).
+  - `TRUST_PROXY`: Railway's edge appends to X-Forwarded-For, and UI traffic
+    passes web → edge → api. Use CIDRs: Railway's private ranges plus the
+    project's static egress IPs (`TRUST_PROXY=10.0.0.0/8,100.64.0.0/10,fd00::/8,<egress
+    IPs>`), then confirm real client IPs in the audit log after the first deploy.
+    Alternative: `API_UPSTREAM=http://api.railway.internal:8787` (private network)
+    and only the private ranges.
+  - Variables (`${{…}}` are Railway reference variables; **generate** = create
+    once with `openssl rand -base64 32`, or `openssl rand -hex 24` for
+    passwords, and store as a shared variable):
+
+    | Variable | api | worker | web | backup | Value |
+    |---|---|---|---|---|---|
+    | `NODE_ENV`, `DEPLOY_ENV` | ✓ | ✓ | | ✓ | `production` |
+    | `APP_URL` | ✓ | ✓ | | | `https://${{web.RAILWAY_PUBLIC_DOMAIN}}` (or the custom domain) |
+    | `API_URL` | ✓ | | | | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}` |
+    | `DATABASE_URL` (owner; migrations, backups) | ✓ | | | ✓ | `${{Postgres.DATABASE_URL}}?sslmode=require` |
+    | `DATABASE_APP_URL` | ✓ | ✓ | | | `postgres://slai_app:${{shared.SLAI_APP_DB_PASSWORD}}@${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:5432/${{Postgres.PGDATABASE}}?sslmode=require` |
+    | `DATABASE_SYSTEM_URL` | ✓ | ✓ | | | same with `slai_worker` / `SLAI_WORKER_DB_PASSWORD` |
+    | `DATABASE_AUTH_URL` | ✓ | | | | same with `slai_auth` / `SLAI_AUTH_DB_PASSWORD` |
+    | `SLAI_*_DB_PASSWORD` | shared | | | | generate |
+    | `MIGRATE_SET_ROLE_PASSWORDS` | ✓ | | | | `true` |
+    | `ENCRYPTION_KEY`, `ENCRYPTION_KEY_ID` | ✓ | ✓ | | | generate; `k1` |
+    | `SESSION_SECRET` | ✓ | | | | generate (different from `ENCRYPTION_KEY`) |
+    | `STORAGE_DRIVER` | ✓ | ✓ | | | `s3` |
+    | `S3_BUCKET`, `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | ✓ | ✓ | | ✓ | `${{Bucket.BUCKET}}`, `${{Bucket.ENDPOINT}}`, `${{Bucket.REGION}}`, `${{Bucket.ACCESS_KEY_ID}}`, `${{Bucket.SECRET_ACCESS_KEY}}` |
+    | `S3_SSE`, `S3_WRITE_ONCE`, `S3_FORCE_PATH_STYLE` | ✓ | ✓ | | ✓ | `provider` (buckets encrypt at rest; no SSE header, versioning or lifecycle), `false` (conditional puts are not documented), `false` (virtual-hosted URLs) |
+    | `BACKUP_S3_BUCKET` | | | | ✓ | `${{Backups.BUCKET}}` (and that bucket's keys in the `S3_*` above) |
+    | `TRUST_PROXY`, `RATE_LIMIT_STORE` | ✓ | | | | see above; `postgres` |
+    | `SMTP_URL`, `EMAIL_FROM` | | ✓ | | | the email provider, `smtps://…` |
+    | `MODEL_PROVIDER`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | | ✓ | | | `anthropic`; commercial keys |
+    | `AGENT_RUNTIME`, `E2B_API_KEY`, `E2B_TEMPLATE` | | ✓ | | | `e2b`; the pinned `slai-agent:<buildId>` |
+    | `API_UPSTREAM` | | | ✓ | | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}` |
+    | `STRIPE_*`, `OAUTH_*`, `SSO_TRUSTED_IDP_ORIGINS` | ✓ | as needed | | | from the providers |
+
+    `PORT` is injected by Railway; the images honor it.
+  - CLI (from the repo root, logged in with `railway login`):
+    ```
+    railway init --name slai                 # or: railway link (existing project)
+    railway add --database postgres
+    railway add --service api                # repeat for worker, web, backup
+    # Dashboard: Create → Bucket, twice ("Bucket", "Backups"); per service,
+    # Settings → Config file = /deploy/railway/<service>.json and connect the GitHub repo.
+    railway variables --service api --set "NODE_ENV=production" --set "DEPLOY_ENV=production" …
+    railway domain --service web             # and --service api (webhooks, SSO callbacks)
+    railway up --service api                 # first deploy from the working tree; then deploys follow main
+    railway up --service worker && railway up --service web && railway up --service backup
+    railway run --service api node dist/seed.mjs   # staging only; never in production
+    ```
+    Railway may also pull the GHCR images (`ghcr.io/giancolombi/slai-*:main`)
+    instead of building; the pre-deploy command works the same.
+  - Postgres backups: enable Railway's native volume backups (daily, and weekly
+    kept longer) in addition to the `backup` cron (TR-38).
+- **TR-41** Vendors and subprocessors:
+
+  | Vendor | Purpose | Customer data it processes | Assurance |
+  |---|---|---|---|
+  | Anthropic | Primary model provider (triage, drafts, contract extraction) | Ticket text, knowledge snippets, contract text, per request | Commercial API, no training on API data; ZDR requested (TR-16, TR-17); SOC 2 Type II |
+  | OpenAI | Fallback model provider | Same as Anthropic, only on provider errors | Commercial API, no training on API data; SOC 2 Type II |
+  | E2B | Sandboxes that run the agents | The run's input manifest (ticket text, no credentials), for the run's life | SOC 2 Type II; sandboxes destroyed after each run |
+  | Railway | Hosting: containers, Postgres, object storage (buckets) | All stored data | SOC 2 Type II (trust.railway.com) |
+  | Email provider (TBD; SMTP with TLS) | Alert and invitation email | Recipient addresses, ticket keys and subjects in alerts | To choose with a DPA and SOC 2 report |
+  | GitHub | Source, CI, container registry (GHCR) | None (code and images only) | SOC 2 Type II |
+  | Stripe | Billing (T-65) | Billing contacts and payment data (Stripe-hosted) | PCI DSS Level 1, SOC 2 |
+  | Customer's help desk and Slack | Their own systems we read from and write to | Their data, under their accounts | The customer's vendors, not ours |
+
+  A new subprocessor needs this table updated and customers notified per the DPA.
+- **TR-42** Data-flow classification:
+
+  | Data | Class | Stored in | Processed by | Retention |
+  |---|---|---|---|---|
+  | Ticket subjects, requester names and emails, comment bodies | Customer confidential (may contain end-user PII) | Postgres (RLS) | api, worker, model providers, E2B | comment bodies 400 days (TR-30b); rest while the org exists |
+  | Ticket events, SLA outcomes, evaluations | Customer confidential | Postgres | api, worker | while the org exists |
+  | Contracts (files, extracted text, citations) | Customer confidential | Object storage (SSE), Postgres | worker, model providers | until archived + 30 days, or org deletion |
+  | Help-desk credentials, webhook secrets, Slack webhooks, SSO secrets | Secret | Postgres, AES-256-GCM (TR-27) | api, worker (in memory) | until removed; rotated per TR-27a |
+  | Passwords, TOTP secrets, backup codes, passkeys, sessions | Secret | Postgres, `slai_auth` only | api (better-auth) | sessions to expiry; the rest until removed |
+  | Member names and emails | Personal | Postgres | api, worker, email provider | while the account exists |
+  | Audit events, usage ledger, credit grants | Compliance records | Postgres (append-only) | api, worker | at least 1 year, kept after org deletion |
+  | Knowledge articles | Customer internal | Postgres | worker, model providers | while the source exists |
+  | Backups | All of the above | Backup bucket | backup job | 35 days daily, 12 months monthly (TR-38) |
+  | Logs | Operational (no bodies, secrets redacted) | Platform logs | — | 30 days |
+- **TR-43** Incident response (outline):
+  1. **Detect**: alerts on 5xx rate, failed jobs, `/readyz` and worker `/healthz`,
+     audit anomalies (failed sign-ins, unexpected exports or deletions), vendor
+     notices, customer reports.
+  2. **Triage** within 1 hour: an incident lead is named; severity SEV1 (data
+     exposure or outage), SEV2 (degraded, no exposure), SEV3. Open an incident
+     record (timeline, decisions).
+  3. **Contain**: revoke sessions (delete rows), rotate exposed keys (TR-27a) and
+     provider keys, pause connections or autonomy (observe), block IPs at the edge,
+     take a backup for forensics.
+  4. **Eradicate and recover**: fix, deploy, restore from backup if needed (TR-38),
+     verify with the audit trail.
+  5. **Notify**: affected customers within 72 hours of confirming a personal-data
+     breach (or sooner per contract); regulators where required.
+  6. **Review** within 5 business days: blameless post-mortem, action items in
+     `specs/tasks.md`, controls updated here. The audit trail is evidence and is
+     never pruned during an investigation.
+- **TR-44** Access review (quarterly, and when someone joins, changes role or
+  leaves):
+  - Infrastructure: Railway project members, GitHub org and repo admins, GHCR,
+    secrets holders, Stripe, model provider and E2B consoles. Remove anyone
+    without a current need; enforce SSO/MFA on each.
+  - Product: per org, owners and admins (`GET /members`), SSO providers; the
+    audit log (`member.*`, `org.*`, `auth.*`) for the quarter.
+  - Database roles: only `slai`, `slai_app`, `slai_worker`, `slai_auth` exist;
+    passwords rotated when an operator leaves.
+  - Record each review (who, when, findings, changes) with the incident records;
+    a key rotation (TR-27a) is recorded the same way.
 
 ### Local development
 - **TR-32** `docker compose up -d` (Postgres 18 on 5433, Mailpit) →

@@ -8,6 +8,8 @@ export * from "./events.js";
 export * from "./jobs.js";
 export * from "./migrate.js";
 export * from "./passwords.js";
+export * from "./prod-env.js";
+export * from "./rotate-keys.js";
 export * as schema from "./schema.js";
 export * from "./schema.js";
 export * from "./seed.js";

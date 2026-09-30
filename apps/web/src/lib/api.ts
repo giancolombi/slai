@@ -24,6 +24,7 @@ import type {
   policyPreviewBody,
   rejectActionBody,
   savedReplyBody,
+  scheduleDeletionBody,
   setWebhookSecretBody,
   signupBody,
   switchOrgBody,
@@ -60,6 +61,8 @@ import {
   type Me,
   type Member,
   type NotificationChannel,
+  type Offboarding,
+  type OrgExport,
   type OrgSettings,
   type OrgSsoSettings,
   type Passkey,
@@ -304,6 +307,14 @@ export const api = {
     get: () => get<OrgSettings>("/org"),
     update: (body: In<typeof updateOrgBody>) => patch<OrgSettings>("/org", body),
   },
+  offboarding: {
+    get: () => get<Offboarding>("/org/offboarding"),
+    requestExport: () => post<OrgExport>("/org/exports"),
+    exportUrl: (exportId: string) => `${API_BASE}/org/exports/${id(exportId)}/download`,
+    scheduleDeletion: (confirmName: string) =>
+      post<Offboarding>("/org/deletion", { confirmName } satisfies In<typeof scheduleDeletionBody>),
+    cancelDeletion: () => del<Offboarding>("/org/deletion"),
+  },
   sso: {
     get: () => get<OrgSsoSettings>("/org/sso"),
     update: (body: In<typeof updateOrgSsoBody>) => patch<OrgSsoSettings>("/org/sso", body),
@@ -362,6 +373,7 @@ export const api = {
     },
     extract: (contractId: string) => post<void>(`/contracts/${id(contractId)}/extract`),
     fileUrl: (contractId: string) => `${API_BASE}/contracts/${id(contractId)}/file`,
+    archive: (contractId: string) => post<Contract>(`/contracts/${id(contractId)}/archive`),
     text: (contractId: string) => get<ContractText>(`/contracts/${id(contractId)}/text`),
   },
   policies: {

@@ -12,6 +12,8 @@ import type {
   List,
   Member,
   NotificationChannel,
+  Offboarding,
+  OrgExport,
   Policy,
   Replay,
   SecondFactor,
@@ -38,11 +40,13 @@ import {
   loginBody,
   manualBillingBody,
   notificationChannelBody,
+  ORG_DELETION_GRACE_DAYS,
   PLANS,
   type PlanId,
   policyPreviewBody,
   rejectActionBody,
   savedReplyBody,
+  scheduleDeletionBody,
   signupBody,
   switchOrgBody,
   TRIAL,
@@ -86,6 +90,16 @@ import {
 import { kestrelAmbiguities, kestrelCitations, kestrelDraftDefinition } from "./policies";
 
 const url = (path: string) => `${API_BASE}${path}`;
+
+const offboarding = new Map<string, Offboarding>();
+function offboardingFor(orgId: string): Offboarding {
+  let s = offboarding.get(orgId);
+  if (!s) {
+    s = { deletion: null, exports: [], graceDays: ORG_DELETION_GRACE_DAYS };
+    offboarding.set(orgId, s);
+  }
+  return s;
+}
 
 /** Mapping mock (T-25): one shared default, per-connection overrides in memory. */
 const MOCK_DEFAULT_MAPPING: FieldMappingTable = {
@@ -693,6 +707,61 @@ export const handlers = [
       },
       { admin: true },
     ),
+  ),
+  // ------------------------------------------------ offboarding (owner; in memory only)
+  http.get(
+    url("/org/offboarding"),
+    guarded(() => HttpResponse.json(offboardingFor(org().settings.id))),
+  ),
+  http.post(
+    url("/org/exports"),
+    guarded(() => {
+      const state = offboardingFor(org().settings.id);
+      const now = new Date();
+      const e: OrgExport = {
+        id: crypto.randomUUID(),
+        status: "succeeded",
+        sizeBytes: 48_213,
+        sha256: "0".repeat(64),
+        error: null,
+        requestedBy: getDb().me.user.email,
+        createdAt: now.toISOString(),
+        finishedAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 7 * 86_400_000).toISOString(),
+      };
+      state.exports.unshift(e);
+      audit(actor(), "org.export.requested", { type: "org_export", id: e.id });
+      return HttpResponse.json(e, { status: 202 });
+    }),
+  ),
+  http.post(
+    url("/org/deletion"),
+    guarded(async ({ request }) => {
+      const body = await parse(request, scheduleDeletionBody);
+      if (body instanceof Response) return body;
+      const o = org();
+      if (body.confirmName.trim() !== o.settings.name.trim())
+        return fail(400, "invalid_request", "Type the organization's name exactly to confirm.");
+      const state = offboardingFor(o.settings.id);
+      const now = new Date();
+      state.deletion = {
+        scheduledFor: new Date(now.getTime() + state.graceDays * 86_400_000).toISOString(),
+        requestedAt: now.toISOString(),
+        requestedBy: getDb().me.user.email,
+      };
+      audit(actor(), "org.deletion.scheduled", { type: "organization", id: o.settings.id });
+      return HttpResponse.json(state);
+    }),
+  ),
+  http.delete(
+    url("/org/deletion"),
+    guarded(() => {
+      const o = org();
+      const state = offboardingFor(o.settings.id);
+      state.deletion = null;
+      audit(actor(), "org.deletion.cancelled", { type: "organization", id: o.settings.id });
+      return HttpResponse.json(state);
+    }),
   ),
   http.get(
     url("/members"),

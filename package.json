@@ -18,11 +18,15 @@
     "db:migrate": "pnpm --filter @slai/db migrate",
     "db:seed": "pnpm --filter @slai/db seed",
     "setup:env": "tsx packages/db/src/scripts/setup-env.ts",
-    "demo:otp": "pnpm --silent --filter @slai/db demo:otp"
+    "demo:otp": "pnpm --silent --filter @slai/db demo:otp",
+    "db:backup": "pnpm --silent --filter @slai/db backup",
+    "db:restore": "pnpm --silent --filter @slai/db restore",
+    "keys:rotate": "pnpm --silent --filter @slai/db keys:rotate"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
     "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"

@@ -50,6 +50,7 @@ export function testEnv(overrides: Partial<Env> = {}): Env {
     STORAGE_DRIVER: "local",
     STORAGE_LOCAL_DIR: "",
     TRUST_PROXY: true,
+    RATE_LIMIT_STORE: "memory",
     ...overrides,
   };
 }
