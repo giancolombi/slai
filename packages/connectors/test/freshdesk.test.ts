@@ -244,3 +244,81 @@ describe("freshdesk connector", () => {
     expect(f.unused()).toEqual([]);
   });
 });
+
+describe("freshdesk solution articles (knowledge)", () => {
+  const routes: Route[] = [
+    {
+      method: "GET",
+      url: `${BASE}/api/v2/solutions/categories`,
+      headers: { authorization: AUTH },
+      fixture: "freshdesk/solution-categories.json",
+    },
+    {
+      method: "GET",
+      url: `${BASE}/api/v2/solutions/categories/5000100/folders`,
+      headers: { authorization: AUTH },
+      fixture: "freshdesk/solution-folders-5000100.json",
+    },
+    {
+      method: "GET",
+      url: `${BASE}/api/v2/solutions/folders/6000200/articles?page=1&per_page=100`,
+      headers: { authorization: AUTH },
+      fixture: "freshdesk/solution-articles-6000200-page1.json",
+      responseHeaders: {
+        link: `<${BASE}/api/v2/solutions/folders/6000200/articles?page=2&per_page=100>; rel="next"`,
+      },
+    },
+    {
+      method: "GET",
+      url: `${BASE}/api/v2/solutions/folders/6000200/articles?page=2&per_page=100`,
+      fixture: "freshdesk/solution-articles-6000200-page2.json",
+    },
+    {
+      method: "GET",
+      url: `${BASE}/api/v2/solutions/folders/6000201/articles?page=1&per_page=100`,
+      fixture: "freshdesk/solution-articles-6000201-page1.json",
+    },
+  ];
+
+  it("declares knowledge support", () => {
+    expect(freshdesk.supportsKnowledge).toBe(true);
+  });
+
+  it("walks categories, folders and pages, keeping only published articles", async () => {
+    const { c, f } = client(routes);
+    const pages = [];
+    let cursor: string | null = null;
+    do {
+      const p = await c.listKnowledgeArticles!(cursor);
+      pages.push(p.items);
+      cursor = p.nextCursor;
+    } while (cursor);
+    expect(pages).toHaveLength(3);
+    expect(pages[0]).toEqual([
+      {
+        sourceId: "7000301",
+        title: "Export large workspaces asynchronously",
+        url: `${BASE}/support/solutions/articles/7000301`,
+        bodyText: "Exports over 5M rows run in the background.",
+        locale: null,
+        updatedAt: new Date("2026-09-02T09:00:00Z"),
+      },
+    ]);
+    // No description_text: the HTML description is converted.
+    expect(pages[1]!.map((a) => [a.sourceId, a.bodyText])).toEqual([
+      ["7000303", "Grant s3:PutObject and s3:PutObjectAcl."],
+    ]);
+    expect(pages[2]!.map((a) => a.sourceId)).toEqual(["7000401"]);
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("returns nothing when there are no folders", async () => {
+    const { c } = client([{ method: "GET", url: `${BASE}/api/v2/solutions/categories`, json: [] }]);
+    expect(await c.listKnowledgeArticles!(null)).toEqual({ items: [], nextCursor: null });
+  });
+
+  it("rejects a malformed cursor", async () => {
+    const { c } = client([]);
+    expect((await rejection(c.listKnowledgeArticles!(encodeCursor({ nope: 1 })))).kind).toBe("invalid");
+  });
+});

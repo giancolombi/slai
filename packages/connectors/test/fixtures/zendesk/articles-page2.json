@@ -1,0 +1,27 @@
+{
+  "articles": [
+    {
+      "id": 360003,
+      "url": "https://acme.zendesk.com/api/v2/help_center/de/articles/360003.json",
+      "html_url": "https://acme.zendesk.com/hc/de/articles/360003-API-Ratenbegrenzung",
+      "title": "API-Ratenbegrenzung",
+      "body": "<p>Bis zu 600 Anfragen pro Minute.</p>",
+      "locale": "de",
+      "draft": false,
+      "section_id": 12,
+      "created_at": "2026-04-01T10:00:00Z",
+      "updated_at": "2026-08-15T08:00:00Z",
+      "edited_at": "2026-08-15T08:00:00Z"
+    }
+  ],
+  "meta": {
+    "has_more": false,
+    "after_cursor": null,
+    "before_cursor": "xyzB2"
+  },
+  "links": {
+    "first": null,
+    "next": null,
+    "prev": null
+  }
+}
