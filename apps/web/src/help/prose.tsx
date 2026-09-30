@@ -10,8 +10,8 @@ import type { GuideId } from "./types";
 
 export function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
-    <section aria-labelledby={id} className="scroll-mt-20">
-      <h2 id={id} className="mt-8 mb-2 text-lg font-semibold tracking-tight text-ink first:mt-0">
+    <section aria-labelledby={id} className="mt-9 first:mt-0">
+      <h2 id={id} className="mb-2 scroll-mt-20 text-lg font-semibold tracking-tight text-ink">
         {title}
       </h2>
       <div className="flex flex-col gap-3">{children}</div>
