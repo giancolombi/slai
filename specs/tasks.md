@@ -94,4 +94,8 @@ Each task references the requirements it serves.
 - [ ] T-63 Deployment: containers, managed Postgres, secrets manager, TLS, backups
 - [ ] T-64 SOC 2 readiness: access reviews, vendor list (E2B, Anthropic, OpenAI), incident
       response, retention and deletion jobs
-- [ ] T-65 Billing: Stripe plans, credit packs, tracked-ticket counting (PR-23)
+- [x] T-65 Billing: plans as code, plan ceilings in dispatch, tracked-ticket counting and monthly
+      snapshots, credits ledger and spend cap, 14-day trial, Stripe Checkout/Portal/credit packs,
+      signed idempotent webhook, past-due grace, overage via Billing Meters, manual mode (PR-23, TR-33 to TR-35)
+- [ ] T-66 Billing with a real Stripe test account: products, prices and Billing Meters created; Customer
+      Portal configured (plan switching); webhook endpoint registered; a full checkout → invoice → overage run
