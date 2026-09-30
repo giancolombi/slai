@@ -1,7 +1,8 @@
-import type { ActionKind, ActionStatus } from "@slai/shared";
+import type { ActionKind, ActionStatus, KnowledgeRef } from "@slai/shared";
 import { Badge, type BadgeTone, Button, cn, Dialog, Field, Textarea } from "@slai/ui";
-import { Ban, Check, Globe, Lock, ShieldAlert, X } from "lucide-react";
+import { Ban, BookOpen, Check, ExternalLink, Globe, Lock, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { safeHref, uniqueRefs, urlHost } from "../../lib/knowledge";
 import { ACTION_STATUS_LABEL } from "../../lib/labels";
 
 const STATUS_TONE: Record<ActionStatus, BadgeTone> = {
@@ -120,5 +121,80 @@ export function RejectDialog({
         />
       </Field>
     </Dialog>
+  );
+}
+
+/**
+ * The knowledge articles a draft relied on, as links. `compact` is a single line for lists;
+ * otherwise a small panel that also says so when the draft used no knowledge.
+ */
+export function UsedKnowledge({
+  refs,
+  compact,
+  className,
+}: {
+  refs: KnowledgeRef[] | undefined;
+  compact?: boolean;
+  className?: string;
+}) {
+  const items = uniqueRefs(refs);
+  const link = (r: KnowledgeRef) => {
+    const href = safeHref(r.url);
+    const title = r.id === null ? `${r.title} (removed)` : r.title;
+    return href ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex min-w-0 items-center gap-1 text-accent-text hover:underline"
+        title={urlHost(href) ?? undefined}
+      >
+        <span className="truncate">{title}</span>
+        <ExternalLink className="size-3 shrink-0" aria-hidden />
+        <span className="sr-only">(opens in a new tab)</span>
+      </a>
+    ) : (
+      <span className="truncate text-ink">{title}</span>
+    );
+  };
+  if (compact) {
+    if (items.length === 0) return null;
+    return (
+      <p className={cn("flex min-w-0 items-center gap-1.5 text-2xs text-ink-muted", className)}>
+        <BookOpen className="size-3 shrink-0" aria-hidden />
+        <span className="shrink-0">Used:</span>
+        <span className="flex min-w-0 flex-wrap gap-x-2">
+          {items.map((r, i) => (
+            <span key={r.id ?? `${r.title}-${i}`} className="min-w-0">
+              {link(r)}
+            </span>
+          ))}
+        </span>
+      </p>
+    );
+  }
+  return (
+    <section
+      aria-label="Knowledge used by this draft"
+      className={cn("rounded-md border border-line bg-sunken/40 px-3 py-2.5", className)}
+    >
+      <h3 className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+        <BookOpen className="size-3.5 text-ink-muted" aria-hidden />
+        Knowledge used
+      </h3>
+      {items.length === 0 ? (
+        <p className="mt-1 text-xs text-ink-muted">
+          No knowledge used. The draft relies on the ticket thread only, so check its facts before sending.
+        </p>
+      ) : (
+        <ul className="mt-1.5 flex flex-col gap-1 text-sm">
+          {items.map((r, i) => (
+            <li key={r.id ?? `${r.title}-${i}`} className="flex min-w-0 items-center">
+              {link(r)}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

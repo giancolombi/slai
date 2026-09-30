@@ -24,6 +24,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouter } from "@tanstack/react-router";
 import {
+  BookOpen,
   Bot,
   Building2,
   Cable,
@@ -90,6 +91,7 @@ function Nav() {
       </SidebarSection>
       <SidebarSection title="Automate">
         {item("/autonomy", <Bot />, "Autonomy")}
+        {item("/knowledge", <BookOpen />, "Knowledge")}
         {item("/connections", <Cable />, "Connections")}
       </SidebarSection>
       <SidebarSection title="Insights">

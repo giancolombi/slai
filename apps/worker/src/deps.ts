@@ -22,13 +22,20 @@ export interface WorkerConfig {
   firstSeenGraceMs: number;
   /** A help-desk write claimed longer ago than this is reconciled (looked for, then retried) (TR-21g). */
   sendReconcileMs: number;
+  /** A help-desk knowledge source is re-synced when its last sync is older than this (T-47). */
+  knowledgeSyncIntervalMs: number;
 }
 
-/** Help-center snippets and assignees for the ticket agents. No knowledge base exists yet, so the default is none. */
+export interface TicketResources extends Pick<TicketContext, "knowledge" | "assignees"> {
+  /** The `knowledge_articles` id of each knowledge item, in the same order (T-47). */
+  knowledgeIds?: (string | null)[];
+}
+
+/** Help-center snippets and assignees for the ticket agents (production: `knowledgeResources`, T-47). */
 export type ResourceLoader = (
   orgId: string,
-  ticket: { id: string; connectionId: string; subject: string },
-) => Promise<Pick<TicketContext, "knowledge" | "assignees">>;
+  ticket: { id: string; connectionId: string; subject: string; lastRequesterMessage?: string | null },
+) => Promise<TicketResources>;
 
 export interface WorkerDeps {
   /** slai_app (RLS): all org data through withOrg. */
@@ -61,4 +68,5 @@ export const DEFAULT_CONFIG: WorkerConfig = {
   appUrl: "http://localhost:5173",
   firstSeenGraceMs: FIRST_SEEN_GRACE_MS,
   sendReconcileMs: SEND_RECONCILE_AFTER_MS,
+  knowledgeSyncIntervalMs: 86_400_000,
 };

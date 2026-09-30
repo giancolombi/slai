@@ -287,3 +287,41 @@ describe("intercom connector", () => {
     expect(f.unused()).toEqual([]);
   });
 });
+
+describe("intercom articles (knowledge)", () => {
+  it("declares knowledge support", () => {
+    expect(intercom.supportsKnowledge).toBe(true);
+  });
+
+  it("pages through published articles as plain text, skipping drafts", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/articles?page=1&per_page=50`,
+        headers: HEADERS,
+        fixture: "intercom/articles-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/articles?page=2&per_page=50`,
+        headers: HEADERS,
+        fixture: "intercom/articles-page2.json",
+      },
+    ]);
+    const p1 = await c.listKnowledgeArticles!(null);
+    expect(p1.items).toEqual([
+      {
+        sourceId: "6871119",
+        title: "Retry webhook deliveries",
+        url: "https://intercom.help/acme/en/articles/6871119-retry-webhook-deliveries",
+        bodyText: "Webhooks are retried for 24 hours.\n\nRespond within 10 seconds.",
+        locale: "en",
+        updatedAt: new Date(1758000000 * 1000),
+      },
+    ]);
+    const p2 = await c.listKnowledgeArticles!(p1.nextCursor);
+    expect(p2.items).toEqual([expect.objectContaining({ sourceId: "6871121", url: null, locale: "fr" })]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+});

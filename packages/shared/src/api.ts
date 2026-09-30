@@ -237,6 +237,8 @@ export interface ConnectorInfo {
   supportsWebhooks: boolean;
   write: { internalNote: boolean; publicReply: boolean; assign: boolean; priority: boolean; tags: boolean };
   docsUrl: string;
+  /** The connector can sync help-center articles into a knowledge source (T-47). */
+  supportsKnowledge?: boolean;
 }
 export interface Connection {
   id: string;
@@ -415,6 +417,8 @@ export interface AgentAction {
   createdAt: string;
   decidedBy: string | null;
   decidedAt: string | null;
+  /** Knowledge the draft relied on (public replies). Always set by the API; optional for older clients. */
+  usedKnowledge?: KnowledgeRef[];
 }
 export const approveActionBody = z.object({ body: z.string().min(1).max(20000).optional() });
 export const rejectActionBody = z.object({ reason: z.string().max(2000).optional() });
@@ -436,6 +440,83 @@ export const autonomyRuleBody = z.object({
   triggerAt: z.enum(["warning", "at_risk", "breached"]),
   minConfidence: z.number().min(0).max(1).default(0.8),
 });
+
+// ---------- knowledge (T-47) ----------
+
+export const KNOWLEDGE_SOURCE_KINDS = ["helpdesk_articles", "saved_replies", "manual"] as const;
+export type KnowledgeSourceKind = (typeof KNOWLEDGE_SOURCE_KINDS)[number];
+export type KnowledgeSourceStatus = "idle" | "syncing" | "error";
+
+/** Where drafts get their facts: a help desk's articles, or saved replies written in slai (`manual`). */
+export interface KnowledgeSource {
+  id: string;
+  connectionId: string | null;
+  kind: KnowledgeSourceKind;
+  name: string;
+  status: KnowledgeSourceStatus;
+  lastSyncAt: string | null;
+  lastError: string | null;
+  articleCount: number;
+  enabledCount: number;
+  createdAt: string;
+}
+/** `helpdesk_articles` needs a connection whose connector supports knowledge; `manual` takes none. */
+export const createKnowledgeSourceBody = z.object({
+  kind: z.enum(["helpdesk_articles", "manual"]),
+  name: z.string().trim().min(1).max(120),
+  connectionId: z.uuid().nullable().default(null),
+});
+
+export interface KnowledgeArticle {
+  id: string;
+  sourceId: string;
+  sourceKind: KnowledgeSourceKind;
+  sourceName: string;
+  externalId: string | null;
+  title: string;
+  url: string | null;
+  bodyText: string;
+  locale: string | null;
+  enabled: boolean;
+  /** The help desk's last update (synced articles) or the last edit in slai (saved replies). */
+  updatedAt: string;
+}
+/** `GET /knowledge-articles?q=&sourceId=&cursor=&limit=`; `q` is a full-text search over title and body. */
+export const knowledgeArticleQuery = z.object({
+  q: z.string().trim().max(200).optional(),
+  sourceId: z.uuid().optional(),
+  cursor: z.string().max(500).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+export const updateKnowledgeArticleBody = z.object({ enabled: z.boolean() });
+
+/** A saved reply written in slai; stored as an article of the org's `manual` source. */
+export const savedReplyBody = z.object({
+  title: z.string().trim().min(1).max(200),
+  bodyText: z.string().trim().min(1).max(10_000),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .nullable()
+    .default(null),
+});
+export const updateSavedReplyBody = z.object({
+  title: z.string().trim().min(1).max(200).optional(),
+  bodyText: z.string().trim().min(1).max(10_000).optional(),
+  url: z
+    .url({ protocol: /^https?$/ })
+    .max(2000)
+    .nullable()
+    .optional(),
+  enabled: z.boolean().optional(),
+});
+
+/** An article a draft relied on. `id` is null when the article has since been deleted. */
+export interface KnowledgeRef {
+  id: string | null;
+  title: string;
+  url: string | null;
+}
 
 // ---------- dashboard, replay, usage, audit ----------
 
@@ -572,6 +653,13 @@ export const notificationChannelBody = z.object({
  *   GET    /actions?status=proposed → List<AgentAction>
  *   POST   /actions/:id/approve    approveActionBody → AgentAction
  *   POST   /actions/:id/reject     rejectActionBody → AgentAction
+ *
+ *   GET    /knowledge-sources      → List<KnowledgeSource>   POST createKnowledgeSourceBody → KnowledgeSource (admin)
+ *   POST   /knowledge-sources/:id/sync → 202 (admin)
+ *   GET    /knowledge-articles?q=&sourceId=&cursor= → List<KnowledgeArticle>
+ *   PATCH  /knowledge-articles/:id updateKnowledgeArticleBody → KnowledgeArticle (admin)
+ *   POST   /saved-replies          savedReplyBody → KnowledgeArticle (admin)
+ *   PATCH  /saved-replies/:id      updateSavedReplyBody → KnowledgeArticle (admin)   DELETE /saved-replies/:id (admin)
  *
  *   GET    /autonomy-rules         → AutonomyRule[]       POST autonomyRuleBody; PUT/DELETE /autonomy-rules/:id (admin)
  *   GET    /notification-channels  → NotificationChannel[]  POST/PATCH/DELETE (admin)
