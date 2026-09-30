@@ -9,12 +9,13 @@ import {
   createProducerBoss,
   createStorage,
   createSystemDb,
+  s3OptionsFromEnv,
 } from "@slai/db";
 import { createApp } from "./app.js";
 import { loadEnv } from "./env.js";
 import { createEventHub } from "./events-hub.js";
 import { createLogger } from "./logger.js";
-import { defaultRateLimits } from "./rate-limit.js";
+import { defaultRateLimits, postgresRateLimiter } from "./rate-limit.js";
 
 const env = loadEnv();
 const logger = createLogger(env.LOG_LEVEL);
@@ -32,7 +33,11 @@ const app = createApp({
   authDb,
   resolveTxt,
   jobs: createJobSender(boss),
-  storage: createStorage({ driver: env.STORAGE_DRIVER, localDir: env.STORAGE_LOCAL_DIR }),
+  storage: createStorage({
+    driver: env.STORAGE_DRIVER,
+    localDir: env.STORAGE_LOCAL_DIR,
+    ...(env.STORAGE_DRIVER === "s3" && { s3: s3OptionsFromEnv() }),
+  }),
   connectors: { get: getConnector, list: listConnectors },
   fetch: globalThis.fetch,
   keyring: createKeyring({
@@ -42,6 +47,7 @@ const app = createApp({
   }),
   logger,
   rateLimits: defaultRateLimits(),
+  ...(env.RATE_LIMIT_STORE === "postgres" && { sharedRateLimit: postgresRateLimiter(orgDb.client) }),
   events: createEventHub(systemDb.client),
   now: () => new Date(),
   ready: async () => {

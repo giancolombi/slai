@@ -60,15 +60,27 @@ export async function scheduleSyncs(deps: WorkerDeps): Promise<number> {
   return n;
 }
 
+/**
+ * Enqueues the retention job. pg-boss keeps one job per singleton slot, so with
+ * several workers ticking it still runs once per interval.
+ */
+export async function scheduleRetention(deps: WorkerDeps): Promise<void> {
+  const seconds = Math.max(60, Math.round(deps.config.retentionIntervalMs / 1000));
+  await deps.queue.send("run-retention", {}, { singletonKey: "retention", singletonSeconds: seconds });
+}
+
 /** Runs the sweep and scheduling every `intervalMs`, never overlapping itself. */
-export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Promise<void> } {
+export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Promise<void>; lastOkAt(): number | null } {
   let running: Promise<void> | null = null;
+  let lastOk: number | null = null;
   const tick = () => {
     if (running) return;
     running = (async () => {
       try {
         const claimed = await sweepDueTickets(deps);
         const syncs = await scheduleSyncs(deps);
+        await scheduleRetention(deps);
+        lastOk = Date.now();
         if (claimed || syncs) deps.logger.debug({ claimed, syncs }, "sweep");
       } catch (e) {
         deps.logger.error({ err: e instanceof Error ? e.message : String(e) }, "sweep failed");
@@ -84,5 +96,6 @@ export function startSweep(deps: WorkerDeps, intervalMs: number): { stop(): Prom
       clearInterval(timer);
       await running;
     },
+    lastOkAt: () => lastOk,
   };
 }

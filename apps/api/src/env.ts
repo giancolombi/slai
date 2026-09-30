@@ -1,4 +1,6 @@
+import { assertProductionEnv } from "@slai/db";
 import { z } from "zod";
+import { parseTrustProxy } from "./client-ip.js";
 
 const base64Key = (name: string, minBytes: number) =>
   z
@@ -42,19 +44,36 @@ export const envSchema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
-  STORAGE_DRIVER: z.enum(["local"]).default("local"),
+  /** `s3` reads S3_* (see packages/db storage.ts); production requires it. */
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default(".data/uploads"),
-  /** Honor X-Forwarded-For for the client IP. Only enable behind a trusted proxy. */
+  /**
+   * Honor X-Forwarded-For for the client IP: false (default), true or a hop
+   * count (proxies in front of the API), or trusted proxy CIDRs. See client-ip.ts.
+   */
   TRUST_PROXY: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((v) => v === "true"),
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((v, ctx) => {
+      try {
+        return typeof v === "boolean" ? v : parseTrustProxy(v);
+      } catch (e) {
+        ctx.addIssue({ code: "custom", message: (e as Error).message });
+        return z.NEVER;
+      }
+    }),
+  /**
+   * `memory` (per process) or `postgres` (shared by every replica). Run more
+   * than one API replica only with `postgres` (TR-24a).
+   */
+  RATE_LIMIT_STORE: z.enum(["memory", "postgres"]).default("memory"),
 });
 
 export type Env = z.infer<typeof envSchema>;
 
 /** Parses env and fails fast with every problem listed. */
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
+  assertProductionEnv(source, "api");
   const parsed = envSchema.safeParse(source);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join(".")}: ${i.message}`);

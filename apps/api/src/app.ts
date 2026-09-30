@@ -11,6 +11,7 @@ import { ApiError } from "./errors.js";
 import { requestLogger, safeErrorMessage } from "./logger.js";
 import { loadSession, requireAuth, writesNeedMember } from "./middleware/auth.js";
 import { csrf, noStore, requestContext } from "./middleware/security.js";
+import { defaultSharedRules, sharedRateLimit } from "./rate-limit.js";
 import { actionRoutes } from "./routes/actions.js";
 import { auditRoutes } from "./routes/audit.js";
 import { authRoutes } from "./routes/auth.js";
@@ -21,6 +22,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { offboardingRoutes } from "./routes/offboarding.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
 import { replayRoutes } from "./routes/replays.js";
@@ -39,6 +41,9 @@ export function createApp(deps: AppDeps) {
 
   app.use("*", requestContext({ trustProxy: deps.env.TRUST_PROXY }));
   app.use("*", requestLogger(deps.logger));
+  if (deps.sharedRateLimit) {
+    app.use(`${API_BASE}/*`, sharedRateLimit(deps.sharedRateLimit, defaultSharedRules(API_BASE)));
+  }
   app.use(
     "*",
     secureHeaders({
@@ -84,6 +89,7 @@ export function createApp(deps: AppDeps) {
   const authed = new Hono<AppEnv>();
   authed.use("*", requireAuth(), writesNeedMember);
   authed.route("/", orgRoutes(deps));
+  authed.route("/", offboardingRoutes(deps));
   authed.route("/", ssoRoutes(deps));
   authed.route("/", connectionRoutes(deps));
   authed.route("/customers", customerRoutes(deps));

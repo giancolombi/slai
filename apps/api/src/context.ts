@@ -6,7 +6,7 @@ import type { Logger } from "pino";
 import type { Env } from "./env.js";
 import { unauthorized } from "./errors.js";
 import type { EventHub } from "./events-hub.js";
-import type { RateLimits } from "./rate-limit.js";
+import type { RateLimits, SharedRateLimiter } from "./rate-limit.js";
 
 /** A connector definition with its credentials type erased (as the registry returns it). */
 export type AnyConnector = NonNullable<ReturnType<typeof getConnector>>;
@@ -34,6 +34,8 @@ export interface AppDeps {
   keyring: Keyring;
   logger: Logger;
   rateLimits: RateLimits;
+  /** Shared (multi-replica) limits, when RATE_LIMIT_STORE=postgres. */
+  sharedRateLimit?: SharedRateLimiter;
   events: EventHub;
   now: () => Date;
   /** Checks the database for /readyz. */
