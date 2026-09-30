@@ -17,6 +17,7 @@
     "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1142.0",
     "@node-rs/argon2": "^2.2.1",
     "@slai/sla-engine": "workspace:*",
     "drizzle-orm": "^0.45.3",

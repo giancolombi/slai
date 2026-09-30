@@ -87,6 +87,10 @@ export const organizations = pgTable("organizations", {
   plan: text("plan").notNull().default("trial"),
   monthlySpendCapCents: integer("monthly_spend_cap_cents"),
   requireMfa: boolean("require_mfa").notNull().default(false),
+  /** Offboarding (T-64): when set, the worker hard-deletes the org at this time unless an owner cancels. */
+  deletionScheduledFor: ts("deletion_scheduled_for"),
+  deletionRequestedAt: ts("deletion_requested_at"),
+  deletionRequestedBy: uuid("deletion_requested_by"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
@@ -159,12 +163,15 @@ export const invitations = pgTable(
   (t) => [index().on(t.orgId, t.email)],
 );
 
-/** Append-only: a trigger rejects UPDATE, DELETE and TRUNCATE. `org_id` is null for pre-auth events. */
+/**
+ * Append-only: a trigger rejects UPDATE, DELETE and TRUNCATE. `org_id` is null for pre-auth events.
+ * `org_id` has no foreign key on purpose: the audit trail outlives a deleted organization (T-64).
+ */
 export const auditEvents = pgTable(
   "audit_events",
   {
     id: id(),
-    orgId: uuid("org_id").references(() => organizations.id, { onDelete: "set null" }),
+    orgId: uuid("org_id"),
     at: ts("at").notNull().defaultNow(),
     actorType: actorTypeEnum("actor_type").notNull(),
     actorId: uuid("actor_id"),
@@ -241,6 +248,8 @@ export const contracts = pgTable(
     mediaType: text("media_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     status: contractStatusEnum("status").notNull().default("uploaded"),
+    /** Set when archived; the retention job hard-deletes the row and file N days later (T-64). */
+    archivedAt: ts("archived_at"),
     extraction: jsonb("extraction"),
     error: text("error"),
     uploadedBy: uuid("uploaded_by").references(() => users.id, { onDelete: "set null" }),
@@ -357,6 +366,8 @@ export const ticketComments = pgTable(
     authorExternalId: text("author_external_id"),
     public: boolean("public").notNull(),
     body: text("body").notNull(),
+    /** Set when the retention job blanked `body` (T-64). The row stays for the timeline. */
+    redactedAt: ts("redacted_at"),
     createdAt: createdAt(),
   },
   (t) => [unique().on(t.ticketId, t.sourceId), index().on(t.ticketId, t.at)],
@@ -504,12 +515,15 @@ export const replays = pgTable(
   (t) => [index().on(t.orgId)],
 );
 
-/** Append-only (trigger-enforced), like audit_events. */
+/**
+ * Append-only (trigger-enforced), like audit_events. Like audit_events, `org_id`
+ * has no foreign key: billing records outlive a deleted organization (T-64).
+ */
 export const usageLedger = pgTable(
   "usage_ledger",
   {
     id: id(),
-    orgId: orgId(),
+    orgId: uuid("org_id").notNull(),
     /** e.g. "model_call", "sandbox_seconds", "tracked_ticket". */
     kind: text("kind").notNull(),
     quantity: bigNumber("quantity").notNull(),
@@ -525,6 +539,36 @@ export const usageLedger = pgTable(
   },
   (t) => [index().on(t.orgId, t.createdAt)],
 );
+
+/** Org data exports (T-64): a tar.gz of JSON plus contract files, produced by the worker, owner-only download. */
+export const orgExports = pgTable(
+  "org_exports",
+  {
+    id: id(),
+    orgId: orgId(),
+    status: runStatusEnum("status").notNull().default("queued"),
+    storageKey: text("storage_key"),
+    sizeBytes: bigNumber("size_bytes"),
+    sha256: text("sha256"),
+    error: text("error"),
+    requestedBy: uuid("requested_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+    finishedAt: ts("finished_at"),
+    /** The retention job deletes the file and row after this. */
+    expiresAt: ts("expires_at").notNull(),
+  },
+  (t) => [index().on(t.orgId)],
+);
+
+/**
+ * Shared token buckets for API rate limits when more than one API replica runs
+ * (RATE_LIMIT_STORE=postgres). Not org data; unlogged (losing it on a crash is fine).
+ */
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  key: text("key").primaryKey(),
+  tokens: real("tokens").notNull(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+});
 
 /** Every org-scoped table (RLS applies). Used by tests to assert coverage. */
 export const ORG_SCOPED_TABLES = [
@@ -545,4 +589,5 @@ export const ORG_SCOPED_TABLES = [
   "notification_channels",
   "replays",
   "usage_ledger",
+  "org_exports",
 ] as const;
