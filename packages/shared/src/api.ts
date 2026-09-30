@@ -95,6 +95,11 @@ export interface Me {
     passkeys: number;
     /** The user has a password (SSO-only users do not). */
     hasPassword: boolean;
+    /**
+     * Sensitive actions (resetting a member's factors) need TOTP or a passkey proven
+     * in this session within the last 5 minutes: until then (null: not fresh).
+     */
+    stepUpUntil: string | null;
   };
 }
 
@@ -133,6 +138,11 @@ export interface Passkey {
   createdAt: string;
 }
 export const deletePasskeyBody = z.object({ id: z.string().min(1).max(100) });
+/** `POST /auth/step-up/passkey`: the WebAuthn assertion for `GET /auth/step-up/passkey-options`. */
+export const stepUpPasskeyBody = z.object({ response: z.record(z.string(), z.unknown()) });
+export interface StepUp {
+  stepUpUntil: string;
+}
 
 // ---------- organization & members ----------
 
@@ -143,6 +153,23 @@ export interface Member {
   role: Role;
   mfaEnabled: boolean;
   lastLoginAt: string | null;
+  /** False once deactivated by the IdP (SCIM): they cannot use this organization. */
+  active: boolean;
+  /** Provisioned by the IdP (SCIM): its lifecycle, and with group mappings its role, come from there. */
+  scimManaged: boolean;
+}
+/**
+ * `POST /members/:userId/reset-mfa` (admin/owner, with a fresh step-up): removes the
+ * member's TOTP, backup codes and passkeys, signs them out everywhere and emails them.
+ */
+export const resetMemberMfaBody = z.object({
+  /** How the member's identity was checked (a ticket, a call). Recorded in the audit log. */
+  reason: z.string().trim().min(10).max(500),
+});
+export interface MfaResetResult {
+  userId: string;
+  removed: { totp: boolean; passkeys: number };
+  sessionsRevoked: number;
 }
 export const inviteBody = z.object({ email: z.email(), role: z.enum(ROLES) });
 export const updateMemberBody = z.object({ role: z.enum(ROLES) });
@@ -220,11 +247,50 @@ export const updateOrgSsoBody = z.object({
   enforceSso: z.boolean().optional(),
   /** Also require slai MFA for SSO sessions (default off: the IdP's MFA is trusted). */
   requireMfaForSso: z.boolean().optional(),
+  /** Refuse SSO sign-ins unless the IdP asserts MFA (OIDC `amr`, SAML AuthnContextClassRef). */
+  requireIdpMfa: z.boolean().optional(),
 });
 export interface OrgSsoSettings {
   enforceSso: boolean;
   requireMfaForSso: boolean;
+  requireIdpMfa: boolean;
   providers: SsoProvider[];
+}
+
+// ---------- SCIM provisioning (org admins) ----------
+
+/** A SCIM bearer token. The token itself is shown once, at creation. */
+export interface ScimToken {
+  id: string;
+  name: string;
+  /** The first characters, to tell tokens apart. */
+  prefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+export interface ScimTokenCreated extends ScimToken {
+  /** Shown once: paste it into the IdP's provisioning settings. */
+  token: string;
+}
+export const createScimTokenBody = z.object({ name: z.string().trim().min(1).max(100) });
+/** Roles an IdP group can grant (never owner: owners are managed in slai). */
+export const SCIM_ROLES = ["admin", "member", "viewer"] as const;
+export interface ScimGroupRole {
+  id: string;
+  /** The IdP group's display name, e.g. "slai-admins" (case-insensitive). */
+  groupName: string;
+  role: (typeof SCIM_ROLES)[number];
+}
+export const scimGroupRoleBody = z.object({
+  groupName: z.string().trim().min(1).max(200),
+  role: z.enum(SCIM_ROLES),
+});
+export interface ScimSettings {
+  /** The SCIM 2.0 base URL to configure at the IdP. */
+  baseUrl: string;
+  tokens: ScimToken[];
+  groupRoles: ScimGroupRole[];
 }
 
 // ---------- connections ----------
@@ -519,6 +585,8 @@ export const notificationChannelBody = z.object({
  *   POST   /auth/logout            → 204
  *   GET    /auth/me                → Me (works while MFA is pending)
  *   POST   /auth/switch-org        { organizationId } → Me
+ *   GET    /auth/step-up/passkey-options → WebAuthn request options (MFA done)
+ *   POST   /auth/step-up/passkey   stepUpPasskeyBody → StepUp (TOTP step-up: /auth/two-factor/verify-totp)
  * Auth (better-auth, allowlisted; responses normalized to our DTOs and errors):
  *   POST   /auth/sign-in/email     loginBody → SignInResult | 403 sso_required
  *   POST   /auth/sign-in/sso       ssoSignInBody → { url } (then the browser goes to the IdP)
@@ -546,6 +614,19 @@ export const notificationChannelBody = z.object({
  *   POST   /org/sso/providers/:id/verify-domain → SsoProvider | 422 domain_not_verified (admin)
  *   GET    /members                → List<Member>         POST /members/invite inviteBody (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
+ *   POST   /members/:userId/reset-mfa  resetMemberMfaBody → MfaResetResult (admin; 403 step_up_required,
+ *                                   cannot_reset_owner, cross_org_member; 409 last_owner, self_reset)
+ *   GET    /org/scim               → ScimSettings (admin)
+ *   POST   /org/scim/tokens        createScimTokenBody → 201 ScimTokenCreated (admin)
+ *   DELETE /org/scim/tokens/:id    → 204, revokes (admin)
+ *   POST   /org/scim/group-roles   scimGroupRoleBody → 201 ScimGroupRole (admin)   DELETE /org/scim/group-roles/:id
+ *
+ * SCIM 2.0 (not under /api/v1; `Authorization: Bearer <org SCIM token>`, application/scim+json):
+ *   GET    /scim/v2/ServiceProviderConfig
+ *   GET    /scim/v2/Users?filter=userName eq "x"   POST /scim/v2/Users
+ *   GET|PUT|PATCH|DELETE /scim/v2/Users/:id        (active=false deactivates; DELETE removes the member)
+ *   GET    /scim/v2/Groups?filter=displayName eq "x"  POST /scim/v2/Groups
+ *   GET|PUT|PATCH|DELETE /scim/v2/Groups/:id
  *
  *   GET    /connectors             → ConnectorInfo[]
  *   GET    /connections            → List<Connection>     POST /connections createConnectionBody (admin)

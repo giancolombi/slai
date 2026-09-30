@@ -15,7 +15,8 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/scripts/migrate.ts",
     "seed": "tsx src/scripts/seed.ts",
-    "demo:otp": "tsx src/scripts/demo-otp.ts"
+    "demo:otp": "tsx src/scripts/demo-otp.ts",
+    "break-glass": "tsx src/scripts/break-glass.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",

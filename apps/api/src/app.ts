@@ -20,6 +20,7 @@ import { customerRoutes } from "./routes/customers.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
+import { mfaResetRoutes } from "./routes/mfa-reset.js";
 import { notificationRoutes } from "./routes/notifications.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
@@ -84,6 +85,7 @@ export function createApp(deps: AppDeps) {
   const authed = new Hono<AppEnv>();
   authed.use("*", requireAuth(), writesNeedMember);
   authed.route("/", orgRoutes(deps));
+  authed.route("/", mfaResetRoutes(deps));
   authed.route("/", ssoRoutes(deps));
   authed.route("/", connectionRoutes(deps));
   authed.route("/customers", customerRoutes(deps));

@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { audit, invitations, memberships, organizations, type Tx, users } from "@slai/db";
 import { inviteBody, type Member, type OrgSettings, updateMemberBody, updateOrgBody } from "@slai/shared";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { type AppDeps, type AppEnv, auditBase, auth, ROLE_RANK } from "../context.js";
 import { conflict, forbidden, notFound } from "../errors.js";
@@ -11,7 +11,10 @@ import { body, idParam } from "../validate.js";
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function ownerCount(tx: Tx): Promise<number> {
-  const [r] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberships).where(eq(memberships.role, "owner"));
+  const [r] = await tx
+    .select({ n: sql<number>`count(*)::int` })
+    .from(memberships)
+    .where(and(eq(memberships.role, "owner"), isNull(memberships.disabledAt)));
   return r?.n ?? 0;
 }
 
@@ -65,12 +68,18 @@ export function orgRoutes(deps: AppDeps) {
           role: memberships.role,
           mfaEnabled: users.mfaEnabled,
           lastLoginAt: users.lastLoginAt,
+          disabledAt: memberships.disabledAt,
+          scimManaged: memberships.scimManaged,
         })
         .from(memberships)
         .innerJoin(users, eq(users.id, memberships.userId))
         .orderBy(asc(memberships.createdAt)),
     );
-    const items: Member[] = rows.map((r) => ({ ...r, lastLoginAt: r.lastLoginAt?.toISOString() ?? null }));
+    const items: Member[] = rows.map(({ disabledAt, ...r }) => ({
+      ...r,
+      lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
+      active: disabledAt === null,
+    }));
     return c.json({ items, nextCursor: null });
   });
 

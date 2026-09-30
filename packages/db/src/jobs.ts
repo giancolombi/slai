@@ -23,6 +23,14 @@ export const JOB_PAYLOADS = {
   "evaluate-ticket": z.object({ orgId: uuid, ticketId: uuid }),
   /** Fetch one ticket's history from the help desk and ingest it (from sync and webhooks). */
   "ingest-ticket": z.object({ orgId: uuid, connectionId: uuid, ticketSourceId: z.string().min(1).max(200) }),
+  /** Tell a user about a security change to their account (T-19: an admin or break-glass factor reset). */
+  "send-security-email": z.object({
+    orgId: uuid,
+    userId: uuid,
+    kind: z.enum(["mfa_reset"]),
+    /** The admin who did it (null: break-glass by an operator). */
+    actorUserId: uuid.nullable(),
+  }),
 } as const;
 
 export type JobName = keyof typeof JOB_PAYLOADS;
@@ -38,6 +46,7 @@ export const QUEUE = {
   runReplay: "run-replay",
   evaluateTicket: "evaluate-ticket",
   ingestTicket: "ingest-ticket",
+  sendSecurityEmail: "send-security-email",
 } as const satisfies Record<string, JobName>;
 
 /** Parses a job's data in the worker (trust boundary). */

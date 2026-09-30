@@ -5,6 +5,7 @@ import { executeAction, runAgent } from "./agents.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
 import { runReplay } from "./replay.js";
+import { sendSecurityEmail } from "./security-email.js";
 import { evaluateTicketJob, ingestTicket, processWebhook, syncConnection } from "./sync.js";
 
 type Data<N extends JobName> = z.output<(typeof JOB_PAYLOADS)[N]>;
@@ -20,6 +21,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "execute-action": (p) => executeAction(deps, p),
     "extract-contract": (p) => extractContractJob(deps, p),
     "run-replay": (p) => runReplay(deps, p),
+    "send-security-email": (p) => sendSecurityEmail(deps, p),
   };
 }
 

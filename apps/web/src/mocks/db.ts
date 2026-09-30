@@ -119,7 +119,7 @@ function seedAcme(now: number): OrgData {
 export function emptyOrg(id: string, name: string, owner: Member, now: number): OrgData {
   return {
     settings: { id, name, plan: "replay", monthlySpendCapCents: null },
-    sso: { enforceSso: false, requireMfaForSso: false, providers: [] },
+    sso: { enforceSso: false, requireMfaForSso: false, requireIdpMfa: false, providers: [] },
     members: [owner],
     connections: [],
     customers: [],
@@ -155,6 +155,8 @@ function seed(): MockDb {
     role: "admin",
     mfaEnabled: true,
     lastLoginAt: null,
+    active: true,
+    scimManaged: false,
   };
   return {
     version: VERSION,

@@ -414,6 +414,8 @@ export const handlers = [
       role: "owner",
       mfaEnabled: false,
       lastLoginAt: new Date().toISOString(),
+      active: true,
+      scimManaged: false,
     };
     d.orgs[orgId] = emptyOrg(orgId, body.organizationName, owner, Date.now());
     d.me = {
@@ -426,7 +428,14 @@ export const handlers = [
       },
       role: "owner",
       organizations: [{ id: orgId, name: body.organizationName, role: "owner" }],
-      security: { authMethod: "password", mfa: "enrollment_required", totp: false, passkeys: 0, hasPassword: true },
+      security: {
+        authMethod: "password",
+        mfa: "enrollment_required",
+        totp: false,
+        passkeys: 0,
+        hasPassword: true,
+        stepUpUntil: null,
+      },
     };
     d.passkeys = [];
     d.session = "in";
@@ -609,6 +618,8 @@ export const handlers = [
           role: body.role,
           mfaEnabled: false,
           lastLoginAt: null,
+          active: true,
+          scimManaged: false,
         };
         o.members.push(member);
         audit(actor(), "member.invited", { type: "member", id: member.userId }, body);

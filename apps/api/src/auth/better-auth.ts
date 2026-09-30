@@ -33,7 +33,7 @@ import { API_BASE } from "@slai/shared";
 import { type BetterAuthOptions, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor } from "better-auth/plugins";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { AppDeps } from "../context.js";
 import { domainsOf, emailDomain } from "./domains.js";
 import { sealAdapter } from "./sealing-adapter.js";
@@ -114,6 +114,7 @@ export function createAuth(deps: AuthDeps) {
         authMethod: { type: "string", required: false, input: false },
         mfaVerified: { type: "boolean", required: false, input: false },
         ssoOrgId: { type: "string", required: false, input: false },
+        stepUpAt: { type: "date", required: false, input: false },
       },
     },
     account: {
@@ -166,6 +167,8 @@ export function createAuth(deps: AuthDeps) {
               data.authMethod = s.authMethod ?? "password";
               data.mfaVerified = true;
             }
+            // A TOTP code or a passkey was just proven: fresh for step-up (a backup code is not).
+            if (path === "/two-factor/verify-totp" || origin?.authMethod === "passkey") data.stepUpAt = new Date();
             if (origin?.authMethod === "sso") {
               const provider = await providerById(ctx?.params?.providerId);
               data.ssoOrgId = provider?.orgId ?? null;
@@ -175,7 +178,7 @@ export function createAuth(deps: AuthDeps) {
               const [m] = await db
                 .select({ orgId: memberships.orgId })
                 .from(memberships)
-                .where(eq(memberships.userId, s.userId))
+                .where(and(eq(memberships.userId, s.userId), isNull(memberships.disabledAt)))
                 .orderBy(asc(memberships.createdAt))
                 .limit(1);
               data.activeOrgId = m?.orgId ?? null;

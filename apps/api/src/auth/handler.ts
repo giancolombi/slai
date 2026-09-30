@@ -221,7 +221,7 @@ export function authHandler(deps: AppDeps, auth: Auth) {
   };
 
   const signedIn = async (c: Ctx, res: Response, a: AuthContext): Promise<Response> => {
-    const me = await buildMe(db, a);
+    const me = await buildMe(db, a, deps.now());
     const result: SignInResult =
       a.mfa === "satisfied"
         ? { status: "signed_in", me }
@@ -364,7 +364,10 @@ export function authHandler(deps: AppDeps, auth: Auth) {
       }
       if (a && !issuedSession(res)) {
         // Step-up in the current session (no new session issued): record the verification on it.
-        await db.update(sessions).set({ mfaVerified: true }).where(eq(sessions.id, a.sessionId));
+        await db
+          .update(sessions)
+          .set({ mfaVerified: true, ...(isTotp && { stepUpAt: deps.now() }) })
+          .where(eq(sessions.id, a.sessionId));
       }
       const s = (await newSession(res)) ?? (a ? (await resolveAuth(deps, auth, c.req.raw.headers)).ctx : null);
       if (!s) throw unauthorized();
