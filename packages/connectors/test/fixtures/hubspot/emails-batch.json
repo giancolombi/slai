@@ -1,0 +1,68 @@
+{
+  "status": "COMPLETE",
+  "results": [
+    {
+      "id": "9001",
+      "properties": {
+        "hs_createdate": "2026-09-28T09:30:00.000Z",
+        "hs_email_direction": "EMAIL",
+        "hs_email_html": "<p>Hi Maya, could you tell us how many rows the export has?</p>",
+        "hs_email_status": "SENT",
+        "hs_email_subject": "Re: CSV export times out",
+        "hs_email_text": "Hi Maya, could you tell us how many rows the export has?",
+        "hs_timestamp": "2026-09-28T09:30:00.000Z",
+        "hubspot_owner_id": "777"
+      },
+      "createdAt": "2026-09-28T09:30:00.000Z",
+      "updatedAt": "2026-09-28T09:30:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "9002",
+      "properties": {
+        "hs_email_direction": "INCOMING_EMAIL",
+        "hs_email_html": "<div>About <b>5 million</b> rows.</div>",
+        "hs_email_status": null,
+        "hs_email_subject": "Re: CSV export times out",
+        "hs_email_text": null,
+        "hs_timestamp": "2026-09-28T11:00:00.000Z",
+        "hubspot_owner_id": null
+      },
+      "createdAt": "2026-09-28T11:00:00.000Z",
+      "updatedAt": "2026-09-28T11:00:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "9003",
+      "properties": {
+        "hs_email_direction": "EMAIL",
+        "hs_email_html": "<p>We enabled async exports for your workspace.</p>",
+        "hs_email_status": "SENT",
+        "hs_email_subject": "Re: CSV export times out",
+        "hs_email_text": "We enabled async exports for your workspace.",
+        "hs_timestamp": "2026-09-28T12:00:00.000Z",
+        "hubspot_owner_id": "777"
+      },
+      "createdAt": "2026-09-28T12:00:00.000Z",
+      "updatedAt": "2026-09-28T12:00:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "9004",
+      "properties": {
+        "hs_email_direction": "INCOMING_EMAIL",
+        "hs_email_html": null,
+        "hs_email_status": null,
+        "hs_email_subject": "Re: CSV export times out",
+        "hs_email_text": "It is failing again this morning.",
+        "hs_timestamp": "2026-09-29T08:00:00.000Z",
+        "hubspot_owner_id": null
+      },
+      "createdAt": "2026-09-29T08:00:00.000Z",
+      "updatedAt": "2026-09-29T08:00:00.000Z",
+      "archived": false
+    }
+  ],
+  "startedAt": "2026-09-29T10:00:00.000Z",
+  "completedAt": "2026-09-29T10:00:00.100Z"
+}
