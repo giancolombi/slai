@@ -552,6 +552,7 @@ export const manualBillingBody = z.object({
   plan: z.enum(PLAN_IDS).optional(),
   status: z.enum(BILLING_STATUSES).optional(),
   trialEndsAt: z.iso.datetime().nullable().optional(),
+  pastDueSince: z.iso.datetime().nullable().optional(),
   grantCredits: z.number().int().positive().max(10_000_000).optional(),
 });
 /** `url` is where to send the browser (Stripe Checkout or the Customer Portal). */

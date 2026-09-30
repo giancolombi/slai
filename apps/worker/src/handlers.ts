@@ -2,6 +2,7 @@ import { ConnectorError } from "@slai/connectors";
 import { JOB_NAMES, type JOB_PAYLOADS, type JobName, parseJob } from "@slai/db";
 import type { z } from "zod";
 import { executeAction, runAgent } from "./agents.js";
+import { billingSnapshotJob } from "./billing.js";
 import type { WorkerDeps } from "./deps.js";
 import { extractContractJob } from "./extract.js";
 import { runReplay } from "./replay.js";
@@ -20,6 +21,7 @@ export function createHandlers(deps: WorkerDeps): Handlers {
     "execute-action": (p) => executeAction(deps, p),
     "extract-contract": (p) => extractContractJob(deps, p),
     "run-replay": (p) => runReplay(deps, p),
+    "billing-snapshot": (p) => billingSnapshotJob(deps, p),
   };
 }
 

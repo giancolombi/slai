@@ -6,6 +6,7 @@ import {
   channelsToNotify,
   crossed,
   decideDispatch,
+  decideRunLevel,
   decideSendStep,
   findSentComment,
   matchCustomerAccount,
@@ -90,6 +91,7 @@ describe("decideDispatch", () => {
     actionableRisk: "at_risk" as const,
     ticketOpen: true,
     rule: { level: "autopilot" as const, triggerAt: "at_risk" as const },
+    ceiling: "autopilot" as const,
     spend: "ok" as const,
     alreadyHandled: false,
   };
@@ -115,6 +117,79 @@ describe("decideDispatch", () => {
     expect(decideDispatch({ ...base, prevRisk: "at_risk" }).runDraft).toBe(false);
     expect(decideDispatch({ ...base, alreadyHandled: true }).runDraft).toBe(false);
     expect(decideDispatch({ ...base, ticketOpen: false }).runDraft).toBe(false);
+  });
+});
+
+describe("plan ceilings in dispatch (T-65)", () => {
+  const base = {
+    prevRisk: "warning" as const,
+    nextRisk: "at_risk" as const,
+    actionableRisk: "at_risk" as const,
+    ticketOpen: true,
+    rule: { level: "autopilot" as const, triggerAt: "at_risk" as const },
+    ceiling: "autopilot" as const,
+    spend: "ok" as const,
+    alreadyHandled: false,
+  };
+
+  it("Starter (triage ceiling) triages but never drafts or sends", () => {
+    for (const level of ["assist", "autopilot"] as const) {
+      const d = decideDispatch({ ...base, rule: { ...base.rule, level }, ceiling: "triage" });
+      expect(d).toMatchObject({ runTriage: true, runDraft: false, mayAutoSend: false, effectiveLevel: "triage" });
+      expect(d.reason).toMatch(/plan allows up to triage/);
+    }
+  });
+
+  it("a trial or Growth (assist ceiling) drafts but never auto-sends", () => {
+    const d = decideDispatch({ ...base, ceiling: "assist" });
+    expect(d).toMatchObject({ runTriage: true, runDraft: true, mayAutoSend: false, effectiveLevel: "assist" });
+  });
+
+  it("Scale (autopilot ceiling) auto-sends", () => {
+    expect(decideDispatch(base)).toMatchObject({ runDraft: true, mayAutoSend: true, effectiveLevel: "autopilot" });
+  });
+
+  it("an observe ceiling (trial expired, past due beyond grace, canceled) runs nothing", () => {
+    const d = decideDispatch({ ...base, ceiling: "observe" });
+    expect(d).toMatchObject({ runTriage: false, runDraft: false, effectiveLevel: "observe" });
+    expect(d.reason).toMatch(/plan allows observe only/);
+  });
+
+  it("the ceiling never raises a rule", () => {
+    expect(decideDispatch({ ...base, rule: { ...base.rule, level: "observe" } }).runTriage).toBe(false);
+    expect(decideDispatch({ ...base, rule: { ...base.rule, level: "assist" } }).mayAutoSend).toBe(false);
+  });
+
+  it("the spend cap still wins over the plan", () => {
+    expect(decideDispatch({ ...base, spend: "over_cap" }).reason).toMatch(/spend cap/);
+  });
+});
+
+describe("decideRunLevel (T-65)", () => {
+  const base = { kind: "draft_reply" as const, ruleLevel: "autopilot" as const, manual: false, spend: "ok" as const };
+
+  it("caps a run at the plan's ceiling", () => {
+    expect(decideRunLevel({ ...base, ceiling: "assist" }).level).toBe("assist");
+    expect(decideRunLevel({ ...base, ceiling: "autopilot" }).level).toBe("autopilot");
+  });
+
+  it("a draft on a triage-only plan does not run; a triage does", () => {
+    expect(decideRunLevel({ ...base, ceiling: "triage" })).toEqual({
+      level: "observe",
+      reason: "plan allows triage only",
+    });
+    expect(decideRunLevel({ ...base, kind: "triage", ceiling: "triage" }).level).toBe("triage");
+  });
+
+  it("a manual run lifts observe to assist, but not past the plan", () => {
+    const manual = { ...base, ruleLevel: "observe" as const, manual: true };
+    expect(decideRunLevel({ ...manual, ceiling: "autopilot" }).level).toBe("assist");
+    expect(decideRunLevel({ ...manual, ceiling: "observe" }).level).toBe("observe");
+    expect(decideRunLevel({ ...manual, kind: "triage", ceiling: "triage" }).level).toBe("triage");
+  });
+
+  it("nothing runs over the spend cap", () => {
+    expect(decideRunLevel({ ...base, ceiling: "autopilot", spend: "over_cap" }).reason).toMatch(/spend cap/);
   });
 });
 
@@ -164,6 +239,7 @@ describe("first evaluation (T-48)", () => {
       nextRisk: "breached" as const,
       ticketOpen: true,
       rule: { level: "assist" as const, triggerAt: "at_risk" as const },
+      ceiling: "autopilot" as const,
       spend: "ok" as const,
       alreadyHandled: false,
     };
@@ -200,10 +276,11 @@ describe("channelsToNotify", () => {
 });
 
 describe("spendState", () => {
-  it("compares micro-dollars to a cents cap", () => {
-    expect(spendState(999_999, 100)).toBe("ok");
-    expect(spendState(1_000_000, 100)).toBe("over_cap");
-    expect(spendState(10 ** 12, null)).toBe("ok");
+  it("compares credits used with the cap in credits", () => {
+    expect(spendState(99, 100)).toBe("ok");
+    expect(spendState(100, 100)).toBe("over_cap");
+    expect(spendState(0, 0)).toBe("over_cap");
+    expect(spendState(10 ** 9, null)).toBe("ok");
   });
 });
 

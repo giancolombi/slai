@@ -136,13 +136,21 @@ export async function tmpStorageDir() {
 
 // ---------- fixtures (written as the owner role) ----------
 
-export async function createOrg(owner: Owner, opts: { capCents?: number | null } = {}) {
+/** An org on an active Scale plan by default (every agent level allowed); pass `billing` to test plans (T-65). */
+export async function createOrg(
+  owner: Owner,
+  opts: { capCents?: number | null; billing?: Partial<typeof organizations.$inferInsert> } = {},
+) {
   const id = randomUUID();
   await owner.db.insert(organizations).values({
     id,
     name: `Org ${id.slice(0, 8)}`,
     slug: `org-${id}`,
     monthlySpendCapCents: opts.capCents ?? null,
+    plan: "scale",
+    billingStatus: "active",
+    trialEndsAt: null,
+    ...opts.billing,
   });
   return id;
 }
