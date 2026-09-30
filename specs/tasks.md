@@ -89,7 +89,7 @@ Each task references the requirements it serves.
 - [ ] T-57 OAuth connect flows (Intercom, HubSpot, Salesforce, Zoho, Help Scout); show the webhook secret for providers that need it pasted
 - [x] T-58 Inline contract text on the review screen (`GET /contracts/:id/text`, document pane with
       citation scroll and highlight); bundle splitting (vendor chunks, zod-free entry: entry chunk
-      466.6 → 61 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
+      466.6 → 62 kB) (the MFA QR code shipped in T-52a) (PR-4, TR-22b)
 - [x] T-59 API contract: `approvedBy`/`uploadedBy`/`decidedBy` documented as user ids, with
       `…ByName` display names on the DTOs; the invite response is the shared `Invitation` DTO
 - [ ] T-59a Invitation email (worker mailer) and accept flow (sign up or sign in, then join the org).
