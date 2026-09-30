@@ -17,13 +17,18 @@ jobs:
     env:
       DATABASE_URL: postgres://slai:slai@localhost:5433/slai
       DATABASE_APP_URL: postgres://slai_app:slai_app@localhost:5433/slai
+      DATABASE_SYSTEM_URL: postgres://slai_worker:slai_worker@localhost:5433/slai
+      APP_URL: http://localhost:5173
+      API_URL: http://localhost:8787
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: .data/uploads
       MODEL_PROVIDER: mock
       AGENT_RUNTIME: local
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with: { node-version: 24 }
       - run: corepack enable
+      - uses: actions/setup-node@v5
+        with: { node-version: 24, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - name: Generate secrets
         run: |
