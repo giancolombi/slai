@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 .wt/
 .claude/worktrees/
+.data/

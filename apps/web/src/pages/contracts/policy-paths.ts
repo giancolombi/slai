@@ -154,3 +154,35 @@ export function fieldDomId(path: string) {
 export function citationDomId(path: string) {
   return `cite-${path.replace(/\./g, "-")}`;
 }
+
+/**
+ * Maps a path emitted by contract extraction onto this screen's semantic path.
+ * Extraction returns several policies, so its paths are index-based and
+ * prefixed with the policy ("policies[0].targets[2].minutes"). Returns null
+ * for paths that belong to a different policy of the same contract. Paths
+ * already in semantic form pass through unchanged.
+ */
+export function extractionPath(path: string, policyIndex: number, extracted: SlaPolicy): string | null {
+  let p = path;
+  const scoped = /^policies\[(\d+)\]\.?(.*)$/.exec(p);
+  if (scoped) {
+    if (Number(scoped[1]) !== policyIndex) return null;
+    p = scoped[2] ?? "";
+  }
+  const target = /^targets\[(\d+)\]/.exec(p);
+  if (target) {
+    const t = extracted.targets[Number(target[1])];
+    return t ? targetPath(t.metric, t.priority) : null;
+  }
+  const credit = /^credits\[(\d+)\]/.exec(p);
+  if (credit) {
+    const c = extracted.credits[Number(credit[1])];
+    return c ? `credits.${c.id}` : null;
+  }
+  if (p.startsWith("calendar.timezone")) return "calendar.timezone";
+  if (p.startsWith("calendar.holidays")) return "calendar.holidays";
+  if (p.startsWith("calendar")) return "calendar.weekly";
+  const pause = /^pauseStatuses\.(\w+)/.exec(p);
+  if (pause) return `pauseStatuses.${pause[1]}`;
+  return p || null;
+}

@@ -9,7 +9,16 @@ import { and, eq, sql } from "drizzle-orm";
 import { connect, type Tx } from "./client.js";
 import { AAD, encrypt, encryptJson, type Keyring } from "./crypto.js";
 import { hashPassword, verifyPassword } from "./passwords.js";
-import { connections, customerAccounts, memberships, organizations, slaPolicies, users } from "./schema.js";
+import {
+  autonomyRules,
+  connections,
+  customerAccounts,
+  memberships,
+  notificationChannels,
+  organizations,
+  slaPolicies,
+  users,
+} from "./schema.js";
 
 export const DEMO = {
   orgName: "Acme Cloud",
@@ -204,18 +213,111 @@ export async function seed(ownerUrl: string, opts: { keyring?: Keyring } = {}) {
         });
       }
 
+      // Customers match the demo help desk's requester orgs (packages/connectors demo content).
       const customers = [
-        { name: "Globex Corporation", domains: ["globex.com"], fee: 1_250_000, policyId: premiumId },
-        { name: "Initech", domains: ["initech.io"], fee: 480_000, policyId: null },
+        {
+          name: "Northwind Analytics",
+          domains: ["northwind-analytics.example"],
+          ext: ["org-northwind"],
+          fee: 1_250_000,
+          policyId: premiumId,
+        },
+        {
+          name: "Meridian Payments",
+          domains: ["meridianpay.example"],
+          ext: ["org-meridian"],
+          fee: 980_000,
+          policyId: premiumId,
+        },
+        {
+          name: "Bluepeak Logistics",
+          domains: ["bluepeak.example"],
+          ext: ["org-bluepeak"],
+          fee: 640_000,
+          policyId: null,
+        },
+        {
+          name: "Quillon Health",
+          domains: ["quillon-health.example"],
+          ext: ["org-quillon"],
+          fee: 720_000,
+          policyId: null,
+        },
+        {
+          name: "Cobalt Insurance",
+          domains: ["cobalt-ins.example"],
+          ext: ["org-cobalt"],
+          fee: 560_000,
+          policyId: null,
+        },
+        {
+          name: "Lumen Retail Group",
+          domains: ["lumenretail.example"],
+          ext: ["org-lumen"],
+          fee: 410_000,
+          policyId: null,
+        },
       ];
+      const customerIds: Record<string, string> = {};
       for (const c of customers) {
-        await tx
+        const [row] = await tx
           .insert(customerAccounts)
-          .values({ orgId, name: c.name, domains: c.domains, monthlyFeeCents: c.fee, policyId: c.policyId })
+          .values({
+            orgId,
+            name: c.name,
+            domains: c.domains,
+            externalOrgIds: c.ext,
+            monthlyFeeCents: c.fee,
+            policyId: c.policyId,
+          })
           .onConflictDoUpdate({
             target: [customerAccounts.orgId, customerAccounts.name],
-            set: { domains: c.domains, monthlyFeeCents: c.fee, policyId: c.policyId, updatedAt: sql`now()` },
+            set: {
+              domains: c.domains,
+              externalOrgIds: c.ext,
+              monthlyFeeCents: c.fee,
+              policyId: c.policyId,
+              updatedAt: sql`now()`,
+            },
+          })
+          .returning({ id: customerAccounts.id });
+        customerIds[c.name] = row!.id;
+      }
+
+      // Autonomy: assist by default, autopilot for one premium customer, earlier drafts for urgent tickets.
+      const rules = [
+        { customerAccountId: null, priority: null, level: "assist" as const, triggerAt: "at_risk" as const },
+        {
+          customerAccountId: null,
+          priority: "urgent" as const,
+          level: "assist" as const,
+          triggerAt: "warning" as const,
+        },
+        {
+          customerAccountId: customerIds["Northwind Analytics"]!,
+          priority: null,
+          level: "autopilot" as const,
+          triggerAt: "at_risk" as const,
+        },
+      ];
+      for (const r of rules) {
+        await tx
+          .insert(autonomyRules)
+          .values({ orgId, ...r, minConfidence: 0.8 })
+          .onConflictDoUpdate({
+            target: [autonomyRules.orgId, autonomyRules.customerAccountId, autonomyRules.priority],
+            set: { level: r.level, triggerAt: r.triggerAt },
           });
+      }
+
+      const [channel] = await tx
+        .select()
+        .from(notificationChannels)
+        .where(and(eq(notificationChannels.orgId, orgId), eq(notificationChannels.kind, "email")));
+      if (!channel) {
+        await tx
+          .insert(notificationChannels)
+          .values({ orgId, kind: "email", target: "support-leads@acme-cloud.example", minRisk: "at_risk" });
       }
       return { orgId, userId, connectionId, policyIds: { enterprise: enterpriseId, premium: premiumId } };
     });

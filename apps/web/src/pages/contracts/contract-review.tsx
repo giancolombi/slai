@@ -43,7 +43,14 @@ import { api, errorMessage, isApiError } from "../../lib/api";
 import { usePersonName } from "../../lib/people";
 import { qk, useContract, useCustomers, useMe, usePolicy } from "../../lib/queries";
 import { PolicyForm } from "./policy-form";
-import { citationDomId, definedPaths, fieldDomId, normalizeDefinition, pathLabel } from "./policy-paths";
+import {
+  citationDomId,
+  definedPaths,
+  extractionPath,
+  fieldDomId,
+  normalizeDefinition,
+  pathLabel,
+} from "./policy-paths";
 import { type Citation, ReviewContext, type ReviewContextValue } from "./review-context";
 import { isResolved, type Resolution, reviewGate } from "./review-gate";
 
@@ -347,15 +354,32 @@ function PolicyReview({
 
   const readOnly = policy.status !== "draft";
   const dirty = JSON.stringify(draft) !== JSON.stringify(original);
-  const citations = useMemo(
-    () => new Map<string, Citation>(extraction.citations.map((c) => [c.path, c])),
-    [extraction.citations],
-  );
-  const ambiguities = extraction.ambiguities;
   // "Changed" is judged against the extraction, not the last save.
   const extracted = useMemo(
     () => normalizeDefinition(policy.definition, policy.name),
     [policy.definition, policy.name],
+  );
+  // One contract can yield several policies; keep only this policy's evidence, keyed by semantic path.
+  const policyIndex = Math.max(0, extraction.policyIds.indexOf(policy.id));
+  const scopedCitations = useMemo(
+    () =>
+      extraction.citations.flatMap((c) => {
+        const path = extractionPath(c.path, policyIndex, extracted);
+        return path ? [{ ...c, path }] : [];
+      }),
+    [extraction.citations, policyIndex, extracted],
+  );
+  const citations = useMemo(
+    () => new Map<string, Citation>(scopedCitations.map((c) => [c.path, c])),
+    [scopedCitations],
+  );
+  const ambiguities = useMemo(
+    () =>
+      extraction.ambiguities.flatMap((a) => {
+        const path = extractionPath(a.path, policyIndex, extracted);
+        return path ? [{ ...a, path }] : [];
+      }),
+    [extraction.ambiguities, policyIndex, extracted],
   );
 
   const invalidate = () =>
@@ -503,18 +527,18 @@ function PolicyReview({
             {preview && <PreviewCard preview={preview} onClose={() => setPreview(null)} />}
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink">Citations</h2>
-              <span className="font-mono text-2xs text-ink-muted tnum">{extraction.citations.length} clauses</span>
+              <span className="font-mono text-2xs text-ink-muted tnum">{scopedCitations.length} clauses</span>
             </div>
             <div
               ref={citationsRef}
               className="flex max-h-none flex-col gap-2.5 overflow-y-auto pr-1 scrollbar-thin lg:max-h-[calc(100dvh-13rem)]"
             >
-              {extraction.citations.length === 0 && (
+              {scopedCitations.length === 0 && (
                 <p className="rounded-md border border-dashed border-line-strong p-4 text-sm text-ink-muted">
                   The extraction returned no citations. Check every value against the original document.
                 </p>
               )}
-              {extraction.citations.map((c) => (
+              {scopedCitations.map((c) => (
                 // biome-ignore lint/a11y/noStaticElementInteractions: hover preview; the quote's field button is the keyboard path
                 <div
                   key={c.path}
