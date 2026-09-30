@@ -42,6 +42,23 @@ export const envSchema = z.object({
         .map((s) => s.trim())
         .filter(Boolean),
     ),
+  /**
+   * OAuth apps for "Continue with <Provider>" (T-57). A provider's button is live only
+   * when both its client id and secret are set; the redirect URI to register is
+   * `${API_URL}/api/v1/connections/oauth/<provider>/callback`.
+   */
+  OAUTH_ZENDESK_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_ZENDESK_CLIENT_SECRET: z.string().min(1).optional(),
+  OAUTH_INTERCOM_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_INTERCOM_CLIENT_SECRET: z.string().min(1).optional(),
+  OAUTH_HUBSPOT_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_HUBSPOT_CLIENT_SECRET: z.string().min(1).optional(),
+  OAUTH_SALESFORCE_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_SALESFORCE_CLIENT_SECRET: z.string().min(1).optional(),
+  OAUTH_ZOHO_DESK_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_ZOHO_DESK_CLIENT_SECRET: z.string().min(1).optional(),
+  OAUTH_HELP_SCOUT_CLIENT_ID: z.string().min(1).optional(),
+  OAUTH_HELP_SCOUT_CLIENT_SECRET: z.string().min(1).optional(),
   STORAGE_DRIVER: z.enum(["local"]).default("local"),
   STORAGE_LOCAL_DIR: z.string().default(".data/uploads"),
   /** Honor X-Forwarded-For for the client IP. Only enable behind a trusted proxy. */

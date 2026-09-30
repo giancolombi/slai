@@ -21,6 +21,7 @@ import { dashboardRoutes } from "./routes/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { notificationRoutes } from "./routes/notifications.js";
+import { oauthRoutes } from "./routes/oauth.js";
 import { orgRoutes } from "./routes/org.js";
 import { policyRoutes } from "./routes/policies.js";
 import { replayRoutes } from "./routes/replays.js";
@@ -79,6 +80,9 @@ export function createApp(deps: AppDeps) {
   // Our /auth routes, then better-auth's allowlisted endpoints behind the same middleware.
   app.route(AUTH_BASE, authRoutes(deps, auth));
   app.route(AUTH_BASE, authHandler(deps, auth));
+
+  // OAuth connect flow: browser navigations that check the session themselves and redirect on failure.
+  app.route(`${API_BASE}/connections/oauth`, oauthRoutes(deps));
 
   // Everything below needs a signed-in session whose second factor is done (the MFA gate).
   const authed = new Hono<AppEnv>();

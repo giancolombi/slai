@@ -237,6 +237,13 @@ export interface ConnectorInfo {
   supportsWebhooks: boolean;
   write: { internalNote: boolean; publicReply: boolean; assign: boolean; priority: boolean; tags: boolean };
   docsUrl: string;
+  /** Present when the provider supports "Continue with <Provider>" (T-57). */
+  oauth?: {
+    /** False when this deployment has no OAuth app for the provider (OAUTH_<PROVIDER>_CLIENT_ID/SECRET). */
+    configured: boolean;
+    /** Values asked for before the redirect, e.g. the Zendesk subdomain. */
+    params: { key: string; label: string; placeholder?: string; help?: string; options?: string[] }[];
+  };
 }
 export interface Connection {
   id: string;
@@ -258,6 +265,63 @@ export const createConnectionBody = z.object({
   credentials: z.record(z.string(), z.string()),
   config: z.record(z.string(), z.unknown()).default({}),
 });
+
+// ---------- status/priority mapping (PR-8, T-25) ----------
+
+export const TICKET_STATUSES = [
+  "new",
+  "open",
+  "pending",
+  "on_hold",
+  "solved",
+  "closed",
+] as const satisfies readonly TicketStatus[];
+export const PRIORITIES = ["urgent", "high", "normal", "low"] as const satisfies readonly Priority[];
+
+export interface FieldMappingTable {
+  status: Record<string, TicketStatus>;
+  /** null: "no priority" (the policy's default priority applies). */
+  priority: Record<string, Priority | null>;
+}
+export interface ConnectionMapping {
+  /** The connector's shipped mapping. */
+  defaults: FieldMappingTable;
+  /** This connection's overrides (entries that differ from the defaults). */
+  overrides: FieldMappingTable;
+  /** Raw values sync found that nothing maps yet (they count as open / no priority until mapped). */
+  unmapped: { field: "status" | "priority"; raw: string }[];
+  /** Distinct raw values seen on this connection's stored tickets. */
+  observed: { status: string[]; priority: string[] };
+}
+const rawKey = z.string().trim().min(1).max(200);
+const MAX_MAPPING_ENTRIES = 500;
+/** PUT /connections/:id/mapping replaces the overrides; `{ status: {}, priority: {} }` resets to the defaults. */
+export const updateMappingBody = z.object({
+  status: z
+    .record(rawKey, z.enum(TICKET_STATUSES))
+    .default({})
+    .refine((r) => Object.keys(r).length <= MAX_MAPPING_ENTRIES, `At most ${MAX_MAPPING_ENTRIES} statuses.`),
+  priority: z
+    .record(rawKey, z.enum(PRIORITIES).nullable())
+    .default({})
+    .refine((r) => Object.keys(r).length <= MAX_MAPPING_ENTRIES, `At most ${MAX_MAPPING_ENTRIES} priorities.`),
+});
+
+// ---------- webhook secret (T-57) ----------
+
+/** Returned only by the admin-only, audited reveal (and never in list or detail DTOs). */
+export interface WebhookSecretReveal {
+  webhookUrl: string;
+  /** "slai": paste `secret` into the help desk. "provider": the help desk signs; paste its secret into slai. */
+  secretSource: "slai" | "provider";
+  /** slai's generated secret; null when the provider's own secret is used (or none was set yet). */
+  secret: string | null;
+  /** True when a secret is stored (for "provider", whether it was pasted in yet). */
+  configured: boolean;
+  steps: string[];
+}
+/** For providers that generate their own signing secret: the admin pastes it into slai. */
+export const setWebhookSecretBody = z.object({ secret: z.string().trim().min(8).max(500) });
 
 // ---------- customers (our customer's customers) ----------
 
@@ -552,6 +616,11 @@ export const notificationChannelBody = z.object({
  *   GET    /connections/:id        → Connection           DELETE /connections/:id (admin)
  *   POST   /connections/:id/test   → { ok, accountName }
  *   POST   /connections/:id/sync   → 202
+ *   GET    /connections/:id/mapping → ConnectionMapping    PUT updateMappingBody → ConnectionMapping (admin)
+ *   POST   /connections/:id/webhook-secret/reveal → WebhookSecretReveal (admin, audited)
+ *   PUT    /connections/:id/webhook-secret  setWebhookSecretBody → 204 (admin, audited; provider-signed only)
+ *   GET    /connections/oauth/:provider/start?name=&<params> → 302 to the provider (admin)
+ *   GET    /connections/oauth/:provider/callback → 302 to APP_URL/connections/:id (or ?oauth_error=)
  *   POST   /webhooks/:connectionId (public; signature-verified by the connector)
  *
  *   GET    /customers              → List<CustomerAccount>   POST /customers upsertCustomerBody
