@@ -13,6 +13,7 @@ import { and, desc, eq, inArray, lt } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
 import { type AppDeps, type AppEnv, auditBase, auth } from "../context.js";
+import { contractText, isTextExtractable } from "../contract-text.js";
 import { ApiError, badRequest, conflict, notFound } from "../errors.js";
 import { toContract } from "../mappers.js";
 import { assertInOrg } from "../org-refs.js";
@@ -165,6 +166,30 @@ export function contractRoutes(deps: AppDeps) {
       await notifyEvent(tx, { orgId: a.orgId, type: "contract.updated", id });
     });
     return c.json({ queued: true }, 202);
+  });
+
+  app.get("/:id/text", async (c) => {
+    const a = auth(c);
+    const id = idParam(c, "id", "Contract");
+    const row = await deps.orgDb.withOrg(a.orgId, async (tx) => {
+      const { c: r } = await loadOne(tx, id);
+      await audit(tx, {
+        ...auditBase(c),
+        orgId: a.orgId,
+        action: "contract.text_viewed",
+        target: { type: "contract", id },
+      });
+      return r;
+    });
+    if (!isTextExtractable(row.mediaType)) {
+      throw new ApiError(415, "unsupported_media_type", "This file type has no readable text.");
+    }
+    try {
+      return c.json(await contractText(row, await deps.storage.get(row.storageKey)));
+    } catch (e) {
+      if (e instanceof ApiError) throw e;
+      throw new ApiError(422, "unreadable_document", "The document's text couldn't be read. Open the original.");
+    }
   });
 
   app.get("/:id/file", async (c) => {

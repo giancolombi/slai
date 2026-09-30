@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { auditEvents } from "@slai/db";
-import type { Contract } from "@slai/shared";
+import type { Contract, ContractText } from "@slai/shared";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+import { boundPages } from "../src/contract-text.js";
 import { addMember, setupApp, signup } from "./harness.js";
 
 const ctx = setupApp();
@@ -83,6 +85,52 @@ describe("contract upload", () => {
     const big = Buffer.concat([PDF, Buffer.alloc(20 * 1024 * 1024 + 1, 0x20)]);
     const res = await client.req("POST", "/contracts", { body: form(big, "big.pdf") });
     expect(res.status).toBe(413);
+  });
+
+  it("returns the extracted text with PDF page boundaries, audited, and only to its own org", async () => {
+    const a = await signup(ctx);
+    const b = await signup(ctx);
+    const pdf = readFileSync(new URL("../../../packages/agents/test/fixtures/globex-exhibit.pdf", import.meta.url));
+    const up = await a.client.req<Contract>("POST", "/contracts", {
+      body: form(new Uint8Array(pdf), "globex-exhibit.pdf"),
+    });
+    expect(up.status).toBe(201);
+    const res = await a.client.get<ContractText>(`/contracts/${up.body.id}/text`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ contractId: up.body.id, filename: "globex-exhibit.pdf", truncated: false });
+    expect(res.body.pages.length).toBeGreaterThan(0);
+    expect(res.body.pages[0]!.page).toBe(1);
+    expect(res.body.pages.map((p) => p.text).join(" ")).toMatch(/first response within 1 hour/i);
+    const audited = await ctx.owner.db
+      .select()
+      .from(auditEvents)
+      .where(and(eq(auditEvents.orgId, a.orgId), eq(auditEvents.action, "contract.text_viewed")));
+    expect(audited).toHaveLength(1);
+    // RLS: another org can't read it, even by id.
+    expect((await b.client.get(`/contracts/${up.body.id}/text`)).status).toBe(404);
+
+    const txt = await a.client.req<Contract>("POST", "/contracts", {
+      body: form(Buffer.from("Critical: respond within 1 hour.\nNormal: within 1 day."), "sla.txt"),
+    });
+    const plain = await a.client.get<ContractText>(`/contracts/${txt.body.id}/text`);
+    expect(plain.body.pages).toEqual([{ page: null, text: "Critical: respond within 1 hour.\nNormal: within 1 day." }]);
+  });
+
+  it("bounds the text it returns", () => {
+    const pages = [
+      { page: 1, text: "a".repeat(6) },
+      { page: 2, text: "b".repeat(6) },
+      { page: 3, text: "c" },
+    ];
+    expect(boundPages(pages, 20)).toEqual({ pages, truncated: false });
+    expect(boundPages(pages, 9)).toEqual({
+      pages: [
+        { page: 1, text: "aaaaaa" },
+        { page: 2, text: "bbb" },
+      ],
+      truncated: true,
+    });
+    expect(boundPages(pages, 6)).toEqual({ pages: [{ page: 1, text: "aaaaaa" }], truncated: true });
   });
 
   it("rejects another org's customer id and viewer uploads", async () => {

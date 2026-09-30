@@ -311,6 +311,20 @@ export interface Contract {
 }
 /** `POST /contracts` is multipart: `file` (pdf/docx/txt/md, ≤ 20 MB) + optional `customerAccountId`. */
 
+/** Longest contract text `GET /contracts/:id/text` returns; the rest is cut and `truncated` set. */
+export const CONTRACT_TEXT_MAX_CHARS = 400_000;
+/**
+ * `GET /contracts/:id/text`: the plain text slai extracted from the file (unpdf for PDF,
+ * mammoth for DOCX), for reading citations in place. A PDF has one entry per page
+ * (`page` from 1, matching citation pages); other formats are one entry with `page: null`.
+ */
+export interface ContractText {
+  contractId: string;
+  filename: string;
+  pages: { page: number | null; text: string }[];
+  truncated: boolean;
+}
+
 export type PolicyStatus = "draft" | "active" | "superseded" | "archived";
 export interface Policy {
   id: string;
@@ -579,6 +593,7 @@ export const notificationChannelBody = z.object({
  *   GET    /contracts              → List<Contract>       POST /contracts (multipart) → Contract
  *   GET    /contracts/:id          → Contract             POST /contracts/:id/extract → 202
  *   GET    /contracts/:id/file     → the original file (download)
+ *   GET    /contracts/:id/text     → ContractText (extracted plain text with page boundaries)
  *
  *   GET    /policies               → List<Policy>         POST /policies { name, definition } → Policy
  *   GET    /policies/:id           → Policy               PATCH /policies/:id updatePolicyBody (draft only)
