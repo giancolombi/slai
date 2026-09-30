@@ -45,7 +45,9 @@ import {
   Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef } from "react";
+import { LiveIndicator } from "./components/live-indicator";
 import { api, errorMessage } from "./lib/api";
+import { useLiveUpdates } from "./lib/live";
 import { useActions, useContracts, useMe } from "./lib/queries";
 
 export const MOCK_MODE = import.meta.env.VITE_MOCK_API === "1";
@@ -231,6 +233,9 @@ function OrgMenu() {
 
 export function AppLayout() {
   const nav = <Nav />;
+  const { data: me } = useMe();
+  // The mock API has no event stream; it keeps polling instead.
+  useLiveUpdates(me?.organization.id, !MOCK_MODE);
   return (
     <AppShell
       sidebar={nav}
@@ -249,6 +254,7 @@ export function AppLayout() {
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            <LiveIndicator />
             <TicketSearch />
             <ThemeToggle />
             <UserMenu />

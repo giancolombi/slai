@@ -38,6 +38,9 @@ importers:
       '@simplewebauthn/server':
         specifier: 13.3.3
         version: 13.3.3
+      '@slai/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
       '@slai/connectors':
         specifier: workspace:*
         version: link:../../packages/connectors

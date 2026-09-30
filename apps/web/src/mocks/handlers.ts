@@ -3,6 +3,7 @@ import type {
   AutonomyRule,
   Connection,
   Contract,
+  ContractText,
   CustomerAccount,
   KnowledgeArticle,
   KnowledgeSource,
@@ -130,6 +131,7 @@ function ssoProviderFor(email: string) {
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
 const actor = () => getDb().me.user.name;
+const actorId = () => getDb().me.user.id;
 
 /** Wraps a handler with session + CSRF checks, the persisted save, and latency. */
 function guarded<Args extends { request: Request; params: Record<string, string | readonly string[] | undefined> }>(
@@ -190,6 +192,7 @@ function advanceContracts(now: number) {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: policyId, name },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(readyAt).toISOString(),
     });
@@ -224,6 +227,29 @@ function advanceReplays(now: number) {
       };
     }
   }
+}
+
+/** Plausible contract text for the demo: each cited quote sits on its cited page among boilerplate clauses. */
+function mockContractText(c: Contract): ContractText {
+  const citations = c.extraction?.citations ?? [];
+  const boiler = [
+    "This Schedule forms part of the Agreement between the parties and is subject to its terms.",
+    "Capitalised terms not defined here have the meaning given in the Master Services Agreement.",
+    "The Supplier shall provide the Support Services with reasonable skill, care and diligence.",
+    "Nothing in this Schedule limits either party's rights under clause 14 (Liability).",
+  ];
+  const paged = citations.some((x) => x.page !== null);
+  const last = Math.max(1, ...citations.map((x) => x.page ?? 1));
+  const pages: ContractText["pages"] = [];
+  for (let n = 1; n <= (paged ? last : 1); n++) {
+    const quotes = citations.filter((x) => (paged ? x.page === n : true)).map((x) => x.quote);
+    const clauses = [...new Set(quotes)].flatMap((q, i) => [`${n}.${i + 1} ${q}`, boiler[(n + i) % boiler.length]!]);
+    pages.push({
+      page: paged ? n : null,
+      text: [`${c.filename}`, "", boiler[n % boiler.length]!, "", ...clauses.map((x) => `${x}\n`)].join("\n"),
+    });
+  }
+  return { contractId: c.id, filename: c.filename, pages, truncated: false };
 }
 
 function customerView(c: ReturnType<typeof org>["customers"][number], now: number): CustomerAccount {
@@ -835,6 +861,14 @@ export const handlers = [
       return c ? HttpResponse.json(c) : fail(404, "not_found", "Contract not found.");
     }),
   ),
+  http.get(
+    url("/contracts/:id/text"),
+    guarded(({ params }) => {
+      const c = org().contracts.find((x) => x.id === params.id);
+      if (!c) return fail(404, "not_found", "Contract not found.");
+      return HttpResponse.json(mockContractText(c));
+    }),
+  ),
   http.get(url("/contracts/:id/file"), async ({ params }) => {
     const c = org().contracts.find((x) => x.id === params.id);
     if (!c) return fail(404, "not_found", "Contract not found.");
@@ -860,7 +894,8 @@ export const handlers = [
         customerAccountId,
         status: "extracting",
         uploadedAt: new Date().toISOString(),
-        uploadedBy: actor(),
+        uploadedBy: actorId(),
+        uploadedByName: actor(),
         error: null,
         extraction: null,
       };
@@ -909,6 +944,7 @@ export const handlers = [
         isDefault: body.isDefault,
         definition: body.definition,
         approvedBy: null,
+        approvedByName: null,
         approvedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -949,7 +985,8 @@ export const handlers = [
         for (const x of o.policies)
           if (x.status === "active" && x.name === p.name && x.id !== p.id) x.status = "superseded";
         p.status = "active";
-        p.approvedBy = actor();
+        p.approvedBy = actorId();
+        p.approvedByName = actor();
         p.approvedAt = new Date().toISOString();
         const contract = o.contracts.find((c) => c.id === p.contractId);
         if (contract?.extraction?.policyIds.every((id) => o.policies.find((x) => x.id === id)?.status === "active")) {
@@ -1075,6 +1112,7 @@ export const handlers = [
           blockedReason: null,
           createdAt: new Date(now).toISOString(),
           decidedBy: null,
+          decidedByName: null,
           decidedAt: null,
         });
       }
@@ -1110,7 +1148,8 @@ export const handlers = [
       const edited = body.body !== undefined && body.body !== a.body;
       if (body.body !== undefined) a.body = body.body;
       a.status = "sent";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       const t = o.tickets.find((x) => x.id === a.ticketId);
       if (t) {
@@ -1154,7 +1193,8 @@ export const handlers = [
       if (a.status !== "proposed" && a.status !== "blocked")
         return fail(409, "already_decided", "This draft was already decided.");
       a.status = "rejected";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       audit(actor(), "action.rejected", { type: "agent_action", id: a.id }, { reason: body.reason ?? null });
       return HttpResponse.json(a);

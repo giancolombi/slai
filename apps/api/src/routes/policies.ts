@@ -26,6 +26,7 @@ import { toPolicy } from "../mappers.js";
 import { requireRole } from "../middleware/auth.js";
 import { assertInOrg } from "../org-refs.js";
 import { decodeCursor, idCursor, page, pageQuery } from "../pagination.js";
+import { nameOf, userNames } from "../people.js";
 import { body, idParam, query } from "../validate.js";
 
 const PREVIEW_MAX_TICKETS = 2000;
@@ -44,6 +45,11 @@ export function validDefinition(definition: unknown, id: string, name: string): 
   }
 }
 
+/** The DTO with the approver's display name. */
+async function policyDto(tx: Tx, p: typeof slaPolicies.$inferSelect) {
+  return toPolicy(p, nameOf(await userNames(tx, [p.approvedBy]), p.approvedBy));
+}
+
 async function loadPolicy(tx: Tx, id: string, lock = false) {
   const q = tx.select().from(slaPolicies).where(eq(slaPolicies.id, id));
   const [row] = lock ? await q.for("update") : await q;
@@ -57,17 +63,27 @@ export function policyRoutes(deps: AppDeps) {
   app.get("/", async (c) => {
     const q = query(c, pageQuery.extend({ status: z.enum(["draft", "active", "superseded", "archived"]).optional() }));
     const cur = decodeCursor(q.cursor, idCursor);
-    const rows = await deps.orgDb.withOrg(auth(c).orgId, (tx) =>
-      tx
+    const res = await deps.orgDb.withOrg(auth(c).orgId, async (tx) => {
+      const rows = await tx
         .select()
         .from(slaPolicies)
         .where(
           and(q.status ? eq(slaPolicies.status, q.status) : undefined, cur ? lt(slaPolicies.id, cur.id) : undefined),
         )
         .orderBy(desc(slaPolicies.id))
-        .limit(q.limit + 1),
-    );
-    return c.json(page(rows, q.limit, toPolicy, (r) => ({ id: r.id })));
+        .limit(q.limit + 1);
+      const names = await userNames(
+        tx,
+        rows.map((r) => r.approvedBy),
+      );
+      return page(
+        rows,
+        q.limit,
+        (r) => toPolicy(r, nameOf(names, r.approvedBy)),
+        (r) => ({ id: r.id }),
+      );
+    });
+    return c.json(res);
   });
 
   app.post("/", async (c) => {
@@ -117,7 +133,7 @@ export function policyRoutes(deps: AppDeps) {
 
   app.get("/:id", async (c) => {
     const id = idParam(c, "id", "Policy");
-    return c.json(toPolicy(await deps.orgDb.withOrg(auth(c).orgId, (tx) => loadPolicy(tx, id))));
+    return c.json(await deps.orgDb.withOrg(auth(c).orgId, async (tx) => policyDto(tx, await loadPolicy(tx, id))));
   });
 
   app.patch("/:id", async (c) => {
@@ -205,7 +221,7 @@ export function policyRoutes(deps: AppDeps) {
       });
       return r!;
     });
-    return c.json(toPolicy(row));
+    return c.json(toPolicy(row, a.user.name));
   });
 
   app.post("/:id/archive", requireRole("admin"), async (c) => {
@@ -213,7 +229,7 @@ export function policyRoutes(deps: AppDeps) {
     const id = idParam(c, "id", "Policy");
     const row = await deps.orgDb.withOrg(a.orgId, async (tx) => {
       const p = await loadPolicy(tx, id, true);
-      if (p.status === "archived") return p;
+      if (p.status === "archived") return policyDto(tx, p);
       const [r] = await tx
         .update(slaPolicies)
         .set({ status: "archived", isDefault: false })
@@ -226,9 +242,9 @@ export function policyRoutes(deps: AppDeps) {
         target: { type: "policy", id },
         metadata: { from: p.status, version: p.version },
       });
-      return r!;
+      return policyDto(tx, r!);
     });
-    return c.json(toPolicy(row));
+    return c.json(row);
   });
 
   app.post("/:id/preview", async (c) => {

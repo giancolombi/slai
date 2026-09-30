@@ -145,6 +145,13 @@ export interface Member {
   lastLoginAt: string | null;
 }
 export const inviteBody = z.object({ email: z.email(), role: z.enum(ROLES) });
+/** `POST /members/invite` → 201 Invitation. The token is never returned; it goes only to the invitee. */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: string;
+}
 export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -291,7 +298,10 @@ export interface Contract {
   customerAccountId: string | null;
   status: ContractStatus;
   uploadedAt: string;
-  uploadedBy: string;
+  /** User id of the uploader (null if that user was deleted). */
+  uploadedBy: string | null;
+  /** The uploader's display name, so clients needn't resolve `uploadedBy`. */
+  uploadedByName: string | null;
   error: string | null;
   /** Present once extraction finished. */
   extraction: {
@@ -303,6 +313,20 @@ export interface Contract {
 }
 /** `POST /contracts` is multipart: `file` (pdf/docx/txt/md, ≤ 20 MB) + optional `customerAccountId`. */
 
+/** Longest contract text `GET /contracts/:id/text` returns; the rest is cut and `truncated` set. */
+export const CONTRACT_TEXT_MAX_CHARS = 400_000;
+/**
+ * `GET /contracts/:id/text`: the plain text slai extracted from the file (unpdf for PDF,
+ * mammoth for DOCX), for reading citations in place. A PDF has one entry per page
+ * (`page` from 1, matching citation pages); other formats are one entry with `page: null`.
+ */
+export interface ContractText {
+  contractId: string;
+  filename: string;
+  pages: { page: number | null; text: string }[];
+  truncated: boolean;
+}
+
 export type PolicyStatus = "draft" | "active" | "superseded" | "archived";
 export interface Policy {
   id: string;
@@ -313,7 +337,10 @@ export interface Policy {
   isDefault: boolean;
   /** The engine's SlaPolicy definition (validated by @slai/sla-engine policySchema). */
   definition: unknown;
+  /** User id of the approving admin; null while a draft. */
   approvedBy: string | null;
+  /** The approver's display name. */
+  approvedByName: string | null;
   approvedAt: string | null;
   createdAt: string;
 }
@@ -415,7 +442,13 @@ export interface AgentAction {
   /** Why autopilot did not send it (guardrail), if blocked. */
   blockedReason: string | null;
   createdAt: string;
+  /**
+   * User id of the person who approved or rejected it. Null with `decidedAt` set means
+   * slai decided on its own (an autopilot send, or an assist-mode internal note).
+   */
   decidedBy: string | null;
+  /** The decider's display name (null when `decidedBy` is null). */
+  decidedByName: string | null;
   decidedAt: string | null;
   /** Knowledge the draft relied on (public replies). Always set by the API; optional for older clients. */
   usedKnowledge?: KnowledgeRef[];
@@ -625,7 +658,7 @@ export const notificationChannelBody = z.object({
  *   PATCH  /org/sso/providers/:id  updateSsoProviderBody → SsoProvider (admin)
  *   DELETE /org/sso/providers/:id  (admin)
  *   POST   /org/sso/providers/:id/verify-domain → SsoProvider | 422 domain_not_verified (admin)
- *   GET    /members                → List<Member>         POST /members/invite inviteBody (admin)
+ *   GET    /members                → List<Member>         POST /members/invite inviteBody → Invitation (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
  *
  *   GET    /connectors             → ConnectorInfo[]
@@ -641,6 +674,7 @@ export const notificationChannelBody = z.object({
  *   GET    /contracts              → List<Contract>       POST /contracts (multipart) → Contract
  *   GET    /contracts/:id          → Contract             POST /contracts/:id/extract → 202
  *   GET    /contracts/:id/file     → the original file (download)
+ *   GET    /contracts/:id/text     → ContractText (extracted plain text with page boundaries)
  *
  *   GET    /policies               → List<Policy>         POST /policies { name, definition } → Policy
  *   GET    /policies/:id           → Policy               PATCH /policies/:id updatePolicyBody (draft only)
@@ -671,4 +705,4 @@ export const notificationChannelBody = z.object({
  *   GET    /events                 Server-Sent Events: `ticket.updated`, `action.created`, `replay.progress`
  *   GET    /healthz, /readyz       (unauthenticated)
  */
-export const API_BASE = "/api/v1";
+export { API_BASE } from "./base.js";

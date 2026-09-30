@@ -182,6 +182,20 @@ export const AGENTS = [
   "Arjun Patel",
 ] as const;
 
+/** Mock user ids follow the member list: "Maya Okafor" → "u_maya". */
+export function userIdFor(name: string): string {
+  return `u_${name
+    .split(" ")[0]!
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[^a-z]/g, "")}`;
+}
+
+/** The decider fields of an action; null means slai decided (autopilot). */
+function decider(name: string | null) {
+  return { decidedBy: name ? userIdFor(name) : null, decidedByName: name };
+}
+
 export function buildMembers(now: number): Member[] {
   const roles: Member["role"][] = ["admin", "admin", "member", "member", "member", "member", "viewer", "member"];
   return [
@@ -454,7 +468,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.northwind,
       isDefault: false,
       definition: { ...premierDefinition, id: POLICY_PREMIER },
-      approvedBy: "Maya Okafor",
+      approvedBy: userIdFor("Maya Okafor"),
+      approvedByName: "Maya Okafor",
       approvedAt: new Date(now - 38 * DAY).toISOString(),
       createdAt: new Date(now - 39 * DAY).toISOString(),
     },
@@ -466,7 +481,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.standard,
       isDefault: true,
       definition: { ...standardDefinition, id: POLICY_STANDARD },
-      approvedBy: "Priya Raman",
+      approvedBy: userIdFor("Priya Raman"),
+      approvedByName: "Priya Raman",
       approvedAt: new Date(now - 97 * DAY).toISOString(),
       createdAt: new Date(now - 98 * DAY).toISOString(),
     },
@@ -479,6 +495,7 @@ export function buildPolicies(now: number): Policy[] {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: POLICY_KESTREL },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(now - 22 * MIN).toISOString(),
     },
@@ -490,7 +507,8 @@ export function buildPolicies(now: number): Policy[] {
       contractId: CONTRACT_IDS.northwind,
       isDefault: false,
       definition: { ...premierDefinition, id: POLICY_PREMIER_V2 },
-      approvedBy: "Maya Okafor",
+      approvedBy: userIdFor("Maya Okafor"),
+      approvedByName: "Maya Okafor",
       approvedAt: new Date(now - 131 * DAY).toISOString(),
       createdAt: new Date(now - 132 * DAY).toISOString(),
     },
@@ -505,7 +523,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.kestrel,
       status: "needs_review",
       uploadedAt: new Date(now - 24 * MIN).toISOString(),
-      uploadedBy: "Maya Okafor",
+      uploadedBy: userIdFor("Maya Okafor"),
+      uploadedByName: "Maya Okafor",
       error: null,
       extraction: {
         summary:
@@ -521,7 +540,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.halcyon,
       status: "extracting",
       uploadedAt: new Date(now - 90_000).toISOString(),
-      uploadedBy: "Priya Raman",
+      uploadedBy: userIdFor("Priya Raman"),
+      uploadedByName: "Priya Raman",
       error: null,
       extraction: null,
     },
@@ -531,7 +551,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.northwind,
       status: "approved",
       uploadedAt: new Date(now - 39 * DAY).toISOString(),
-      uploadedBy: "Maya Okafor",
+      uploadedBy: userIdFor("Maya Okafor"),
+      uploadedByName: "Maya Okafor",
       error: null,
       extraction: {
         summary:
@@ -554,7 +575,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: null,
       status: "approved",
       uploadedAt: new Date(now - 98 * DAY).toISOString(),
-      uploadedBy: "Priya Raman",
+      uploadedBy: userIdFor("Priya Raman"),
+      uploadedByName: "Priya Raman",
       error: null,
       extraction: {
         summary: "Default support terms for all customers without a negotiated SLA.",
@@ -569,7 +591,8 @@ export function buildContracts(now: number): Contract[] {
       customerAccountId: CUSTOMER_IDS.parcelhub,
       status: "failed",
       uploadedAt: new Date(now - 3 * DAY).toISOString(),
-      uploadedBy: "Kofi Mensah",
+      uploadedBy: userIdFor("Kofi Mensah"),
+      uploadedByName: "Kofi Mensah",
       error:
         "No SLA schedule found. The document looks like a scanned image without a text layer; upload a text PDF or DOCX.",
       extraction: null,
@@ -1056,6 +1079,7 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
       blockedReason: blocked ? "Guardrail: mentions a credit amount (pricing/legal commitment). Needs a human." : null,
       createdAt: new Date(now - (i * 7 + 3) * MIN).toISOString(),
       decidedBy: null,
+      decidedByName: null,
       decidedAt: null,
     };
   });
@@ -1078,7 +1102,7 @@ export function buildActions(now: number, tickets: MockTicket[], riskOf: (t: Moc
       confidence: Number((0.78 + r.next() * 0.2).toFixed(2)),
       blockedReason: null,
       createdAt: new Date(now - (i + 2) * 5 * HOUR).toISOString(),
-      decidedBy: sent ? (i % 2 ? "autopilot" : r.pick(AGENTS)) : r.pick(AGENTS),
+      ...decider(sent ? (i % 2 ? null : r.pick(AGENTS)) : r.pick(AGENTS)),
       decidedAt: new Date(now - (i + 2) * 5 * HOUR + 4 * MIN).toISOString(),
     });
   });
