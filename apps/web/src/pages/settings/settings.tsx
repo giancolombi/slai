@@ -33,6 +33,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage } from "../../lib/api";
 import { qk, useChannels, useMe, useOrg } from "../../lib/queries";
+import { OffboardingSection } from "./offboarding";
 import { SecurityTab } from "./security";
 import { SsoTab } from "./sso";
 
@@ -53,7 +54,7 @@ const riskOptions = MIN_RISKS.map((r) => {
 
 // ---------------------------------------------------------------- organization
 
-function OrganizationTab({ canEdit }: { canEdit: boolean }) {
+function OrganizationTab({ canEdit, isOwner }: { canEdit: boolean; isOwner: boolean }) {
   const org = useOrg();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
@@ -88,49 +89,54 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <Card>
-      <form onSubmit={submit} noValidate>
-        <CardHeader
-          title="Organization"
-          description={canEdit ? "Visible to everyone in your organization." : "Only admins can change these settings."}
-        />
-        <CardContent className="flex flex-col gap-5">
-          <Field label="Name" error={error ?? undefined} className="max-w-md">
-            <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
-          </Field>
-          <p className="flex items-center gap-2 text-xs text-ink-muted">
-            <ShieldCheck className="size-3.5 text-ok-text" aria-hidden />
-            Two-factor authentication is required for everyone (an authenticator app or a passkey; SSO users through
-            their identity provider).
-          </p>
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <span>Plan</span>
-            <Badge tone="accent" size="sm" className="capitalize">
-              {org.data.plan}
-            </Badge>
-            <Link to="/usage" className="font-medium text-accent-text hover:underline">
-              Usage & billing
-            </Link>
-          </div>
-        </CardContent>
-        {canEdit && (
-          <CardFooter>
-            <Button
-              variant="ghost"
-              disabled={!dirty}
-              onClick={() => {
-                setName(org.data.name);
-              }}
-            >
-              Discard
-            </Button>
-            <Button type="submit" variant="primary" disabled={!dirty} loading={save.isPending}>
-              Save changes
-            </Button>
-          </CardFooter>
-        )}
-      </form>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <form onSubmit={submit} noValidate>
+          <CardHeader
+            title="Organization"
+            description={
+              canEdit ? "Visible to everyone in your organization." : "Only admins can change these settings."
+            }
+          />
+          <CardContent className="flex flex-col gap-5">
+            <Field label="Name" error={error ?? undefined} className="max-w-md">
+              <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
+            </Field>
+            <p className="flex items-center gap-2 text-xs text-ink-muted">
+              <ShieldCheck className="size-3.5 text-ok-text" aria-hidden />
+              Two-factor authentication is required for everyone (an authenticator app or a passkey; SSO users through
+              their identity provider).
+            </p>
+            <div className="flex items-center gap-2 text-xs text-ink-muted">
+              <span>Plan</span>
+              <Badge tone="accent" size="sm" className="capitalize">
+                {org.data.plan}
+              </Badge>
+              <Link to="/usage" className="font-medium text-accent-text hover:underline">
+                Usage & billing
+              </Link>
+            </div>
+          </CardContent>
+          {canEdit && (
+            <CardFooter>
+              <Button
+                variant="ghost"
+                disabled={!dirty}
+                onClick={() => {
+                  setName(org.data.name);
+                }}
+              >
+                Discard
+              </Button>
+              <Button type="submit" variant="primary" disabled={!dirty} loading={save.isPending}>
+                Save changes
+              </Button>
+            </CardFooter>
+          )}
+        </form>
+      </Card>
+      {isOwner && <OffboardingSection orgName={org.data.name} />}
+    </div>
   );
 }
 
@@ -416,7 +422,7 @@ export function SettingsPage() {
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
         </TabsList>
         <TabsContent value="organization" className="pt-5">
-          <OrganizationTab canEdit={canEdit} />
+          <OrganizationTab canEdit={canEdit} isOwner={me?.role === "owner"} />
         </TabsContent>
         <TabsContent value="security" className="pt-5">
           <SecurityTab />
