@@ -1,0 +1,206 @@
+{
+  "type": "conversation",
+  "id": "555",
+  "title": "Webhook deliveries delayed by 30+ minutes",
+  "created_at": 1790586000,
+  "updated_at": 1790668800,
+  "waiting_since": 1790668800,
+  "snoozed_until": null,
+  "open": true,
+  "state": "open",
+  "read": true,
+  "priority": "high",
+  "admin_assignee_id": 991,
+  "team_assignee_id": "5017691",
+  "tags": {
+    "type": "tag.list",
+    "tags": [
+      {
+        "type": "tag",
+        "id": "123",
+        "name": "api",
+        "applied_at": 1790586900,
+        "applied_by": { "type": "admin", "id": "991" }
+      }
+    ]
+  },
+  "conversation_rating": null,
+  "source": {
+    "type": "conversation",
+    "id": "403918330",
+    "delivered_as": "customer_initiated",
+    "subject": "",
+    "body": "<p>Webhooks for order.updated are arriving 30-45 minutes late.</p>",
+    "author": {
+      "type": "user",
+      "id": "6329bd9ffe4e2e91dac76188",
+      "name": "Liam Okafor",
+      "email": "liam@bluepeak.example"
+    },
+    "attachments": [],
+    "url": null,
+    "redacted": false
+  },
+  "contacts": {
+    "type": "contact.list",
+    "contacts": [{ "type": "contact", "id": "6329bd9ffe4e2e91dac76188", "external_id": "u-77" }]
+  },
+  "teammates": { "type": "admin.list", "teammates": [{ "type": "admin", "id": "991" }] },
+  "first_contact_reply": { "created_at": 1790586000, "type": "conversation", "url": null },
+  "sla_applied": { "type": "conversation_sla_summary", "sla_name": "Enterprise", "sla_status": "active" },
+  "statistics": { "type": "conversation_statistics", "first_admin_reply_at": 1790587800, "count_reopens": 1 },
+  "ticket": null,
+  "linked_objects": { "type": "list", "data": [], "total_count": 0, "has_more": false },
+  "ai_agent_participated": true,
+  "conversation_parts": {
+    "type": "conversation_part.list",
+    "total_count": 10,
+    "conversation_parts": [
+      {
+        "type": "conversation_part",
+        "id": "7001",
+        "part_type": "comment",
+        "body": "Thanks for reaching out! Fin here, an agent will be with you shortly.",
+        "created_at": 1790586030,
+        "updated_at": 1790586030,
+        "notified_at": 1790586030,
+        "assigned_to": null,
+        "author": { "type": "bot", "id": "fin-1", "name": "Fin", "email": "" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7002",
+        "part_type": "note",
+        "body": "Queue lag dashboard confirms backlog in us-east.",
+        "created_at": 1790586900,
+        "updated_at": 1790586900,
+        "notified_at": 1790586900,
+        "assigned_to": null,
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7003",
+        "part_type": "assignment",
+        "body": "Hi Liam, I'm looking into the delivery delay now.",
+        "created_at": 1790587800,
+        "updated_at": 1790587800,
+        "notified_at": 1790587800,
+        "assigned_to": { "type": "admin", "id": "991" },
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7004",
+        "part_type": "snoozed",
+        "body": null,
+        "created_at": 1790588700,
+        "updated_at": 1790588700,
+        "notified_at": 1790588700,
+        "assigned_to": null,
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7005",
+        "part_type": "comment",
+        "body": "Still delayed on our side, here is a delivery id: dlv_123.",
+        "created_at": 1790596800,
+        "updated_at": 1790596800,
+        "notified_at": 1790596800,
+        "assigned_to": null,
+        "author": {
+          "type": "user",
+          "id": "6329bd9ffe4e2e91dac76188",
+          "name": "Liam Okafor",
+          "email": "liam@bluepeak.example"
+        },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7006",
+        "part_type": "unsnoozed",
+        "body": null,
+        "created_at": 1790596800,
+        "updated_at": 1790596800,
+        "notified_at": 1790596800,
+        "assigned_to": null,
+        "author": { "type": "bot", "id": "op-1", "name": "Operator", "email": "" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7007",
+        "part_type": "comment",
+        "body": "The queue is drained and deliveries are real-time again.",
+        "created_at": 1790597100,
+        "updated_at": 1790597100,
+        "notified_at": 1790597100,
+        "assigned_to": null,
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7008",
+        "part_type": "close",
+        "body": null,
+        "created_at": 1790600400,
+        "updated_at": 1790600400,
+        "notified_at": 1790600400,
+        "assigned_to": null,
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7009",
+        "part_type": "comment",
+        "body": "It's happening again this morning.",
+        "created_at": 1790668800,
+        "updated_at": 1790668800,
+        "notified_at": 1790668800,
+        "assigned_to": null,
+        "author": {
+          "type": "user",
+          "id": "6329bd9ffe4e2e91dac76188",
+          "name": "Liam Okafor",
+          "email": "liam@bluepeak.example"
+        },
+        "attachments": [],
+        "redacted": false
+      },
+      {
+        "type": "conversation_part",
+        "id": "7010",
+        "part_type": "open",
+        "body": null,
+        "created_at": 1790668800,
+        "updated_at": 1790668800,
+        "notified_at": 1790668800,
+        "assigned_to": null,
+        "author": {
+          "type": "user",
+          "id": "6329bd9ffe4e2e91dac76188",
+          "name": "Liam Okafor",
+          "email": "liam@bluepeak.example"
+        },
+        "attachments": [],
+        "redacted": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "type": "conversation",
+  "id": "555",
+  "created_at": 1790586000,
+  "updated_at": 1790672400,
+  "state": "open",
+  "priority": "high",
+  "conversation_parts": {
+    "type": "conversation_part.list",
+    "total_count": 11,
+    "conversation_parts": [
+      {
+        "type": "conversation_part",
+        "id": "9001",
+        "part_type": "note",
+        "body": "<p>Drafted by slai</p>",
+        "created_at": 1790672400,
+        "updated_at": 1790672400,
+        "author": { "type": "admin", "id": "991", "name": "Dana Whitfield", "email": "dana@acme.com" }
+      }
+    ]
+  }
+}
