@@ -82,7 +82,7 @@ export function createApp(deps: AppDeps) {
     return bodyLimit({
       maxSize: isUpload ? MAX_UPLOAD_BYTES + 64 * 1024 : JSON_LIMIT,
       onError: () => {
-        throw new ApiError(413, "payload_too_large", "Request body is too large.");
+        throw new ApiError(413, "payload_too_large", "That's too large to send. Files can be up to 20 MB.");
       },
     })(c, next);
   });
@@ -97,7 +97,7 @@ export function createApp(deps: AppDeps) {
     bodyLimit({
       maxSize: JSON_LIMIT,
       onError: () => {
-        throw new ApiError(413, "payload_too_large", "Request body is too large.");
+        throw new ApiError(413, "payload_too_large", "That's too large to send. Files can be up to 20 MB.");
       },
     }),
   );
@@ -139,25 +139,41 @@ export function createApp(deps: AppDeps) {
 
   app.notFound((c) => c.json(new ApiError(404, "not_found", "Not found.").body(), 404));
   app.onError((err, c) => {
-    if (err instanceof ApiError) return c.json(err.body(), err.status);
-    if (err instanceof HTTPException) {
+    const requestId = c.get("requestId");
+    if (err instanceof ApiError && err.status < 500) return c.json(err.body(), err.status);
+    if (err instanceof HTTPException && err.status < 500) {
       return c.json(
         new ApiError(err.status as never, "http_error", err.message || "Request failed.").body(),
         err.status,
       );
     }
     if (isDatabaseSaturated(err)) {
-      deps.logger.warn({ requestId: c.get("requestId"), err: safeErrorMessage(err) }, "database saturated");
+      deps.logger.warn({ requestId, err: safeErrorMessage(err) }, "database saturated");
       c.header("Retry-After", "2");
-      return c.json(new ApiError(503, "unavailable", "slai is busy. Please retry in a moment.").body(), 503);
+      return c.json(serverError("unavailable", BUSY, requestId), 503);
+    }
+    // 5xx: messages we authored are kept (with the reference); anything else (driver, provider,
+    // stack) goes to the log only, never the body.
+    if (err instanceof ApiError) {
+      deps.logger.error({ requestId, code: err.code, err: err.message }, "server error");
+      return c.json(serverError(err.code, err.message, requestId), err.status);
     }
     deps.logger.error(
-      { requestId: c.get("requestId"), err: { name: (err as Error).name, message: safeErrorMessage(err) } },
+      { requestId, err: { name: (err as Error).name, message: safeErrorMessage(err) } },
       "unhandled error",
     );
-    return c.json(new ApiError(500, "internal", `Something went wrong (request ${c.get("requestId")}).`).body(), 500);
+    const status = err instanceof HTTPException ? err.status : 500;
+    return c.json(serverError("internal", SOMETHING_WRONG, requestId), status as 500);
   });
   return app;
+}
+
+const SOMETHING_WRONG =
+  "Something went wrong on our side. Try again, and if it keeps happening contact support with the reference below.";
+const BUSY = "slai is busy right now. Try again in a moment.";
+
+function serverError(code: string, message: string, requestId: string | undefined) {
+  return { error: { code, message, ...(requestId ? { requestId } : {}) } };
 }
 
 export type App = ReturnType<typeof createApp>;

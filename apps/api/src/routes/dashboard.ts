@@ -1,5 +1,6 @@
 import {
   agentActions,
+  agentRuns,
   connections,
   countTrackedTickets,
   creditState,
@@ -11,7 +12,7 @@ import {
   tickets,
   usageLedger,
 } from "@slai/db";
-import type { DashboardSummary, Risk, UsageSummary } from "@slai/shared";
+import type { DashboardSummary, Risk, UsageKind, UsageSummary } from "@slai/shared";
 import {
   type CreditRule,
   type CycleResult,
@@ -149,6 +150,8 @@ async function exposure(tx: Tx, outcomes: Outcome[]): Promise<number> {
   return total;
 }
 
+const USAGE_KINDS: UsageKind[] = ["triage", "draft_reply", "autopilot_reply", "contract_extraction"];
+
 export function dashboardRoutes(deps: AppDeps) {
   const app = new Hono<AppEnv>();
 
@@ -235,16 +238,22 @@ export function dashboardRoutes(deps: AppDeps) {
   app.get("/usage", async (c) => {
     const { start, end } = currentPeriod(deps.now());
     const usage = await deps.orgDb.withOrg(auth(c).orgId, async (tx): Promise<UsageSummary> => {
+      // Labelled by what the customer buys: model calls and agent time fold into the run's action;
+      // the autopilot reply is its own action. Ledger rows with neither are counted in the totals only.
+      const purchased = sql<
+        string | null
+      >`case when ${usageLedger.kind} = 'autopilot_reply' then 'autopilot_reply' else ${agentRuns.kind}::text end`;
       const rows = await tx
         .select({
-          kind: usageLedger.kind,
-          count: sql<number>`count(*)::int`,
+          kind: purchased,
+          count: sql<number>`count(distinct coalesce(${usageLedger.agentRunId}, ${usageLedger.id})) filter (where ${usageLedger.credits} > 0)::int`,
           micros: sql<number>`coalesce(sum(${usageLedger.costMicros}), 0)::bigint`,
           credits: sql<number>`coalesce(sum(${usageLedger.credits}), 0)::int`,
         })
         .from(usageLedger)
+        .leftJoin(agentRuns, eq(agentRuns.id, usageLedger.agentRunId))
         .where(and(gte(usageLedger.createdAt, start), lt(usageLedger.createdAt, end)))
-        .groupBy(usageLedger.kind);
+        .groupBy(purchased);
       // The same tracked-ticket count and spend cap as billing (T-65).
       const org = await loadOrgBilling(tx);
       const credit = org ? await creditState(tx, org, deps.now(), { start, end }) : null;
@@ -255,12 +264,19 @@ export function dashboardRoutes(deps: AppDeps) {
         creditsUsed: rows.reduce((s, r) => s + r.credits, 0),
         costCents: Math.round(totalMicros / 10_000),
         spendCapCents: credit?.balance.cap ?? null,
-        byKind: rows.map((r) => ({
-          kind: r.kind,
-          count: r.count,
-          credits: r.credits,
-          costCents: Math.round(Number(r.micros) / 10_000),
-        })),
+        byKind: USAGE_KINDS.flatMap((kind) => {
+          const r = rows.find((x) => x.kind === kind);
+          // Contract reading is included in every plan: listed only if it ever costs credits.
+          if (kind === "contract_extraction" && !r?.credits) return [];
+          return [
+            {
+              kind,
+              count: r?.count ?? 0,
+              credits: r?.credits ?? 0,
+              costCents: Math.round(Number(r?.micros ?? 0) / 10_000),
+            },
+          ];
+        }),
         trackedTickets: tracked,
       };
     });

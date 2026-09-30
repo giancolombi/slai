@@ -101,13 +101,16 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly details: unknown;
+  /** Set on server errors: a reference the user can quote to support. */
+  readonly requestId: string | undefined;
 
-  constructor(status: number, code: string, message: string, details?: unknown) {
+  constructor(status: number, code: string, message: string, details?: unknown, requestId?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
     this.details = details;
+    this.requestId = requestId;
   }
 
   get isUnauthorized() {
@@ -179,18 +182,27 @@ export async function toApiError(res: Response): Promise<ApiError> {
     /* not JSON */
   }
   const err = (body as ApiErrorBody | null)?.error;
-  if (err && typeof err.code === "string") {
+  const serverError = res.status >= 500;
+  const requestId = serverError
+    ? (err?.requestId ?? res.headers.get("x-request-id") ?? undefined) || undefined
+    : undefined;
+  if (err && typeof err.code === "string" && !(serverError && !err.message)) {
     return new ApiError(
       res.status,
       err.code,
       err.message || DEFAULT_MESSAGES[res.status] || "Request failed.",
       err.details,
+      requestId,
     );
   }
+  // No usable JSON body (a proxy page, an HTML error): never show it, only a plain sentence.
   return new ApiError(
     res.status,
     `http_${res.status}`,
-    DEFAULT_MESSAGES[res.status] ?? (res.status >= 500 ? "Something went wrong on our side." : "Request failed."),
+    DEFAULT_MESSAGES[res.status] ??
+      (serverError ? "Something went wrong on our side. Try again in a moment." : "Request failed. Try again."),
+    undefined,
+    requestId,
   );
 }
 
@@ -491,8 +503,21 @@ export const api = {
 };
 
 /** A human message for any thrown value. */
+/** The short support reference for a server error: the first block of its request id. */
+export function errorReference(e: unknown): string | null {
+  if (!isApiError(e) || !e.requestId) return null;
+  return e.requestId.split("-")[0]!.slice(0, 12);
+}
+
+/**
+ * What to tell the user about a failure. API messages are written for users; anything else
+ * (a JavaScript error, a library message) is replaced by a plain sentence and logged instead.
+ */
 export function errorMessage(e: unknown): string {
-  if (isApiError(e)) return e.message;
-  if (e instanceof Error) return e.message;
-  return "Something went wrong.";
+  if (isApiError(e)) {
+    const ref = errorReference(e);
+    return ref ? `${e.message} Reference: ${ref}` : e.message;
+  }
+  if (e instanceof Error) console.error(e);
+  return "Something went wrong. Try again, and if it keeps happening, contact support.";
 }

@@ -64,7 +64,11 @@ export function ScimCard({ ssoReady }: { ssoReady: boolean }) {
     mutationFn: api.scim.revokeToken,
     onSuccess: () => {
       void refresh();
-      toast({ tone: "success", title: "Token revoked", description: "Your IdP can no longer provision with it." });
+      toast({
+        tone: "success",
+        title: "Token revoked",
+        description: "Your identity provider can no longer add or remove members with it.",
+      });
     },
     onError: (e) => toast({ tone: "error", title: "Couldn't revoke", description: errorMessage(e) }),
   });
@@ -218,7 +222,7 @@ export function ScimCard({ ssoReady }: { ssoReady: boolean }) {
         open={created !== null}
         onOpenChange={(o) => !o && setCreated(null)}
         title="Copy your SCIM token"
-        description="Paste it into your identity provider's provisioning settings. It is shown only once; slai keeps only a hash."
+        description="Paste it into your identity provider's provisioning settings. It is shown only once, so copy it now."
         footer={
           <Button variant="primary" onClick={() => setCreated(null)}>
             Done

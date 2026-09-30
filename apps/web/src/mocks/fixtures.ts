@@ -25,7 +25,7 @@ import type {
   Replay,
   TicketStatus,
 } from "@slai/shared";
-import { type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
+import { ACTION_CREDITS, type BillingInvoice, type BillingStatus, type PlanId, TRIAL } from "@slai/shared";
 import {
   KESTREL_DOC,
   kestrelAmbiguities,
@@ -123,7 +123,7 @@ export function buildMe(): Me {
     role: "owner",
     organizations: [
       { id: ACME_ORG_ID, name: "Acme Cloud", role: "owner" },
-      { id: SANDBOX_ORG_ID, name: "Acme Cloud (Sandbox)", role: "admin" },
+      { id: SANDBOX_ORG_ID, name: "Acme Cloud (Staging)", role: "admin" },
     ],
     security: {
       authMethod: "password",
@@ -411,7 +411,7 @@ export function buildConnections(now: number): Connection[] {
       name: "Intercom (self-serve)",
       status: "error",
       lastSyncAt: new Date(now - 3 * HOUR - 12 * MIN).toISOString(),
-      lastError: "401 Unauthorized: the access token was revoked. Reconnect to resume syncing.",
+      lastError: "The help desk rejected slai's access. Reconnect it to resume syncing.",
       mappingIssues: [],
       webhookUrl: `https://hooks.slai.example/v1/webhooks/${CONN_INTERCOM}`,
       ticketCount: 1_137,
@@ -978,7 +978,7 @@ function buildTimeline(
   items.push({
     at: at(0.02),
     type: "agent_triage",
-    label: `Triage: ${r.pick(["Bug", "Incident", "How-to", "Account", "Billing"])} · suggested priority ${t.priority} · confidence ${(0.8 + r.next() * 0.17).toFixed(2)}`,
+    label: `Triage: ${r.pick(["Bug", "Incident", "How-to", "Account", "Billing"])} · suggested priority ${t.priority} · ${Math.round((0.8 + r.next() * 0.17) * 100)}% confident`,
     author: "slai agent",
   });
   if (t.assignee) items.push({ at: at(0.04), type: "assigned", label: `Assigned to ${t.assignee}` });
@@ -1143,6 +1143,7 @@ export function buildRuns(now: number, ticket: MockTicket, hasDraft: boolean): A
       model: "claude-haiku",
       costCents: 1,
       sandboxSeconds: 4.2,
+      credits: ACTION_CREDITS.triage,
       startedAt: new Date(ticket.createdAt + 40_000).toISOString(),
       finishedAt: new Date(ticket.createdAt + 46_000).toISOString(),
       error: null,
@@ -1157,6 +1158,7 @@ export function buildRuns(now: number, ticket: MockTicket, hasDraft: boolean): A
       model: "claude-sonnet",
       costCents: 6,
       sandboxSeconds: 11.8,
+      credits: ACTION_CREDITS.draft_reply,
       startedAt: new Date(now - 14 * MIN).toISOString(),
       finishedAt: new Date(now - 13.5 * MIN).toISOString(),
       error: null,

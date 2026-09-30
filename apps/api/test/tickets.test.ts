@@ -1,4 +1,4 @@
-import { agentActions, auditEvents, notificationChannels, notifyEvent, usageLedger } from "@slai/db";
+import { agentActions, agentRuns, auditEvents, notificationChannels, notifyEvent, usageLedger } from "@slai/db";
 import type { AgentAction, DashboardSummary, Policy, TicketDetail, TicketSummary, UsageSummary } from "@slai/shared";
 import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -146,16 +146,79 @@ describe("dashboard and usage", () => {
     }
   });
 
-  it("summarizes metered usage", async () => {
+  it("summarizes usage by what the customer buys, not by internal meters", async () => {
+    const runs = await ctx.owner.db
+      .insert(agentRuns)
+      .values([
+        { orgId: owner.orgId, ticketId, kind: "triage", status: "succeeded" },
+        { orgId: owner.orgId, ticketId, kind: "draft_reply", status: "succeeded" },
+        { orgId: owner.orgId, ticketId, kind: "draft_reply", status: "failed" },
+      ])
+      .returning();
+    const [triage, draft, failed] = runs as [(typeof runs)[0], (typeof runs)[0], (typeof runs)[0]];
     await ctx.owner.db.insert(usageLedger).values([
-      { orgId: owner.orgId, kind: "model_call", quantity: 1200, unit: "tokens", costMicros: 25_000, credits: 1 },
-      { orgId: owner.orgId, kind: "sandbox_seconds", quantity: 30, unit: "seconds", costMicros: 5_000 },
+      // triage: one model call (carries the credits) and agent time
+      {
+        orgId: owner.orgId,
+        kind: "model_call",
+        quantity: 1200,
+        unit: "tokens",
+        costMicros: 25_000,
+        credits: 3,
+        agentRunId: triage.id,
+      },
+      {
+        orgId: owner.orgId,
+        kind: "sandbox_seconds",
+        quantity: 30,
+        unit: "seconds",
+        costMicros: 5_000,
+        agentRunId: triage.id,
+      },
+      // a draft that was sent on autopilot
+      {
+        orgId: owner.orgId,
+        kind: "model_call",
+        quantity: 3000,
+        unit: "tokens",
+        costMicros: 60_000,
+        credits: 20,
+        agentRunId: draft.id,
+      },
+      {
+        orgId: owner.orgId,
+        kind: "model_call",
+        quantity: 800,
+        unit: "tokens",
+        costMicros: 10_000,
+        credits: 0,
+        agentRunId: draft.id,
+      },
+      { orgId: owner.orgId, kind: "autopilot_reply", quantity: 1, unit: "replies", credits: 60, agentRunId: draft.id },
+      // a failed draft: metered, not billed
+      {
+        orgId: owner.orgId,
+        kind: "model_call",
+        quantity: 500,
+        unit: "tokens",
+        costMicros: 2_000,
+        credits: 0,
+        agentRunId: failed.id,
+      },
     ]);
     const res = await owner.client.get<UsageSummary>("/usage");
-    expect(res.body).toMatchObject({ costCents: 3, creditsUsed: 1 });
-    expect(res.body.byKind).toEqual(
-      expect.arrayContaining([{ kind: "model_call", count: 1, credits: 1, costCents: 3 }]),
-    );
+    expect(res.body).toMatchObject({ creditsUsed: 83, costCents: 10 });
+    expect(res.body.byKind).toEqual([
+      { kind: "triage", count: 1, credits: 3, costCents: 3 },
+      { kind: "draft_reply", count: 1, credits: 20, costCents: 7 },
+      { kind: "autopilot_reply", count: 1, credits: 60, costCents: 0 },
+    ]);
+    expect(JSON.stringify(res.body.byKind)).not.toMatch(/model_call|sandbox_seconds/);
+
+    // Each run on the ticket reports the credits it consumed.
+    const detail = await owner.client.get<TicketDetail>(`/tickets/${ticketId}`);
+    const credits = Object.fromEntries(detail.body.agentRuns.map((r) => [r.id, r.credits]));
+    expect(credits).toMatchObject({ [triage.id]: 3, [draft.id]: 80, [failed.id]: 0 });
   });
 });
 

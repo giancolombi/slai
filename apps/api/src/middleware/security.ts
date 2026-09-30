@@ -46,7 +46,7 @@ export function csrf(opts: { appUrl: string; exempt: (path: string) => boolean }
   return async (c, next) => {
     if (SAFE.has(c.req.method) || opts.exempt(c.req.path)) return next();
     if (c.req.header("x-requested-with") !== "slai") {
-      throw new ApiError(403, "csrf", "Missing X-Requested-With header.");
+      throw new ApiError(403, "csrf", "This request was blocked for your security. Refresh the page and try again.");
     }
     const origin = c.req.header("origin");
     if (origin !== undefined && origin !== allowed) {

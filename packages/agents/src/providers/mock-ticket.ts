@@ -57,16 +57,16 @@ export function mockTriage(ctx: TicketContext): TriageResult {
   const needsHumanReason = !needsHuman
     ? null
     : injection
-      ? "The ticket contains text that tries to instruct the assistant."
+      ? "The ticket contains text that tries to give the AI agent instructions."
       : humanCategory
-        ? `Category "${category}" always needs a human.`
+        ? `${category.replace(/_/g, " ")} tickets always need a person.`
         : "Mentions refunds, legal terms, cancellation, or an escalation.";
   const assignee = ctx.assignees.find((a) => a.skills.some((s) => s.toLowerCase() === category)) ?? null;
   return {
     summary: `${ctx.customerName ?? "The customer"} wrote about "${ctx.subject}" (${ctx.thread.length} message${ctx.thread.length === 1 ? "" : "s"}).`,
     category,
     suggestedPriority,
-    priorityReason: `Keyword rules matched category "${category}".`,
+    priorityReason: `Based on the topic (${category.replace(/_/g, " ")}) and the wording of the ticket.`,
     suggestedAssigneeSourceId: assignee?.sourceId ?? null,
     sentiment,
     needsHuman,
@@ -161,8 +161,8 @@ export function mockDraft(ctx: TicketContext, triage: TriageResult | null): Draf
   return {
     body: lines.join("\n"),
     internalNote: k
-      ? `Mock draft based on knowledge item ${kIndex} ("${k.title}").`
-      : "Mock draft: no matching knowledge item; holding reply asking for details.",
+      ? `Draft based on "${k.title}" from your knowledge.`
+      : "No matching knowledge found, so this draft asks the customer for more details.",
     confidence: k && !anyFlag ? 0.9 : 0.4,
     usedKnowledge: k ? [kIndex] : [],
     flags,

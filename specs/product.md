@@ -158,6 +158,19 @@ IDs are referenced from `technical.md` and `tasks.md`.
     are pointed at the checklist; invited members at tickets and approvals;
     viewers at what they can see.
   - Every empty state names the next action and links to its guide.
+- **PR-28** The product shows only information relevant to support users;
+  implementation details stay out of the UI. Users see SLA due times and
+  remaining time, the evidence behind a breach (timeline, policy version),
+  credits and money, audit entries as sentences, and the setup values admins
+  must paste (webhook URL and secret, SSO and SCIM values, DNS records). They
+  never see model or vendor names (except where data processing is disclosed),
+  token counts or model costs, sandbox ids or timings, internal ids, raw enum
+  values or JSON paths, spec codes, or raw server and provider errors. Agent work
+  on a ticket reads as what the agent did, when, its outcome and the credits
+  used. Every error says what happened and what to do next; server errors add a
+  short reference to quote to support. Members and viewers don't see admin-only
+  controls or setup details (at most "Ask an admin to …"). The design-system
+  style guide is a development tool and is not part of the product.
 
 ## 4. Pricing
 

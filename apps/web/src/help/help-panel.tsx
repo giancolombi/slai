@@ -2,7 +2,8 @@ import { Button, Sheet } from "@slai/ui";
 import { Link, useMatches } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, CircleHelp, Info } from "lucide-react";
 import { useState } from "react";
-import { PAGE_HELP, type PageHelp } from "./page-help";
+import { useMe } from "../lib/queries";
+import { nextSteps, PAGE_HELP, type PageHelp } from "./page-help";
 import { GUIDE_TITLES } from "./titles";
 
 /** The help entry for the page being shown (the deepest matched route), if any. */
@@ -14,6 +15,8 @@ export function usePageHelp(): PageHelp | null {
 
 /** The body of the "About this page" panel. */
 export function PageHelpContent({ help, onNavigate }: { help: PageHelp; onNavigate?: () => void }) {
+  const me = useMe();
+  const steps = nextSteps(help, me.data?.role);
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="page-help-what">
@@ -27,7 +30,7 @@ export function PageHelpContent({ help, onNavigate }: { help: PageHelp; onNaviga
           What to do next
         </h3>
         <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-ink-muted marker:text-ink-subtle">
-          {help.next.map((n) => (
+          {steps.map((n) => (
             <li key={n}>{n}</li>
           ))}
         </ul>

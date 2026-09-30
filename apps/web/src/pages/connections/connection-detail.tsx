@@ -5,6 +5,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowLeft, CircleAlert, PlugZap, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Page, QueryState } from "../../components/page";
+import { useAccess } from "../../lib/access";
 import { api, errorMessage } from "../../lib/api";
 import { providerLabel } from "../../lib/labels";
 import { qk, useConnection, useConnectionMapping, useMe } from "../../lib/queries";
@@ -58,6 +59,7 @@ function Detail({
   justConnected: boolean;
 }) {
   const queryClient = useQueryClient();
+  const { canWork } = useAccess();
   const status = CONNECTION_STATUS[connection.status];
   const test = useMutation({
     mutationFn: () => api.connections.test(connection.id),
@@ -95,14 +97,16 @@ function Detail({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" leadingIcon={<PlugZap />} loading={test.isPending} onClick={() => test.mutate()}>
-            Test
-          </Button>
-          <Button size="sm" leadingIcon={<RefreshCw />} loading={sync.isPending} onClick={() => sync.mutate()}>
-            Sync now
-          </Button>
-        </div>
+        {canWork && (
+          <div className="flex items-center gap-2">
+            <Button size="sm" leadingIcon={<PlugZap />} loading={test.isPending} onClick={() => test.mutate()}>
+              Test
+            </Button>
+            <Button size="sm" leadingIcon={<RefreshCw />} loading={sync.isPending} onClick={() => sync.mutate()}>
+              Sync now
+            </Button>
+          </div>
+        )}
       </div>
 
       {connection.status === "error" && connection.lastError && (
@@ -115,7 +119,7 @@ function Detail({
         </div>
       )}
 
-      {connection.webhookUrl ? (
+      {!canManage ? null : connection.webhookUrl ? (
         <WebhookSetup
           connectionId={connection.id}
           webhookUrl={connection.webhookUrl}
@@ -124,7 +128,8 @@ function Detail({
         />
       ) : (
         <Card className="px-5 py-4 text-sm text-ink-muted">
-          {providerLabel(connection.provider)} has no webhooks slai can verify, so slai polls it for changes.
+          {providerLabel(connection.provider)} doesn't send slai updates directly, so slai checks it for changes every
+          few minutes. There's nothing to set up.
         </Card>
       )}
 

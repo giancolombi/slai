@@ -25,13 +25,14 @@ import {
   ticketComments,
   tickets,
 } from "@slai/db";
+import { ACTION_CREDITS } from "@slai/shared";
 import type { Priority } from "@slai/sla-engine";
 import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import { clientFor, connectorFor, loadConnection, markConnectionError } from "./connection.js";
 import { type Autonomy, decideRunLevel, decideSendStep, findSentComment, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import { errorMessage } from "./logger.js";
-import { CREDITS, currentBilling, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
+import { currentBilling, meterAction, meterRun, reachedCapThresholds } from "./metering.js";
 import { loadRules } from "./react.js";
 import { notifyCapThresholds } from "./spend.js";
 
@@ -152,7 +153,7 @@ async function finishRun<T>(
       finishedAt: now,
     })
     .where(eq(agentRuns.id, run.id));
-  await meterRun(tx, orgId, now, result.metering, result.ok ? CREDITS[run.kind] : 0, {
+  await meterRun(tx, orgId, now, result.metering, result.ok ? ACTION_CREDITS[run.kind] : 0, {
     ticketId: run.ticketId,
     agentRunId: run.id,
   });
@@ -170,13 +171,16 @@ async function failRun(deps: WorkerDeps, orgId: string, runId: string, error: st
   });
 }
 
+/** An enum value as words ("data_request" → "data request"). */
+const plain = (s: string) => s.replace(/_/g, " ");
+
 function internalNoteBody(triage: TriageResult | null, draft: DraftReplyResult, blockedReason: string | null) {
   const lines = ["slai draft for review"];
   if (triage) {
     lines.push(
       "",
       `Summary: ${triage.summary}`,
-      `Category: ${triage.category} · Sentiment: ${triage.sentiment} · Suggested priority: ${triage.suggestedPriority}`,
+      `Category: ${plain(triage.category)} · Sentiment: ${plain(triage.sentiment)} · Suggested priority: ${plain(triage.suggestedPriority)}`,
     );
     if (triage.needsHuman) lines.push(`Needs a human: ${triage.needsHumanReason ?? "yes"}`);
   }

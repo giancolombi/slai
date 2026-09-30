@@ -39,7 +39,7 @@ const LEVEL_DETAILS: Record<Autonomy, { can: string[]; human: string }> = {
     human: "Your team does all the work.",
   },
   assist: {
-    can: ["Triages category and priority", "Drafts a reply in a sandbox", "Posts it as an internal note"],
+    can: ["Triages category and priority", "Drafts a reply for approval", "Posts it as an internal note"],
     human: "A person approves every reply in one click.",
   },
   autopilot: {
@@ -327,7 +327,7 @@ export function AutonomyPage() {
             actions={
               !canEdit && (
                 <Badge tone="neutral" icon={<Lock aria-hidden />}>
-                  Read-only: admins can edit
+                  Read-only: ask an admin to change autonomy
                 </Badge>
               )
             }

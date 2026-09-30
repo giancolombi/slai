@@ -266,7 +266,7 @@ export const kestrelAmbiguities: { path: string; question: string; assumption: s
   },
   {
     path: "pauseStatuses.resolution",
-    question: "Does “awaiting action from the Customer” also cover tickets on hold for a third party (on_hold)?",
+    question: "Does “awaiting action from the Customer” also cover tickets on hold for a third party?",
     assumption: "Only “pending” (waiting on the customer) pauses resolution; “on hold” keeps the clock running.",
     quote:
       "Time during which the Supplier is awaiting information or action from the Customer shall not count towards the Resolution Time.",

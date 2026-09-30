@@ -26,7 +26,10 @@ export class ApiError extends Error {
 export const badRequest = (message: string, details?: unknown) =>
   new ApiError(400, "invalid_request", message, details);
 export const unauthorized = (code = "unauthorized", message = "Not signed in.") => new ApiError(401, code, message);
-export const forbidden = (message = "You do not have permission to do that.", code = "forbidden") =>
-  new ApiError(403, code, message);
-export const notFound = (what = "Resource") => new ApiError(404, "not_found", `${what} not found.`);
+export const forbidden = (
+  message = "You don't have permission to do that. Ask an admin in your organization.",
+  code = "forbidden",
+) => new ApiError(403, code, message);
+export const notFound = (what = "Resource") =>
+  new ApiError(404, "not_found", `${what} not found. It may have been deleted; refresh the page.`);
 export const conflict = (message: string, code = "conflict") => new ApiError(409, code, message);

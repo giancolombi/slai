@@ -114,9 +114,9 @@ export const FAQS: Faq[] = [
             The policy is not <B>assigned</B> to the customer on <AppLink to="/customers">Customers</AppLink>.
           </li>
           <li>
-            The ticket did not <B>match</B> the customer. Matching uses the help desk's organization id first, then the
-            most specific email domain of the requester. Add the customer's domains or help-desk organization ids.
-            Unmatched tickets use the default policy.
+            The ticket did not <B>match</B> the customer. Matching uses the requester's help-desk organization first,
+            then the most specific email domain. Add the customer's email domains or help-desk organizations. Unmatched
+            tickets use the default policy.
           </li>
         </Ul>
       </>
@@ -128,9 +128,12 @@ export const FAQS: Faq[] = [
     keywords: "training privacy data model ai openai anthropic retention",
     a: (
       <P>
-        No. slai only uses commercial model APIs (Anthropic, with OpenAI as a fallback) under terms that do not train on
-        your data, never consumer AI subscriptions. Agents run in isolated, short-lived sandboxes that never receive
-        your help-desk credentials.
+        No. slai's agents use commercial AI providers (Anthropic, with OpenAI as a fallback) under business terms that
+        forbid training on your data. Agents never see your help-desk credentials. See{" "}
+        <GuideLink to="team-security" anchor="data">
+          how your data is protected
+        </GuideLink>
+        .
       </P>
     ),
   },

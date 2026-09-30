@@ -15,13 +15,25 @@ export async function body<T extends ZodType>(c: Context, schema: T): Promise<z.
     throw new ApiError(400, "invalid_body", "Request body must be JSON.");
   }
   const r = schema.safeParse(raw);
-  if (!r.success) throw new ApiError(400, "invalid_body", "Request body is invalid.", issues(r.error));
+  if (!r.success)
+    throw new ApiError(
+      400,
+      "invalid_body",
+      "Some details aren't valid. Check the highlighted fields and try again.",
+      issues(r.error),
+    );
   return r.data;
 }
 
 export function query<T extends ZodType>(c: Context, schema: T): z.output<T> {
   const r = schema.safeParse(c.req.query());
-  if (!r.success) throw new ApiError(400, "invalid_query", "Query parameters are invalid.", issues(r.error));
+  if (!r.success)
+    throw new ApiError(
+      400,
+      "invalid_query",
+      "That filter isn't valid. Clear the filters and try again.",
+      issues(r.error),
+    );
   return r.data;
 }
 

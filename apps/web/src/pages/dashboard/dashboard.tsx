@@ -33,6 +33,7 @@ import {
 import { ErrorState, Page } from "../../components/page";
 import { Checklist } from "../../help/checklist";
 import { WhatsThis } from "../../help/whats-this";
+import { useAccess } from "../../lib/access";
 import { errorMessage } from "../../lib/api";
 import { METRIC_LABEL, PRIORITY_LABEL } from "../../lib/labels";
 import { useDashboard, useMe, useOnboarding, useUpdateOnboarding } from "../../lib/queries";
@@ -156,7 +157,7 @@ function DashboardBody({ data }: { data: DashboardSummary }) {
           value={formatPercent(data.attainmentPercent)}
           detail={
             delta === null
-              ? "Met ÷ (met + breached) cycles"
+              ? "Share of SLA targets met this period"
               : `${delta >= 0 ? "+" : "−"}${Math.abs(delta).toFixed(1)} pts over ${data.attainmentTrend.length} days`
           }
           detailTone={delta === null ? "neutral" : delta >= 0 ? "good" : "bad"}
@@ -217,7 +218,7 @@ function DashboardBody({ data }: { data: DashboardSummary }) {
               Open tickets by risk <WhatsThis concept="risk" />
             </span>
           }
-          description="Worst live SLA metric per ticket, from the deterministic clock."
+          description="Each open ticket at its most urgent SLA clock, calculated exactly from your contracts."
         />
         <CardContent>
           <RiskDistribution byRisk={data.byRisk} />
@@ -374,19 +375,26 @@ function DueSoon({ tickets: raw }: { tickets: TicketSummary[] }) {
 }
 
 function EmptyDashboard({ withChecklist }: { withChecklist: boolean }) {
+  const { isAdmin } = useAccess();
   // With the checklist on screen, it already says what to do next.
   if (withChecklist) return null;
   return (
     <Card>
       <EmptyState
         icon={<Plug />}
-        title="Connect a help desk to start the clocks"
-        description="slai reads your SLA contracts, runs every ticket on a deterministic clock and warns you before a breach. Setup takes about five minutes."
+        title={isAdmin ? "Connect a help desk to start the clocks" : "No tickets yet"}
+        description={
+          isAdmin
+            ? "slai reads your SLA contracts, times every ticket exactly against them and warns you before a breach. Setup takes about five minutes."
+            : "Tickets appear here once an admin connects your help desk. Ask an admin to finish setup."
+        }
         action={
           <>
-            <Button asChild variant="primary">
-              <Link to="/onboarding">Start setup</Link>
-            </Button>
+            {isAdmin && (
+              <Button asChild variant="primary">
+                <Link to="/onboarding">Start setup</Link>
+              </Button>
+            )}
             <Button asChild variant="secondary">
               <Link to="/help/$guideId" params={{ guideId: "getting-started" }}>
                 <BookOpen aria-hidden /> Read Getting started

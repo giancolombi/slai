@@ -29,6 +29,7 @@ import type {
   TotpEnrollment,
 } from "@slai/shared";
 import {
+  ACTION_CREDITS,
   API_BASE,
   approveActionBody,
   autonomyRuleBody,
@@ -533,10 +534,10 @@ export const handlers = [
 
   // WebAuthn needs a real authenticator and the real API; mock mode only lists and removes.
   http.get(url("/auth/passkey/generate-register-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
   http.get(url("/auth/passkey/generate-authenticate-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
   http.get(
     url("/auth/passkey/list-user-passkeys"),
@@ -911,10 +912,10 @@ export const handlers = [
     return HttpResponse.json(preview);
   }),
   http.post(url("/auth/invitations/:token/signup"), () =>
-    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+    fail(501, "mock_mode", "Invitations can't be accepted in the demo."),
   ),
   http.post(url("/auth/invitations/:token/accept"), () =>
-    fail(501, "mock_mode", "Accepting invitations needs the real API."),
+    fail(501, "mock_mode", "Invitations can't be accepted in the demo."),
   ),
   http.patch(
     url("/members/:userId"),
@@ -978,7 +979,7 @@ export const handlers = [
     ),
   ),
   http.get(url("/auth/step-up/passkey-options"), () =>
-    fail(501, "mock_mode", "Passkeys need the real API (mock mode can't run WebAuthn)."),
+    fail(501, "mock_mode", "Passkeys aren't available in the demo."),
   ),
 
   // ------------------------------------------------ SCIM settings (admins)
@@ -1090,7 +1091,11 @@ export const handlers = [
             missing.map((f) => ({ path: [f.key], message: "Required" })),
           );
         if (Object.values(body.credentials).some((v) => v === "bad" || v === "invalid"))
-          return fail(422, "invalid_credentials", `${info.displayName} rejected these credentials (401 Unauthorized).`);
+          return fail(
+            422,
+            "invalid_credentials",
+            `${info.displayName} rejected these credentials. Check them and try again.`,
+          );
         const o = org();
         const id = crypto.randomUUID();
         const conn: Connection = {
@@ -1486,13 +1491,14 @@ export const handlers = [
         model: kind === "triage" ? "claude-haiku" : "claude-sonnet",
         costCents: kind === "triage" ? 1 : 6,
         sandboxSeconds: kind === "triage" ? 3.9 : 12.4,
+        credits: kind === "triage" ? ACTION_CREDITS.triage : ACTION_CREDITS.draft_reply,
         startedAt: new Date(now - 12_000).toISOString(),
         finishedAt: new Date(now).toISOString(),
         error: null,
         output: { confidence: 0.87 },
       } as const;
       t.agentRuns.push({ ...run });
-      o.usageExtraCents += run.costCents;
+      o.usageExtraCents += run.credits;
       if (kind === "draft_reply") {
         const first = t.requester.name?.split(" ")[0] ?? "there";
         o.actions.unshift({

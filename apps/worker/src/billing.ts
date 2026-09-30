@@ -162,7 +162,7 @@ export async function billingSnapshotJob(deps: WorkerDeps, payload: { orgId: str
         action: "billing.tracked_overage",
         subject: `[slai] ${u.tracked.toLocaleString("en-US")} SLA-tracked tickets this month, over your plan's ${u.trackedLimit?.toLocaleString("en-US")}`,
         text: [
-          `This month ${u.tracked} tickets had a live SLA; ${ent.plan.name} includes ${u.trackedLimit}.`,
+          `This month ${u.tracked.toLocaleString("en-US")} tickets had a live SLA clock; the ${ent.plan.name} plan includes ${u.trackedLimit?.toLocaleString("en-US")}.`,
           "SLA monitoring and alerts continue for every ticket.",
           billed
             ? `Each extra tracked ticket is billed at ${money(ent.plan.ticketOverageCents ?? 0)} (${money(u.ticketOverageCents)} so far). A larger plan may cost less.`
@@ -190,7 +190,7 @@ export async function billingSnapshotJob(deps: WorkerDeps, payload: { orgId: str
     ) {
       notices.push({
         action: "billing.trial_expired",
-        subject: "[slai] Your trial has ended: agents are observe-only",
+        subject: "[slai] Your trial has ended: agents are paused, alerts continue",
         text: `SLA monitoring and alerts continue. Choose a plan to turn triage and drafts back on.\n\n${link}`,
       });
     }
@@ -198,7 +198,7 @@ export async function billingSnapshotJob(deps: WorkerDeps, payload: { orgId: str
     if (ent.state === "degraded" && (await once(tx, orgId, "billing.degraded", dueKey, { pastDueSince: dueKey }))) {
       notices.push({
         action: "billing.degraded",
-        subject: "[slai] Payment past due: agents are observe-only",
+        subject: "[slai] Payment past due: agents are paused, alerts continue",
         text: `We could not collect your last payment, and the grace period has ended. SLA monitoring and alerts continue; agents are paused until the payment method is updated.\n\n${link}`,
       });
     }

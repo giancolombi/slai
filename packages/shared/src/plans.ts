@@ -6,6 +6,9 @@
  * Money is integer cents. 1 credit = 1 cent.
  */
 
+/** Credits per billable action (specs/product.md §4; 1 credit = 1 cent). */
+export const ACTION_CREDITS = { triage: 3, draft_reply: 20, autopilot_reply: 60 } as const;
+
 export const PLAN_IDS = ["replay", "starter", "growth", "scale", "enterprise"] as const;
 export type PlanId = (typeof PLAN_IDS)[number];
 /** The plans a customer can buy through self-serve checkout. */

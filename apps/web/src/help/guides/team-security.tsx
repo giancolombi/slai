@@ -88,6 +88,17 @@ function Body() {
         </P>
       </Section>
 
+      <Section id="data" title="How your data is protected">
+        <Ul>
+          <li>Help-desk credentials and alert webhooks are encrypted and never shown again after you save them.</li>
+          <li>
+            Each agent runs in an isolated, short-lived environment that never receives your help-desk credentials. It
+            can only suggest; slai checks every suggestion before anything is written to your help desk.
+          </li>
+          <li>Your data is never used to train AI models.</li>
+        </Ul>
+      </Section>
+
       <Section id="audit" title="The audit log">
         <P>
           Sign-ins, membership and role changes, connections, policy approvals, autonomy changes, draft approvals and
@@ -103,7 +114,7 @@ export const teamSecurity: Guide = {
   id: "team-security",
   title: "Team and security",
   summary:
-    "Roles and invitations, required two-factor authentication, resetting a lost factor, SSO, SCIM and the audit log.",
+    "Roles and invitations, required two-factor authentication, resetting a lost factor, SSO, SCIM, how your data is protected, and the audit log.",
   keywords: [
     "roles",
     "owner",
@@ -128,6 +139,9 @@ export const teamSecurity: Guide = {
     "entra",
     "scim",
     "audit",
+    "security",
+    "privacy",
+    "encryption",
   ],
   related: ["getting-started", "billing", "faq"],
   sections: [
@@ -136,6 +150,7 @@ export const teamSecurity: Guide = {
     { id: "reset", title: "Resetting a lost factor" },
     { id: "sso", title: "Single sign-on (SSO)" },
     { id: "scim", title: "SCIM provisioning" },
+    { id: "data", title: "How your data is protected" },
     { id: "audit", title: "The audit log" },
   ],
   Body,

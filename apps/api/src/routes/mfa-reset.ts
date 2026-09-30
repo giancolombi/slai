@@ -56,7 +56,7 @@ export function mfaResetRoutes(deps: AppDeps) {
       for (const m of theirs) {
         if (m.role === "owner" && (await activeOwners(tx, m.orgId)) <= 1) {
           throw conflict(
-            "This is the organization's only owner. Their two-factor can only be reset through the break-glass procedure (contact slai support).",
+            "This is the organization's only owner. Only slai support can reset their two-factor: contact support.",
             "last_owner",
           );
         }
@@ -81,7 +81,7 @@ export function mfaResetRoutes(deps: AppDeps) {
         throw new ApiError(
           403,
           "cross_org_member",
-          "This person also belongs to another organization where you are not an admin. An admin of every organization they belong to must do this, or slai support through break-glass.",
+          "This person also belongs to another organization where you are not an admin. An admin of every organization they belong to must do this, or contact slai support.",
         );
       }
 

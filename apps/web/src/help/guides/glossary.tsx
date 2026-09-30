@@ -94,7 +94,7 @@ export const TERMS: Term[] = [
   {
     id: "minimum-confidence",
     term: "Minimum confidence",
-    def: "The confidence an autopilot draft needs to be sent (0.8 by default).",
+    def: "The confidence an autopilot draft needs to be sent (80% by default).",
     see: "autonomy",
   },
   {
@@ -112,7 +112,7 @@ export const TERMS: Term[] = [
   {
     id: "policy",
     term: "Policy",
-    def: "The machine-checkable version of a contract's SLA terms: targets, calendar, pauses and credits. Versioned; approved by an admin.",
+    def: "A contract's SLA terms as the rules slai measures tickets against: targets, business hours, pauses and credits. Versioned; approved by an admin.",
     see: "contract-review",
   },
   {

@@ -201,7 +201,7 @@ describe("Continue with <Provider>", () => {
     render(<OAuthConnect connector={connector({ configured: false, params: [] })} name="x" onStart={vi.fn()} />);
     const button = screen.getByRole("button", { name: "Continue with Zendesk" });
     expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription(/isn't set up on this slai deployment/);
+    expect(button).toHaveAccessibleDescription(/isn't available yet/);
   });
 
   it("renders nothing for connectors without OAuth", () => {
@@ -238,7 +238,7 @@ describe("Webhook setup", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "Copy webhook secret" })).toBeNull();
-    expect(screen.getByText("Webhooks are rejected until this is saved.")).toBeInTheDocument();
+    expect(screen.getByText("Updates from your help desk are ignored until this is saved.")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/signing secret from your help desk/i), "provider-secret-1");
     await user.click(screen.getByRole("button", { name: "Save secret" }));
     expect(onSetSecret).toHaveBeenCalledWith("provider-secret-1");

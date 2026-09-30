@@ -21,7 +21,6 @@ import {
   EmptyState,
   Field,
   formatDate,
-  formatDuration,
   formatMoney,
   formatNumber,
   Input,
@@ -83,17 +82,17 @@ import {
 import type { BillingSearch } from "../../router";
 import { UsageMeter } from "./meter";
 
-const KIND_META: Record<string, { label: string; help: string; unit?: "seconds" }> = {
-  triage: { label: "Ticket triage", help: "Category, priority and summary per ticket" },
-  draft_reply: { label: "Reply drafts", help: "Drafts queued for one-click approval" },
-  autopilot_reply: { label: "Autopilot replies", help: "Replies sent within guardrails" },
-  contract_extraction: { label: "Contract extraction", help: "Policies extracted from uploaded contracts" },
-  policy_preview: { label: "Policy previews", help: "Replays of a draft policy before approval" },
-  sandbox_seconds: { label: "Sandbox time", help: "Seconds of isolated agent compute", unit: "seconds" },
+/** Usage is labelled by what the customer buys (see the pricing table), never by internal meters. */
+const KIND_META: Record<string, { label: string; help: string }> = {
+  triage: { label: "Triage", help: "Summary, category and suggested priority for a ticket" },
+  draft_reply: { label: "Drafts", help: "Replies written for a person to approve" },
+  autopilot_reply: { label: "Autopilot replies", help: "Replies sent automatically within guardrails" },
+  contract_extraction: { label: "Contract reading", help: "SLA terms read from uploaded contracts" },
+  policy_preview: { label: "Policy previews", help: "A policy checked against past tickets before approval" },
 };
 
 function kindMeta(kind: string) {
-  return KIND_META[kind] ?? { label: kind.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()), help: "" };
+  return KIND_META[kind] ?? { label: "Other agent work", help: "" };
 }
 
 /** Billing periods are UTC calendar months; show them as such in every time zone. */
@@ -313,7 +312,7 @@ function PlanCard({
       </p>
 
       <div className="mt-5 flex flex-wrap gap-2">
-        {perms.canEdit && (
+        {perms.canPay && (
           <>
             <Button
               variant={choosing ? "primary" : "secondary"}
@@ -348,12 +347,13 @@ function PlanCard({
         )}
       </div>
       {!perms.canEdit ? (
-        <p className="mt-3 text-xs text-ink-muted">Only owners and admins can change the plan or buy credits.</p>
+        <p className="mt-3 text-xs text-ink-muted">Ask an owner or admin to change the plan or buy credits.</p>
       ) : billing.mode === "manual" ? (
         <p className="mt-3 flex gap-1.5 text-xs text-ink-muted">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          Billing is managed manually here (local dev, no Stripe keys). Payment actions are off; use the manual controls
-          below.
+          {import.meta.env.DEV
+            ? "Development build: payments aren't connected, so use the manual controls below."
+            : "Your plan is managed by slai. To change it or add credits, contact your slai account manager."}
         </p>
       ) : null}
     </Card>
@@ -459,13 +459,13 @@ function ByKind({ usage }: { usage: UsageSummary }) {
   const rows = [...usage.byKind].sort((a, b) => b.credits - a.credits);
   return (
     <Card>
-      <CardHeader title="Credits by kind" description="Every model call and sandbox second is metered." />
+      <CardHeader title="Credits by kind" description="Credits used this period, by what the agents did." />
       {rows.length === 0 ? (
         <EmptyState
           compact
           icon={<Receipt />}
           title="No usage yet this period"
-          description="Agent runs, contract extraction and previews will appear here."
+          description="Triage, drafts and autopilot replies appear here as agents work on your tickets."
           action={<GuideButton guide="billing" anchor="credits" />}
         />
       ) : (
@@ -488,7 +488,7 @@ function ByKind({ usage }: { usage: UsageSummary }) {
                     <div className="font-medium text-ink">{meta.label}</div>
                     {meta.help && <div className="text-xs text-ink-muted">{meta.help}</div>}
                   </TD>
-                  <TD numeric>{meta.unit === "seconds" ? formatDuration(k.count * 1000) : formatNumber(k.count)}</TD>
+                  <TD numeric>{formatNumber(k.count)}</TD>
                   <TD numeric>{formatNumber(k.credits)}</TD>
                   <TD>
                     <div className="flex items-center gap-3">
@@ -639,15 +639,17 @@ function PlanComparison({ billing, perms }: { billing: BillingSummary; perms: Pe
                 )}
               </ul>
               {isCheckoutPlan(id) ? (
-                <Button
-                  className="mt-5"
-                  variant={owned ? "secondary" : "primary"}
-                  disabled={owned || !perms.canPay || checkout.isPending || checkout.isSuccess}
-                  loading={pending}
-                  onClick={() => checkout.mutate({ plan: id })}
-                >
-                  {owned ? "Your plan" : `Choose ${p.name}`}
-                </Button>
+                (perms.canPay || owned) && (
+                  <Button
+                    className="mt-5"
+                    variant={owned ? "secondary" : "primary"}
+                    disabled={owned || !perms.canPay || checkout.isPending || checkout.isSuccess}
+                    loading={pending}
+                    onClick={() => checkout.mutate({ plan: id })}
+                  >
+                    {owned ? "Your plan" : `Choose ${p.name}`}
+                  </Button>
+                )
               ) : (
                 <Button className="mt-5" variant="secondary" asChild>
                   <a href="mailto:sales@slai.example?subject=Enterprise%20plan">Contact sales</a>
@@ -661,7 +663,7 @@ function PlanComparison({ billing, perms }: { billing: BillingSummary; perms: Pe
   );
 }
 
-// ---------------------------------------------------------------- manual mode (local dev, demo)
+// ---------------------------------------------------------------- manual controls (development builds and the demo only)
 
 const STATUS_OPTIONS: { value: BillingStatus; label: string }[] = [
   { value: "trialing", label: "Trialing" },
@@ -714,9 +716,9 @@ function ManualBilling({ billing }: { billing: BillingSummary }) {
           </span>
         }
         description={
-          billing.mode === "manual"
-            ? "No Stripe keys are configured (local dev), so an admin sets the plan directly."
-            : "Demo data: set the plan and state directly to preview each billing screen."
+          MOCK_MODE
+            ? "Demo data: set the plan and state directly to preview each billing screen."
+            : "Development build: payments aren't connected, so set the plan and state directly."
         }
       />
       <div className="flex flex-col gap-4 px-5 pb-5">
@@ -830,7 +832,7 @@ export function BillingPage() {
           {usage.data && <ByKind usage={usage.data} />}
           <Invoices billing={b} />
           <PlanComparison billing={b} perms={perms} />
-          {canEdit && (b.mode === "manual" || MOCK_MODE) && <ManualBilling billing={b} />}
+          {canEdit && ((import.meta.env.DEV && b.mode === "manual") || MOCK_MODE) && <ManualBilling billing={b} />}
           {capOpen && org.data && <SpendCapDialog open={capOpen} onOpenChange={setCapOpen} org={org.data} />}
           {packsOpen && <CreditPackDialog open={packsOpen} onOpenChange={setPacksOpen} />}
         </div>

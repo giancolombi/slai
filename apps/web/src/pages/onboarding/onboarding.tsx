@@ -351,9 +351,7 @@ function ReplayResult({ replayId }: { replayId: string }) {
     return (
       <Card className="p-6">
         <p className="text-sm font-semibold text-ink">Replaying the last {r.days} days</p>
-        <p className="mt-1 text-xs text-ink-muted">
-          Every ticket runs through the same deterministic clock slai uses live.
-        </p>
+        <p className="mt-1 text-xs text-ink-muted">Every ticket is timed exactly the way slai times live tickets.</p>
         <ReplayProgress replay={r} className="mt-5" />
       </Card>
     );

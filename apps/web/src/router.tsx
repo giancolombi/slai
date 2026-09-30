@@ -47,7 +47,7 @@ async function requireMfaSession(queryClient: QueryClient, href: string) {
   return me;
 }
 
-// ---------------------------------------------------------------- public: auth + design
+// ---------------------------------------------------------------- public: auth (+ the dev-only style guide)
 
 const authLayout = createRoute({
   getParentRoute: () => rootRoute,
@@ -92,11 +92,18 @@ const inviteRoute = createRoute({
   component: lazyRouteComponent(() => import("./pages/auth/invite"), "InvitePage"),
 });
 
-const designRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/design",
-  component: lazyRouteComponent(() => import("./pages/design/design"), "DesignPage"),
-});
+/**
+ * The design-system style guide is for the people building slai, not for its users: it exists only in
+ * development builds. In a production build `import.meta.env.DEV` is `false`, so the route and its
+ * lazy chunk are dropped from the bundle and `/design` is a 404 (tested).
+ */
+const designRoute = import.meta.env.DEV
+  ? createRoute({
+      getParentRoute: () => rootRoute,
+      path: "/design",
+      component: lazyRouteComponent(() => import("./pages/design/design"), "DesignPage"),
+    })
+  : null;
 
 // ---------------------------------------------------------------- onboarding (session, no shell)
 
@@ -318,7 +325,7 @@ export const APP_PAGE_ROUTES = [
 
 const routeTree = rootRoute.addChildren([
   authLayout.addChildren([loginRoute, signupRoute, mfaRoute, mfaSetupRoute, inviteRoute]),
-  designRoute,
+  ...(designRoute ? [designRoute] : []),
   onboardingRoute,
   appLayout.addChildren(APP_PAGE_ROUTES),
 ]);

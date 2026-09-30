@@ -41,7 +41,12 @@ export function validDefinition(definition: unknown, id: string, name: string): 
       e instanceof z.ZodError
         ? e.issues.map((i) => ({ path: i.path.join("."), message: i.message }))
         : [{ path: "", message: (e as Error).message }];
-    throw new ApiError(422, "invalid_policy", "The policy definition is invalid.", issues);
+    throw new ApiError(
+      422,
+      "invalid_policy",
+      "This policy has errors. Fix the highlighted fields and save again.",
+      issues,
+    );
   }
 }
 

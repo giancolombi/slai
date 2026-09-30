@@ -13,6 +13,7 @@ import type {
   TicketSummary,
 } from "@slai/shared";
 import { z } from "zod";
+import { userFacingError } from "./user-errors.js";
 
 type Row<T extends { $inferSelect: unknown }> = T["$inferSelect"];
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
@@ -63,14 +64,14 @@ export function toContract(
     uploadedAt: c.createdAt.toISOString(),
     uploadedBy: c.uploadedBy,
     uploadedByName: c.uploadedBy ? uploadedByName : null,
-    error: c.error,
+    error: userFacingError("contract", c.error),
     extraction: x
       ? { summary: x.summary ?? "", policyIds, ambiguities: x.ambiguities ?? [], citations: x.citations ?? [] }
       : null,
   };
 }
 
-export function toAgentRun(r: Row<typeof schema.agentRuns>): AgentRun {
+export function toAgentRun(r: Row<typeof schema.agentRuns>, credits = 0): AgentRun {
   return {
     id: r.id,
     kind: r.kind,
@@ -78,9 +79,10 @@ export function toAgentRun(r: Row<typeof schema.agentRuns>): AgentRun {
     model: r.model,
     costCents: Math.round(r.costMicros / 10_000),
     sandboxSeconds: r.sandboxSeconds,
+    credits,
     startedAt: iso(r.startedAt),
     finishedAt: iso(r.finishedAt),
-    error: r.error,
+    error: userFacingError("agent_run", r.error),
     output: r.output,
   };
 }

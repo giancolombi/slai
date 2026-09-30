@@ -134,7 +134,9 @@ describe("autopilot with synced knowledge (T-47)", () => {
       const { reply, actions } = await runScenario(second);
       expect(reply.status).toBe("proposed");
       expect(reply.body).toContain(EVIL_URL);
-      expect(reply.blockedReason).toMatch(/URL not found in the thread or knowledge: https:\/\/evil\.example\/fix/);
+      expect(reply.blockedReason).toMatch(
+        /URL that isn't in the ticket or your knowledge: https:\/\/evil\.example\/fix/,
+      );
       // Assist-style fallback: a human reviews it; the review note went to the help desk.
       expect(actions.find((a) => a.kind === "internal_note")?.status).toBe("sent");
     } finally {

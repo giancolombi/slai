@@ -233,8 +233,8 @@ function Extracting({ contract }: { contract: Contract }) {
         ))}
       </ol>
       <p className="mt-6 text-xs text-ink-muted">
-        A sandboxed agent reads the contract. Every number it proposes must quote the clause it came from, and nothing
-        goes live until a person approves it.
+        An AI agent reads the contract. Every number it proposes must quote the clause it came from, and nothing goes
+        live until a person approves it.
       </p>
     </Card>
   );
@@ -245,18 +245,19 @@ function ExtractionFailed({ contract }: { contract: Contract }) {
   const retry = useMutation({
     mutationFn: () => api.contracts.extract(contract.id),
     onSuccess: () => {
-      toast({ tone: "success", title: "Extraction restarted" });
+      toast({ tone: "success", title: "Reading the contract again" });
       void queryClient.invalidateQueries({ queryKey: qk.contracts });
     },
-    onError: (e) => toast({ tone: "error", title: "Couldn't restart extraction", description: errorMessage(e) }),
+    onError: (e) =>
+      toast({ tone: "error", title: "Couldn't start reading the contract again", description: errorMessage(e) }),
   });
   return (
     <Card className="mx-auto max-w-xl">
       <EmptyState
         tone="error"
         icon={<FileWarning />}
-        title="Extraction failed"
-        description={contract.error ?? "The document couldn't be read."}
+        title="We couldn't read this contract"
+        description={contract.error ?? "Try again, or upload a clearer copy (PDF, DOCX or text)."}
         action={
           <>
             <Button
@@ -651,7 +652,11 @@ function Summary({
             </Badge>
             {approved ? (
               <Badge tone="ok" size="sm" icon={<CircleCheck aria-hidden />}>
-                {policy.status === "active" ? "Active" : policy.status}
+                {policy.status === "active"
+                  ? "Active"
+                  : policy.status === "superseded"
+                    ? "Replaced by a newer version"
+                    : "Archived"}
               </Badge>
             ) : (
               <Badge tone="warning" size="sm" icon={<PencilLine aria-hidden />}>
@@ -918,7 +923,11 @@ function ActionBar({
           {readOnly ? (
             <span className="inline-flex items-center gap-1.5 text-ink-muted">
               <Lock className="size-4" aria-hidden />
-              {policy.status === "active" ? "This version is live." : `This version is ${policy.status}.`}
+              {policy.status === "active"
+                ? "This version is live."
+                : policy.status === "superseded"
+                  ? "A newer version has replaced this one."
+                  : "This version is archived."}
             </span>
           ) : gate.canApprove ? (
             <span className="inline-flex items-center gap-1.5 font-medium text-ok-text">

@@ -2,7 +2,7 @@
 
 import { browserSupportsWebAuthn, startAuthentication, startRegistration } from "@simplewebauthn/browser";
 import type { SignInResult } from "@slai/shared";
-import { api } from "./api";
+import { api, errorMessage, isApiError } from "./api";
 
 export const passkeysSupported = () => typeof window !== "undefined" && browserSupportsWebAuthn();
 
@@ -32,5 +32,6 @@ export function passkeyError(e: unknown): string {
   const name = (e as Error)?.name;
   if (name === "NotAllowedError" || name === "AbortError") return "The passkey prompt was cancelled or timed out.";
   if (name === "InvalidStateError") return "This passkey is already registered.";
-  return (e as Error)?.message || "The passkey could not be used.";
+  if (isApiError(e)) return errorMessage(e);
+  return "The passkey couldn't be used. Try again, or use your authenticator app or a backup code.";
 }

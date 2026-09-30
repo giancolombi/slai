@@ -4,7 +4,15 @@ import { Link } from "@tanstack/react-router";
 import { Inbox, PartyPopper, ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { GuideButton } from "../../help/guide-button";
-import { ActionKindLabel, ActionStatusBadge, ConfidenceMeter, RejectDialog, UsedKnowledge } from "./draft-parts";
+import {
+  ActionKindLabel,
+  ActionStatusBadge,
+  ConfidenceMeter,
+  isTextAction,
+  ProposedChange,
+  RejectDialog,
+  UsedKnowledge,
+} from "./draft-parts";
 import { useInboxKeys } from "./use-inbox-keys";
 
 export interface ApprovalsInboxProps {
@@ -17,6 +25,8 @@ export interface ApprovalsInboxProps {
   renderContext?: (item: AgentAction) => ReactNode;
   /** How to link to the ticket; defaults to plain text. */
   renderTicketLink?: (item: AgentAction, children: ReactNode) => ReactNode;
+  /** Viewers can read drafts but not approve, reject or edit them. */
+  readOnly?: boolean;
 }
 
 /**
@@ -30,6 +40,7 @@ export function ApprovalsInbox({
   pendingId = null,
   renderContext,
   renderTicketLink = (_item, children) => children,
+  readOnly = false,
 }: ApprovalsInboxProps) {
   const [selectedId, setSelectedId] = useState<string | null>(items[0]?.id ?? null);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -68,11 +79,12 @@ export function ApprovalsInbox({
   };
   const bodyOf = (item: AgentAction) => edits[item.id] ?? item.body ?? "";
   const approve = () => {
-    if (!selected || pendingId === selected.id || !bodyOf(selected).trim()) return;
+    if (readOnly || !selected || pendingId === selected.id) return;
+    if (isTextAction(selected.kind) && !bodyOf(selected).trim()) return;
     onApprove(selected, bodyOf(selected));
   };
   const reject = (reason?: string) => {
-    if (!selected || pendingId === selected.id) return;
+    if (readOnly || !selected || pendingId === selected.id) return;
     onReject(selected, reason);
   };
 
@@ -169,18 +181,22 @@ export function ApprovalsInbox({
             <Kbd>j</Kbd>
             <Kbd>k</Kbd> move
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>a</Kbd> approve
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>r</Kbd> reject
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>e</Kbd> edit
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>Esc</Kbd> done editing
-          </span>
+          {!readOnly && (
+            <>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>a</Kbd> approve
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>r</Kbd> reject
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>e</Kbd> edit
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Kbd>Esc</Kbd> done editing
+              </span>
+            </>
+          )}
         </div>
       </Card>
 
@@ -216,55 +232,67 @@ export function ApprovalsInbox({
             )}
             {renderContext?.(selected)}
             {selected.kind === "public_reply" && <UsedKnowledge refs={selected.usedKnowledge} />}
-            <div className="flex flex-1 flex-col gap-1.5">
-              <div className="flex items-baseline justify-between">
-                <Label htmlFor={editorId}>
-                  {selected.kind === "internal_note" ? "Internal note" : "Reply to the customer"}
-                </Label>
-                {edited && (
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-accent-text hover:underline"
-                    onClick={() =>
-                      setEdits((e) => {
-                        const { [selected.id]: _, ...rest } = e;
-                        return rest;
-                      })
-                    }
-                  >
-                    Discard edits
-                  </button>
-                )}
+            {!isTextAction(selected.kind) && <ProposedChange action={selected} />}
+            {isTextAction(selected.kind) && (
+              <div className="flex flex-1 flex-col gap-1.5">
+                <div className="flex items-baseline justify-between">
+                  <Label htmlFor={editorId}>
+                    {selected.kind === "internal_note" ? "Internal note" : "Reply to the customer"}
+                  </Label>
+                  {edited && (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-accent-text hover:underline"
+                      onClick={() =>
+                        setEdits((e) => {
+                          const { [selected.id]: _, ...rest } = e;
+                          return rest;
+                        })
+                      }
+                    >
+                      Discard edits
+                    </button>
+                  )}
+                </div>
+                <Textarea
+                  ref={editorRef}
+                  id={editorId}
+                  value={bodyOf(selected)}
+                  onChange={(e) => setEdits((prev) => ({ ...prev, [selected.id]: e.target.value }))}
+                  rows={10}
+                  readOnly={readOnly}
+                  className="min-h-56 flex-1 font-sans"
+                />
+                <p className="text-xs text-ink-muted">
+                  {readOnly
+                    ? "Written by an agent. Members and admins approve or reject drafts."
+                    : edited
+                      ? "Edited. Your version will be sent."
+                      : "Written by an agent. Edit freely before sending."}
+                </p>
               </div>
-              <Textarea
-                ref={editorRef}
-                id={editorId}
-                value={bodyOf(selected)}
-                onChange={(e) => setEdits((prev) => ({ ...prev, [selected.id]: e.target.value }))}
-                rows={10}
-                className="min-h-56 flex-1 font-sans"
-              />
-              <p className="text-xs text-ink-muted">
-                {edited
-                  ? "Edited. Your version will be sent."
-                  : "Drafted by the agent in a sandbox. Edit freely before sending."}
-              </p>
+            )}
+          </div>
+          {!readOnly && (
+            <div className="mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
+              <Button onClick={() => setRejecting(true)} disabled={busy} trailingIcon={<Kbd>r</Kbd>}>
+                Reject…
+              </Button>
+              <Button
+                variant="primary"
+                onClick={approve}
+                loading={busy}
+                disabled={isTextAction(selected.kind) && !bodyOf(selected).trim()}
+                trailingIcon={<Kbd className="border-white/30 bg-white/15 text-on-accent">a</Kbd>}
+              >
+                {selected.kind === "public_reply"
+                  ? "Approve & send"
+                  : selected.kind === "internal_note"
+                    ? "Approve & post"
+                    : "Approve & apply"}
+              </Button>
             </div>
-          </div>
-          <div className="mt-auto flex flex-wrap items-center justify-end gap-2 border-t border-line bg-sunken/40 px-5 py-3">
-            <Button onClick={() => setRejecting(true)} disabled={busy} trailingIcon={<Kbd>r</Kbd>}>
-              Reject…
-            </Button>
-            <Button
-              variant="primary"
-              onClick={approve}
-              loading={busy}
-              disabled={!bodyOf(selected).trim()}
-              trailingIcon={<Kbd className="border-white/30 bg-white/15 text-on-accent">a</Kbd>}
-            >
-              {selected.kind === "public_reply" ? "Approve & send" : "Approve & post"}
-            </Button>
-          </div>
+          )}
         </Card>
       )}
 

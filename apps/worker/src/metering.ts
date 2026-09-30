@@ -9,12 +9,11 @@
  */
 import type { RunMetering } from "@slai/agents";
 import { audit, creditState, loadOrgBilling, type Tx, usageLedger } from "@slai/db";
-import type { AgentCeiling } from "@slai/shared";
+import { ACTION_CREDITS, type AgentCeiling } from "@slai/shared";
 import { gte, sql } from "drizzle-orm";
 import { monthKey, monthStart } from "./clock.js";
 import { type SpendState, spendState } from "./decide.js";
 
-export const CREDITS = { triage: 3, draft_reply: 20, autopilot_reply: 60 } as const;
 export const CAP_THRESHOLDS = [50, 80, 100] as const;
 
 export interface LedgerRef {
@@ -102,7 +101,7 @@ export async function meterAction(tx: Tx, orgId: string, now: Date, kind: "autop
     kind,
     quantity: 1,
     unit: "replies",
-    credits: CREDITS[kind],
+    credits: ACTION_CREDITS[kind],
     createdAt: now,
     ...refs(ref),
   });

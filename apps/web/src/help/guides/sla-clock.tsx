@@ -58,11 +58,11 @@ function ClockExamples() {
 function Body() {
   return (
     <>
-      <Section id="deterministic" title="A clock you can check">
+      <Section id="exact" title="A clock you can check">
         <P>
-          Every SLA number in slai (due times, breaches, attainment, credits) comes from one piece of code that follows
-          your policy exactly. No AI model sets or changes them. Given the same ticket history and policy, the answer is
-          always the same, and every breach shows the timeline, the policy version and the arithmetic behind it.
+          Every SLA number in slai (due times, breaches, attainment, credits) is calculated exactly from your policy and
+          the ticket's history, never guessed by AI. The same history always gives the same answer, and every breach
+          shows the timeline, the policy version and the arithmetic behind it.
         </P>
       </Section>
 
@@ -212,7 +212,7 @@ export const slaClock: Guide = {
   ],
   related: ["contract-review", "alerts", "faq", "glossary"],
   sections: [
-    { id: "deterministic", title: "A clock you can check" },
+    { id: "exact", title: "A clock you can check" },
     { id: "metrics", title: "The four metrics" },
     { id: "clocks", title: "Business hours or calendar time" },
     { id: "risk", title: "Warning, at risk, breached" },

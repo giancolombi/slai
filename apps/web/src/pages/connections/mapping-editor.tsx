@@ -220,7 +220,7 @@ export function MappingEditor({ mapping, canEdit, saving, onSave }: MappingEdito
         onOpenChange={setConfirmReset}
         size="sm"
         title="Reset to the default mapping?"
-        description="Your overrides are removed and the connector's shipped mapping applies. Open tickets are re-evaluated."
+        description="Your changes are removed and slai's default mapping for this help desk applies. Open tickets are re-checked."
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirmReset(false)}>

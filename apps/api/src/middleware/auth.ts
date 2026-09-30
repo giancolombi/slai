@@ -63,7 +63,12 @@ export function requireRole(min: Role): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const a = c.get("auth");
     if (!a) throw unauthorized();
-    if (ROLE_RANK[a.role] < ROLE_RANK[min]) throw forbidden(`Requires the ${min} role or higher.`);
+    if (ROLE_RANK[a.role] < ROLE_RANK[min])
+      throw forbidden(
+        min === "owner"
+          ? "Only an owner of this organization can do that."
+          : `You need the ${min === "admin" ? "Admin" : "Member"} role or higher to do that. Ask an admin.`,
+      );
     await next();
   };
 }

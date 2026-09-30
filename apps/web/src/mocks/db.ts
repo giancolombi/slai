@@ -29,7 +29,7 @@ import type {
   TicketSummary,
   UsageSummary,
 } from "@slai/shared";
-import { billingPeriod, creditBalance, entitlements, TRIAL, trackedOverage } from "@slai/shared";
+import { ACTION_CREDITS, billingPeriod, creditBalance, entitlements, TRIAL, trackedOverage } from "@slai/shared";
 import { RISK_ORDER, riskForFraction } from "@slai/ui";
 import {
   ACME_ORG_ID,
@@ -197,7 +197,7 @@ function seed(): MockDb {
     ],
     orgs: {
       [ACME_ORG_ID]: seedAcme(now),
-      [SANDBOX_ORG_ID]: emptyOrg(SANDBOX_ORG_ID, "Acme Cloud (Sandbox)", sandboxOwner, now),
+      [SANDBOX_ORG_ID]: emptyOrg(SANDBOX_ORG_ID, "Acme Cloud (Staging)", sandboxOwner, now),
     },
   };
 }
@@ -404,7 +404,7 @@ export function dashboard(now: number): DashboardSummary {
   };
 }
 
-/** Agent usage this period; 1 credit = 1 cent, so credits used equals cost. */
+/** Agent usage this period, by what the customer buys (like the API); 1 credit = 1 cent. */
 export function usage(now: number): UsageSummary {
   const o = org();
   const { start, end } = billingPeriod(new Date(now));
@@ -419,17 +419,16 @@ export function usage(now: number): UsageSummary {
       trackedTickets: 0,
     };
   }
-  const byKind = [
-    { kind: "triage", count: 540, costCents: 1_620 },
-    { kind: "draft_reply", count: 41, costCents: 1_230 },
-    { kind: "contract_extraction", count: 1, costCents: 450 },
-    { kind: "policy_preview", count: 6, costCents: 180 },
-    { kind: "sandbox_seconds", count: 3_120, costCents: 312 + o.usageExtraCents },
-  ].map((k) => ({ ...k, credits: k.costCents })); // 1 credit = $0.01
+  const byKind: UsageSummary["byKind"] = [
+    { kind: "triage" as const, count: 540, credits: 540 * ACTION_CREDITS.triage + o.usageExtraCents },
+    { kind: "draft_reply" as const, count: 41, credits: 41 * ACTION_CREDITS.draft_reply },
+    { kind: "autopilot_reply" as const, count: 12, credits: 12 * ACTION_CREDITS.autopilot_reply },
+  ].map((k) => ({ ...k, costCents: Math.round(k.credits * 0.35) }));
+  const creditsUsed = byKind.reduce((s, k) => s + k.credits, 0);
   const costCents = byKind.reduce((s, k) => s + k.costCents, 0);
   return {
     period,
-    creditsUsed: costCents,
+    creditsUsed,
     costCents,
     spendCapCents: o.settings.monthlySpendCapCents,
     byKind,

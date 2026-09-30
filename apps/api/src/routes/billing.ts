@@ -26,6 +26,7 @@ import {
   isPlanId,
   manualBillingBody,
   mapStripeStatus,
+  PLANS,
   type PlanId,
 } from "@slai/shared";
 import { eq } from "drizzle-orm";
@@ -38,7 +39,11 @@ import { ApiError, badRequest, conflict, forbidden, notFound } from "../errors.j
 import { requireRole } from "../middleware/auth.js";
 import { body } from "../validate.js";
 
-const manualMode = () => conflict("Billing is managed manually on this deployment (no Stripe keys).", "billing_manual");
+const manualMode = () =>
+  conflict(
+    "Online payment isn't available for this organization. Contact slai support to change your plan.",
+    "billing_manual",
+  );
 
 async function summary(deps: AppDeps, tx: Tx, o: OrgBilling, now: Date): Promise<Omit<BillingSummary, "invoices">> {
   const u = await periodUsage(tx, o, now, billingPeriod(now));
@@ -136,7 +141,10 @@ export function billingRoutes(deps: AppDeps) {
     const a = auth(c);
     const input = await body(c, billingCheckoutBody);
     if (!gw.hasPrice(input.plan))
-      throw conflict(`The ${input.plan} plan is not available for checkout.`, "plan_unavailable");
+      throw conflict(
+        `The ${PLANS[input.plan]?.name ?? "selected"} plan can't be bought online. Contact slai sales.`,
+        "plan_unavailable",
+      );
     const { o, customerId } = await ensureCustomer(c, gw);
     let url: string;
     if (o.stripeSubscriptionId && o.status !== "canceled") {
@@ -183,7 +191,7 @@ export function billingRoutes(deps: AppDeps) {
     const a = auth(c);
     const input = await body(c, creditPackCheckoutBody);
     const pack = CREDIT_PACKS.find((p) => p.id === input.pack);
-    if (!pack) throw badRequest("Unknown credit pack.");
+    if (!pack) throw badRequest("That credit pack isn't available. Refresh the page and choose another.");
     const { customerId } = await ensureCustomer(c, gw);
     const url = await gw.checkoutCreditPack({
       customerId,
@@ -206,7 +214,7 @@ export function billingRoutes(deps: AppDeps) {
 
   /** Manual mode only: set the plan and status directly, or grant credits (local development). */
   app.post("/billing/manual", requireRole("admin"), async (c) => {
-    if (deps.billing) throw conflict("Billing is managed by Stripe on this deployment.", "billing_stripe");
+    if (deps.billing) throw conflict("Plans are changed through checkout for this organization.", "billing_stripe");
     if (deps.env.NODE_ENV === "production") throw forbidden("Manual billing is not available in production.");
     const a = auth(c);
     const input = await body(c, manualBillingBody);

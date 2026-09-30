@@ -36,7 +36,6 @@ import {
   Inbox,
   KeyRound,
   LogOut,
-  Palette,
   Receipt,
   RotateCcw,
   ScrollText,
@@ -51,6 +50,7 @@ import { BillingBanner } from "./components/billing-banner";
 import { LiveIndicator } from "./components/live-indicator";
 import { PageHelpButton } from "./help/help-panel";
 import { WelcomeDialog } from "./help/welcome";
+import { useAccess } from "./lib/access";
 import { api, errorMessage } from "./lib/api";
 import { useLiveUpdates } from "./lib/live";
 import { useActions, useContracts, useMe } from "./lib/queries";
@@ -58,6 +58,7 @@ import { useActions, useContracts, useMe } from "./lib/queries";
 export const MOCK_MODE = import.meta.env.VITE_MOCK_API === "1";
 
 function Nav() {
+  const { isAdmin } = useAccess();
   const approvals = useActions("proposed");
   const contracts = useContracts();
   const pending = approvals.data?.items.length ?? 0;
@@ -83,11 +84,6 @@ function Nav() {
               <SidebarItemContent icon={<CircleHelp />} label="Help" />
             </Link>
           </li>
-          <li>
-            <Link to="/design" className={sidebarItemClass}>
-              <SidebarItemContent icon={<Palette />} label="Design system" />
-            </Link>
-          </li>
         </ul>
       }
     >
@@ -109,7 +105,7 @@ function Nav() {
       <SidebarSection title="Insights">
         {item("/replay", <History />, "Breach Replay")}
         {item("/billing", <Receipt />, "Billing")}
-        {item("/audit", <ShieldCheck />, "Audit log")}
+        {isAdmin && item("/audit", <ShieldCheck />, "Audit log")}
       </SidebarSection>
       <SidebarSection title="Organization">
         {item("/team", <Users />, "Team")}
