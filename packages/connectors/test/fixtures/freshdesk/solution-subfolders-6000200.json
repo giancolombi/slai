@@ -1,0 +1,14 @@
+[
+  {
+    "id": 6000210,
+    "name": "S3 exports",
+    "description": null,
+    "parent_folder_id": 6000200,
+    "visibility": 1,
+    "articles_count": 1,
+    "sub_folders_count": 0,
+    "hierarchy": [{ "level": 0, "type": "folder", "data": { "id": 6000200, "name": "Exports" } }],
+    "created_at": "2026-01-01T00:00:00Z",
+    "updated_at": "2026-01-01T00:00:00Z"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "id": 7000501,
+    "type": 1,
+    "category_id": 5000100,
+    "folder_id": 6000210,
+    "title": "Fix AccessDenied on S3 exports",
+    "description": "<p>Grant <b>s3:PutObject</b>.</p>",
+    "description_text": "Grant s3:PutObject.",
+    "status": 2,
+    "agent_id": 8000001,
+    "tags": [],
+    "created_at": "2026-03-01T00:00:00Z",
+    "updated_at": "2026-08-10T00:00:00Z"
+  }
+]
