@@ -1,7 +1,7 @@
 /**
  * The connector contract. Every help desk adapter implements `ConnectorDefinition`
  * and maps its platform's data into canonical tickets and events (see
- * docs/research/CONNECTORS.md §4). The SLA engine consumes only canonical events.
+ * specs/technical.md TR-11 to TR-14). The SLA engine consumes only canonical events.
  *
  * Connectors are pure HTTP adapters: they receive an injected `fetch`, perform
  * no persistence, and never read environment variables. The worker owns

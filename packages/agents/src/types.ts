@@ -2,7 +2,7 @@
  * The agents contract. Agents turn untrusted text (contracts, ticket threads)
  * into validated *proposals*. They never write to the database or the help
  * desk; the worker does that after validation and the autonomy decision.
- * See docs/adr/003-e2b-agent-sandboxes.md and docs/adr/004-model-api-keys.md.
+ * See specs/technical.md TR-15 to TR-21.
  */
 import type { AuthorRole, Metric, MetricResult, PolicyInput, Priority, RiskLevel } from "@slai/sla-engine";
 

@@ -62,7 +62,7 @@ function prepare(events: TicketEvent[], now: Date): TicketEvent[] {
 /**
  * Replays the ticket history into measurement cycles.
  *
- * Rules (see docs/SLA_SEMANTICS.md):
+ * Rules (see specs/technical.md TR-4 to TR-8):
  * - first_response: starts at creation; stops at the first public agent reply
  *   (or bot reply when policy.botRepliesCount) or when the ticket is solved.
  * - next_response: after the first response, starts at a public requester

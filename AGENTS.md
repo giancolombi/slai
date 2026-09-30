@@ -1,6 +1,8 @@
 # AGENTS.md: how to work in this repo
 
-Read `docs/ARCHITECTURE.md` and the ADRs in `docs/adr/` first.
+Read `specs/product.md`, `specs/technical.md` and `specs/tasks.md` first.
+
+**No other documentation files.** The repo holds `README.md`, `AGENTS.md` (with `CLAUDE.md` as a symlink to it), and `specs/`. Put decisions and requirements in the specs, and update `specs/tasks.md` when a task changes state. Don't add READMEs or other docs.
 
 ## Invariants (never break these)
 
@@ -37,4 +39,4 @@ Read `docs/ARCHITECTURE.md` and the ADRs in `docs/adr/` first.
 
 ## Layout
 
-See the package table in `docs/ARCHITECTURE.md`.
+See the package table in `specs/technical.md`.
