@@ -15,6 +15,8 @@ import type {
   Member,
   NotificationChannel,
   Offboarding,
+  OnboardingState,
+  OnboardingStepId,
   OrgExport,
   Policy,
   Replay,
@@ -45,6 +47,8 @@ import {
   loginBody,
   manualBillingBody,
   notificationChannelBody,
+  ONBOARDING_STEPS,
+  OPTIONAL_ONBOARDING_STEPS,
   ORG_DELETION_GRACE_DAYS,
   PLANS,
   type PlanId,
@@ -60,6 +64,7 @@ import {
   updateKnowledgeArticleBody,
   updateMappingBody,
   updateMemberBody,
+  updateOnboardingBody,
   updateOrgBody,
   updateOrgSsoBody,
   updatePolicyBody,
@@ -320,6 +325,41 @@ function customerView(c: ReturnType<typeof org>["customers"][number], now: numbe
     openTickets: mine.length,
     atRiskTickets: risks.filter((r) => r === "at_risk" || r === "breached").length,
     breachesThisPeriod: c.breachesThisPeriod,
+  };
+}
+
+/** Mirrors the API's `GET /onboarding`: every step from real (mock) org state. */
+function onboardingState(): OnboardingState {
+  const o = org();
+  const d = getDb();
+  const hasDefault = o.policies.some((p) => p.status === "active" && p.isDefault);
+  const done: Record<OnboardingStepId, boolean> = {
+    connect: o.connections.some((c) => c.status === "active"),
+    contract: o.contracts.some((c) => c.status !== "archived"),
+    policy: o.policies.some((p) => p.status === "active" && (p.contractId !== null || p.isDefault)),
+    assign: hasDefault || o.customers.some((c) => c.policyId !== null),
+    autonomy: o.autonomy.length > 0,
+    alerts: o.channels.some((c) => c.enabled),
+    invite:
+      o.members.filter((m) => m.active).length > 1 ||
+      (o.invitations ?? []).some((i) => i.status === "pending" || i.status === "accepted"),
+    replay: o.replays.some((r) => r.status !== "failed"),
+  };
+  const steps = ONBOARDING_STEPS.map((id) => ({
+    id,
+    done: done[id],
+    optional: OPTIONAL_ONBOARDING_STEPS.includes(id),
+  }));
+  const required = steps.filter((x) => !x.optional);
+  // People without a record (the seeded demo orgs, older persisted databases) have "used slai before".
+  const prefs = o.onboarding?.[d.me.user.id] ?? { checklistDismissed: false, welcomeSeen: true };
+  return {
+    steps,
+    requiredDone: required.filter((x) => x.done).length,
+    requiredTotal: required.length,
+    allDone: steps.every((x) => x.done),
+    checklistDismissed: prefs.checklistDismissed,
+    welcomeSeen: prefs.welcomeSeen,
   };
 }
 
@@ -1833,6 +1873,26 @@ export const handlers = [
   http.get(
     url("/dashboard"),
     guarded(() => HttpResponse.json(dashboard(Date.now()))),
+  ),
+  // Onboarding (the checklist is derived from the mock org's state, like the API).
+  http.get(
+    url("/onboarding"),
+    guarded(() => HttpResponse.json(onboardingState())),
+  ),
+  http.patch(
+    url("/onboarding"),
+    guarded(async ({ request }) => {
+      const body = await parse(request, updateOnboardingBody);
+      if (body instanceof Response) return body;
+      const o = org();
+      const userId = getDb().me.user.id;
+      o.onboarding ??= {};
+      const cur = o.onboarding[userId] ?? { checklistDismissed: false, welcomeSeen: true };
+      if (body.checklistDismissed !== undefined) cur.checklistDismissed = body.checklistDismissed;
+      if (body.welcomeSeen) cur.welcomeSeen = true;
+      o.onboarding[userId] = cur;
+      return HttpResponse.json(onboardingState());
+    }),
   ),
   http.get(
     url("/replays"),

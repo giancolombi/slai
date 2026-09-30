@@ -85,6 +85,12 @@ export interface OrgData {
   billing: MockBilling;
   /** When the org was created (drives the dashboard period). */
   createdAt: number;
+  /**
+   * Per-user help preferences (checklist hidden, welcome seen), like the API's
+   * onboarding_state. A user without a record (the seeded demo orgs, older persisted
+   * databases) has "used slai before", so no first-run welcome.
+   */
+  onboarding?: Record<string, { checklistDismissed: boolean; welcomeSeen: boolean }>;
 }
 
 export interface MockDb {
@@ -147,19 +153,13 @@ export function emptyOrg(id: string, name: string, owner: Member, now: number): 
     policies: [],
     tickets: [],
     actions: [],
-    autonomy: [
-      {
-        id: `ar_default_${id.slice(0, 6)}`,
-        customerAccountId: null,
-        priority: null,
-        level: "observe",
-        triggerAt: "at_risk",
-        minConfidence: 0.8,
-      },
-    ],
+    // Like the API: a new org has no autonomy rule (everything observes) until an admin chooses.
+    autonomy: [],
     channels: [],
     replays: [],
     audit: [],
+    // The new owner gets the first-run welcome and the checklist.
+    onboarding: { [owner.userId]: { checklistDismissed: false, welcomeSeen: false } },
     knowledgeSources: [],
     knowledgeArticles: [],
     usageExtraCents: 0,
