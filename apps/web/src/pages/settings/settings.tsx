@@ -28,14 +28,16 @@ import {
 } from "@slai/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Bell, Hash, KeyRound, Mail, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { Bell, Hash, Mail, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { api, errorMessage } from "../../lib/api";
 import { qk, useChannels, useMe, useOrg } from "../../lib/queries";
+import { SecurityTab } from "./security";
+import { SsoTab } from "./sso";
 
-type Tab = "organization" | "security" | "notifications" | "appearance";
-const TABS: Tab[] = ["organization", "security", "notifications", "appearance"];
+type Tab = "organization" | "security" | "sso" | "notifications" | "appearance";
+const TABS: Tab[] = ["organization", "security", "sso", "notifications", "appearance"];
 type MinRisk = Exclude<Risk, "ok">;
 const MIN_RISKS: MinRisk[] = ["warning", "at_risk", "breached"];
 
@@ -55,13 +57,11 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
   const org = useOrg();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
-  const [requireMfa, setRequireMfa] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (org.data) {
       setName(org.data.name);
-      setRequireMfa(org.data.requireMfa);
     }
   }, [org.data]);
 
@@ -79,12 +79,12 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
   if (org.isError)
     return <ErrorState error={org.error} resource="organization settings" onRetry={() => org.refetch()} />;
 
-  const dirty = name.trim() !== org.data.name || requireMfa !== org.data.requireMfa;
+  const dirty = name.trim() !== org.data.name;
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setError("Enter a name.");
     setError(null);
-    save.mutate({ name: name.trim(), requireMfa });
+    save.mutate({ name: name.trim() });
   };
 
   return (
@@ -98,13 +98,11 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
           <Field label="Name" error={error ?? undefined} className="max-w-md">
             <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
           </Field>
-          <Field
-            inline
-            label="Require two-factor for everyone"
-            hint="Members without two-factor are asked to set it up at their next sign-in."
-          >
-            <Switch checked={requireMfa} onCheckedChange={setRequireMfa} disabled={!canEdit} />
-          </Field>
+          <p className="flex items-center gap-2 text-xs text-ink-muted">
+            <ShieldCheck className="size-3.5 text-ok-text" aria-hidden />
+            Two-factor authentication is required for everyone (an authenticator app or a passkey; SSO users through
+            their identity provider).
+          </p>
           <div className="flex items-center gap-2 text-xs text-ink-muted">
             <span>Plan</span>
             <Badge tone="accent" size="sm" className="capitalize">
@@ -122,7 +120,6 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
               disabled={!dirty}
               onClick={() => {
                 setName(org.data.name);
-                setRequireMfa(org.data.requireMfa);
               }}
             >
               Discard
@@ -134,62 +131,6 @@ function OrganizationTab({ canEdit }: { canEdit: boolean }) {
         )}
       </form>
     </Card>
-  );
-}
-
-// ---------------------------------------------------------------- security
-
-function SecurityTab() {
-  const { data: me } = useMe();
-  const org = useOrg();
-  if (!me) return <Skeleton className="h-40 rounded-lg" />;
-  const on = me.user.mfaEnabled;
-  return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader title="Two-factor authentication" description={`For ${me.user.email}`} />
-        <CardContent className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span
-              className={cn(
-                "flex size-10 items-center justify-center rounded-lg border",
-                on
-                  ? "border-ok-border bg-ok-subtle text-ok-text"
-                  : "border-warning-border bg-warning-subtle text-warning-text",
-              )}
-            >
-              {on ? <ShieldCheck className="size-5" aria-hidden /> : <KeyRound className="size-5" aria-hidden />}
-            </span>
-            <div>
-              <p className="text-sm font-medium text-ink">
-                {on ? "On: a code from your authenticator app is required at sign-in." : "Off"}
-              </p>
-              <p className="text-xs text-ink-muted">
-                {on
-                  ? "To move to a new device, set it up again; the old key stops working."
-                  : org.data?.requireMfa
-                    ? "Your organization requires two-factor. Set it up now."
-                    : "Protect approvals and policy changes with a second factor."}
-              </p>
-            </div>
-          </div>
-          <Button asChild variant={on ? "secondary" : "primary"}>
-            <Link to="/mfa/setup">{on ? "Set up on a new device" : "Set up two-factor"}</Link>
-          </Button>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader title="Sessions" />
-        <CardContent className="text-sm text-ink-muted">
-          Sessions use a secure, http-only cookie and expire after 12 hours of inactivity. Signing out ends this session
-          only. Sign-ins are recorded in the{" "}
-          <Link to="/audit" className="font-medium text-accent-text hover:underline">
-            audit log
-          </Link>
-          .
-        </CardContent>
-      </Card>
-    </div>
   );
 }
 
@@ -470,6 +411,7 @@ export function SettingsPage() {
         <TabsList aria-label="Settings sections">
           <TabsTrigger value="organization">Organization</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
+          {canEdit && <TabsTrigger value="sso">Single sign-on</TabsTrigger>}
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="appearance">Appearance</TabsTrigger>
         </TabsList>
@@ -479,6 +421,11 @@ export function SettingsPage() {
         <TabsContent value="security" className="pt-5">
           <SecurityTab />
         </TabsContent>
+        {canEdit && (
+          <TabsContent value="sso" className="pt-5">
+            <SsoTab />
+          </TabsContent>
+        )}
         <TabsContent value="notifications" className="pt-5">
           <NotificationsTab canEdit={canEdit} />
         </TabsContent>

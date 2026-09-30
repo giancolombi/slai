@@ -23,7 +23,6 @@ export function orgRoutes(deps: AppDeps) {
     name: o.name,
     plan: o.plan,
     monthlySpendCapCents: o.monthlySpendCapCents,
-    requireMfa: o.requireMfa,
   });
 
   app.get("/org", async (c) => {
@@ -41,7 +40,6 @@ export function orgRoutes(deps: AppDeps) {
         .set({
           ...(input.name !== undefined && { name: input.name }),
           ...(input.monthlySpendCapCents !== undefined && { monthlySpendCapCents: input.monthlySpendCapCents }),
-          ...(input.requireMfa !== undefined && { requireMfa: input.requireMfa }),
         })
         .where(eq(organizations.id, a.orgId))
         .returning();

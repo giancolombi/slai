@@ -1,33 +1,19 @@
 import { randomBytes } from "node:crypto";
-import {
-  AAD,
-  audit,
-  burnPasswordCheck,
-  decrypt,
-  type Executor,
-  encrypt,
-  hashPassword,
-  memberships,
-  organizations,
-  sessions,
-  users,
-  verifyPassword,
-} from "@slai/db";
-import { loginBody, type Me, mfaVerifyBody, type Role, signupBody, switchOrgBody } from "@slai/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { audit, memberships, organizations, sessions, users } from "@slai/db";
+import { discoverBody, type SignInDiscovery, type SignInResult, signupBody, switchOrgBody } from "@slai/shared";
+import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { deleteCookie, setCookie } from "hono/cookie";
-import { type AppDeps, type AppEnv, type AuthContext, auditBase, auth, type Ctx } from "../context.js";
+import type { Auth } from "../auth/better-auth.js";
+import { CLIENT_IP_HEADER, SESSION_COOKIE } from "../auth/better-auth.js";
+import { SSO_REQUIRED, ssoForEmail } from "../auth/handler.js";
+import { buildMe } from "../auth/me.js";
+import { resolveAuth } from "../auth/session.js";
+import { type AppDeps, type AppEnv, auditBase, auth, type Ctx } from "../context.js";
 import { ApiError, conflict, notFound } from "../errors.js";
-import { requireAuth } from "../middleware/auth.js";
-import { ABSOLUTE_TIMEOUT_MS, createSession, SESSION_COOKIE } from "../sessions.js";
-import { generateSecret, otpauthUrl, verifyTotp } from "../totp.js";
+import { requireSession } from "../middleware/auth.js";
 import { body } from "../validate.js";
 
-const INVALID_LOGIN = () => new ApiError(401, "invalid_credentials", "Invalid email, password, or code.");
 const RATE_LIMITED = () => new ApiError(429, "rate_limited", "Too many attempts. Try again later.");
-
-const mfaAad = AAD.userMfaSecret;
 
 function slugify(name: string): string {
   const base = name
@@ -39,259 +25,105 @@ function slugify(name: string): string {
   return `${base || "org"}-${randomBytes(3).toString("hex")}`;
 }
 
-export async function buildMe(db: Executor, a: Pick<AuthContext, "user" | "orgId" | "role">): Promise<Me> {
-  const rows = await db
-    .select({
-      id: organizations.id,
-      name: organizations.name,
-      slug: organizations.slug,
-      plan: organizations.plan,
-      role: memberships.role,
-    })
-    .from(memberships)
-    .innerJoin(organizations, eq(organizations.id, memberships.orgId))
-    .where(eq(memberships.userId, a.user.id))
-    .orderBy(asc(memberships.createdAt));
-  const active = rows.find((r) => r.id === a.orgId);
-  if (!active) throw notFound("Organization");
-  return {
-    user: a.user,
-    organization: { id: active.id, name: active.name, slug: active.slug, plan: active.plan },
-    role: a.role,
-    organizations: rows.map((r) => ({ id: r.id, name: r.name, role: r.role as Role })),
-  };
-}
-
-export function authRoutes(deps: AppDeps) {
+/** Our own /auth routes; better-auth's allowlisted endpoints are mounted after these (handler.ts). */
+export function authRoutes(deps: AppDeps, betterAuth: Auth) {
   const app = new Hono<AppEnv>();
-  const sys = deps.systemDb.db;
+  const db = deps.authDb.db;
+  const cookieName = deps.env.NODE_ENV === "production" ? `__Secure-${SESSION_COOKIE}` : SESSION_COOKIE;
 
-  const setSessionCookie = (c: Ctx, token: string) =>
-    setCookie(c, SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: deps.env.NODE_ENV === "production",
-      sameSite: "Lax",
-      path: "/",
-      maxAge: ABSOLUTE_TIMEOUT_MS / 1000,
-    });
+  const authHeaders = (c: Ctx) => {
+    const h = new Headers(c.req.raw.headers);
+    h.delete(CLIENT_IP_HEADER);
+    const ip = c.get("ip");
+    if (ip) h.set(CLIENT_IP_HEADER, ip);
+    return h;
+  };
 
   app.post("/signup", async (c) => {
     if (!deps.rateLimits.loginByIp.take(`signup:${c.get("ip") ?? "unknown"}`)) throw RATE_LIMITED();
     const input = await body(c, signupBody);
-    const passwordHash = await hashPassword(input.password);
-    const now = deps.now();
-    const result = await sys.transaction(async (tx) => {
-      const [existing] = await tx.select({ id: users.id }).from(users).where(eq(users.email, input.email));
-      if (existing) return null;
-      const [user] = await tx
-        .insert(users)
-        .values({ email: input.email, name: input.name, passwordHash, lastLoginAt: now })
-        .returning();
-      const [org] = await tx
-        .insert(organizations)
-        .values({ name: input.organizationName, slug: slugify(input.organizationName) })
-        .returning();
-      await tx.insert(memberships).values({ orgId: org!.id, userId: user!.id, role: "owner" });
-      const token = await createSession(tx, {
-        userId: user!.id,
-        orgId: org!.id,
-        mfaVerified: false,
-        ip: c.get("ip"),
-        userAgent: c.req.header("user-agent") ?? null,
-        now,
-      });
-      const a = {
-        user: { id: user!.id, email: user!.email, name: user!.name, mfaEnabled: false },
-        orgId: org!.id,
-        role: "owner" as const,
-      };
-      await audit(tx, {
-        ...auditBase(c),
-        actor: { type: "user", id: user!.id, name: user!.email },
-        orgId: org!.id,
-        action: "auth.signup",
-        target: { type: "organization", id: org!.id },
-      });
-      return { token, me: await buildMe(tx, a) };
-    });
-    if (!result) throw conflict("Unable to create an account with this email.", "signup_failed");
-    setSessionCookie(c, result.token);
-    return c.json(result.me, 201);
-  });
-
-  app.post("/login", async (c) => {
-    const input = await body(c, loginBody);
     const email = input.email.toLowerCase();
-    const ipKey = c.get("ip") ?? "unknown";
-    if (!deps.rateLimits.loginByIp.take(ipKey) || !deps.rateLimits.loginByEmail.take(email)) {
-      await audit(sys, {
-        ...auditBase(c),
-        orgId: null,
-        action: "auth.login_rate_limited",
-        target: { type: "user", id: null },
-        metadata: { email },
-      });
-      throw RATE_LIMITED();
+    if ((await ssoForEmail(deps, email))?.enforced) throw SSO_REQUIRED();
+    let created: { headers: Headers; response: { user: { id: string } } };
+    try {
+      created = (await betterAuth.api.signUpEmail({
+        body: { email, password: input.password, name: input.name },
+        headers: authHeaders(c),
+        returnHeaders: true,
+      })) as typeof created;
+    } catch (e) {
+      const status = (e as { statusCode?: number }).statusCode ?? 500;
+      if (status >= 500) throw e;
+      throw conflict("Unable to create an account with this email.", "signup_failed");
     }
-    const [user] = await sys.select().from(users).where(eq(users.email, email));
-    const failed = async (reason: string) => {
-      await audit(sys, {
-        ...auditBase(c),
-        orgId: null,
-        actor: { type: "user", id: user?.id ?? null, name: email },
-        action: "auth.login_failed",
-        target: { type: "user", id: user?.id ?? null },
-        metadata: { reason },
+    const userId = created.response.user.id;
+    try {
+      await db.transaction(async (tx) => {
+        const [org] = await tx
+          .insert(organizations)
+          .values({ name: input.organizationName, slug: slugify(input.organizationName) })
+          .returning();
+        await tx.insert(memberships).values({ orgId: org!.id, userId, role: "owner" });
+        await tx.update(sessions).set({ activeOrgId: org!.id }).where(eq(sessions.userId, userId));
+        await audit(tx, {
+          ...auditBase(c),
+          actor: { type: "user", id: userId, name: email },
+          orgId: org!.id,
+          action: "auth.signup",
+          target: { type: "organization", id: org!.id },
+        });
       });
-      return INVALID_LOGIN();
-    };
-    if (!user || user.disabledAt) {
-      await burnPasswordCheck(input.password);
-      throw await failed(user ? "disabled" : "unknown_email");
+    } catch (e) {
+      await db.delete(users).where(eq(users.id, userId)); // no orphan user without an org
+      throw e;
     }
-    if (!(await verifyPassword(user.passwordHash, input.password))) throw await failed("bad_password");
-
-    const now = deps.now();
-    if (user.mfaEnabled) {
-      if (!input.totp) throw new ApiError(401, "mfa_required", "Enter the code from your authenticator app.");
-      const step = user.mfaSecret
-        ? verifyTotp(
-            decrypt(user.mfaSecret, { keyring: deps.keyring, aad: mfaAad(user.id) }),
-            input.totp,
-            now,
-            user.mfaLastStep,
-          )
-        : null;
-      if (step === null) throw await failed("bad_totp");
-      await sys.update(users).set({ mfaLastStep: step }).where(eq(users.id, user.id));
-    }
-
-    const [membership] = await sys
-      .select({ orgId: memberships.orgId, role: memberships.role })
-      .from(memberships)
-      .where(eq(memberships.userId, user.id))
-      .orderBy(asc(memberships.createdAt))
-      .limit(1);
-    if (!membership) throw await failed("no_organization");
-
-    const token = await sys.transaction(async (tx) => {
-      await tx.update(users).set({ lastLoginAt: now }).where(eq(users.id, user.id));
-      const t = await createSession(tx, {
-        userId: user.id,
-        orgId: membership.orgId,
-        mfaVerified: user.mfaEnabled,
-        ip: c.get("ip"),
-        userAgent: c.req.header("user-agent") ?? null,
-        now,
-      });
-      await audit(tx, {
-        ...auditBase(c),
-        actor: { type: "user", id: user.id, name: user.email },
-        orgId: membership.orgId,
-        action: "auth.login",
-        target: { type: "user", id: user.id },
-        metadata: { mfa: user.mfaEnabled },
-      });
-      return t;
-    });
-    deps.rateLimits.loginByEmail.reset(email);
-    setSessionCookie(c, token);
-    const me = await buildMe(sys, {
-      user: { id: user.id, email: user.email, name: user.name, mfaEnabled: user.mfaEnabled },
-      orgId: membership.orgId,
-      role: membership.role as Role,
-    });
-    return c.json(me);
+    const setCookies = created.headers.getSetCookie();
+    const value = setCookies.map((v) => new RegExp(`^${cookieName}=([^;]+)`).exec(v)?.[1]).find(Boolean);
+    const { ctx } = await resolveAuth(deps, betterAuth, new Headers({ cookie: `${cookieName}=${value ?? ""}` }));
+    if (!ctx) throw new ApiError(500, "internal", "Account created, but signing in failed. Sign in again.");
+    const result: SignInResult = { status: "mfa_enrollment_required", me: await buildMe(db, ctx) };
+    const out = c.json(result, 201);
+    for (const v of setCookies) out.headers.append("set-cookie", v);
+    return out;
   });
 
-  const signedIn = requireAuth({ allowMfaPending: true });
+  /** Email-first sign-in: SSO or password, decided by the email's domain only (no user lookup). */
+  app.post("/discover", async (c) => {
+    if (!deps.rateLimits.loginByIp.take(`discover:${c.get("ip") ?? "unknown"}`)) throw RATE_LIMITED();
+    const input = await body(c, discoverBody);
+    const sso = await ssoForEmail(deps, input.email);
+    const out: SignInDiscovery = sso
+      ? { method: "sso", providerId: sso.providerId, enforced: sso.enforced }
+      : { method: "password" };
+    return c.json(out);
+  });
 
-  app.post("/logout", signedIn, async (c) => {
+  app.post("/logout", requireSession, async (c) => {
     const a = auth(c);
-    await sys.transaction(async (tx) => {
-      await tx.delete(sessions).where(eq(sessions.id, a.sessionId));
-      await audit(tx, {
-        ...auditBase(c),
-        orgId: a.orgId,
-        action: "auth.logout",
-        target: { type: "user", id: a.user.id },
-      });
+    const res = await betterAuth.api.signOut({ headers: authHeaders(c), returnHeaders: true });
+    await audit(db, {
+      ...auditBase(c),
+      orgId: a.orgId,
+      action: "auth.logout",
+      target: { type: "user", id: a.user.id },
     });
-    deleteCookie(c, SESSION_COOKIE, { path: "/" });
-    return c.body(null, 204);
+    const out = c.body(null, 204);
+    for (const v of res.headers.getSetCookie()) out.headers.append("set-cookie", v);
+    return out;
   });
 
-  app.get("/me", signedIn, async (c) => c.json(await buildMe(sys, auth(c))));
+  // Works while MFA is pending, so the web app can route to enrollment or verification.
+  app.get("/me", requireSession, async (c) => c.json(await buildMe(db, auth(c))));
 
-  app.post("/mfa/setup", signedIn, async (c) => {
-    const a = auth(c);
-    if (a.user.mfaEnabled) throw conflict("Two-factor authentication is already enabled.", "mfa_already_enabled");
-    const secret = generateSecret();
-    await sys.transaction(async (tx) => {
-      await tx
-        .update(users)
-        .set({ mfaSecret: encrypt(secret, { keyring: deps.keyring, aad: mfaAad(a.user.id) }), mfaLastStep: null })
-        .where(eq(users.id, a.user.id));
-      await audit(tx, {
-        ...auditBase(c),
-        orgId: a.orgId,
-        action: "auth.mfa_setup_started",
-        target: { type: "user", id: a.user.id },
-      });
-    });
-    return c.json({ otpauthUrl: otpauthUrl(secret, a.user.email), secret });
-  });
-
-  app.post("/mfa/verify", signedIn, async (c) => {
-    const a = auth(c);
-    const input = await body(c, mfaVerifyBody);
-    const [user] = await sys.select().from(users).where(eq(users.id, a.user.id));
-    if (!user?.mfaSecret) throw new ApiError(400, "mfa_not_setup", "Start two-factor setup first.");
-    const secret = decrypt(user.mfaSecret, { keyring: deps.keyring, aad: mfaAad(user.id) });
-    const now = deps.now();
-    const step = verifyTotp(secret, input.totp, now, user.mfaLastStep);
-    if (step === null) {
-      await audit(sys, {
-        ...auditBase(c),
-        orgId: a.orgId,
-        action: "auth.mfa_failed",
-        target: { type: "user", id: a.user.id },
-      });
-      throw new ApiError(401, "invalid_code", "That code is not valid.");
-    }
-    // Privilege change: rotate the session token (prevents fixation).
-    const token = await sys.transaction(async (tx) => {
-      await tx.update(users).set({ mfaEnabled: true, mfaLastStep: step }).where(eq(users.id, user.id));
-      await tx.delete(sessions).where(eq(sessions.id, a.sessionId));
-      const t = await createSession(tx, {
-        userId: user.id,
-        orgId: a.orgId,
-        mfaVerified: true,
-        ip: c.get("ip"),
-        userAgent: c.req.header("user-agent") ?? null,
-        now,
-      });
-      await audit(tx, {
-        ...auditBase(c),
-        orgId: a.orgId,
-        action: user.mfaEnabled ? "auth.mfa_verified" : "auth.mfa_enabled",
-        target: { type: "user", id: user.id },
-      });
-      return t;
-    });
-    setSessionCookie(c, token);
-    return c.json(await buildMe(sys, { ...a, user: { ...a.user, mfaEnabled: true } }));
-  });
-
-  app.post("/switch-org", signedIn, async (c) => {
+  app.post("/switch-org", requireSession, async (c) => {
     const a = auth(c);
     const input = await body(c, switchOrgBody);
-    const [m] = await sys
+    const [m] = await db
       .select({ role: memberships.role })
       .from(memberships)
       .where(and(eq(memberships.userId, a.user.id), eq(memberships.orgId, input.organizationId)));
     if (!m) throw notFound("Organization");
-    await sys.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       await tx.update(sessions).set({ activeOrgId: input.organizationId }).where(eq(sessions.id, a.sessionId));
       await audit(tx, {
         ...auditBase(c),
@@ -301,7 +133,10 @@ export function authRoutes(deps: AppDeps) {
         metadata: { from: a.orgId },
       });
     });
-    return c.json(await buildMe(sys, { user: a.user, orgId: input.organizationId, role: m.role as Role }));
+    // The MFA state can differ per org (SSO trust is per org), so re-resolve.
+    const { ctx } = await resolveAuth(deps, betterAuth, c.req.raw.headers);
+    if (!ctx) throw notFound("Organization");
+    return c.json(await buildMe(db, ctx));
   });
 
   return app;

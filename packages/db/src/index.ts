@@ -1,4 +1,5 @@
 export * from "./audit.js";
+export * from "./auth-secrets.js";
 export * from "./client.js";
 export * from "./crypto.js";
 export * from "./evaluation.js";
@@ -11,3 +12,4 @@ export * from "./schema.js";
 export * from "./seed.js";
 export * from "./storage.js";
 export * from "./testing.js";
+export * from "./totp.js";

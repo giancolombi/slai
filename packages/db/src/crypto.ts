@@ -1,6 +1,6 @@
 /**
  * Envelope-free AES-256-GCM for secrets at rest (connector credentials, webhook
- * secrets, MFA secrets, Slack webhook URLs).
+ * secrets, Slack webhook URLs, SSO client secrets).
  *
  * Ciphertext format: `v1.<keyId>.<iv>.<tag>.<ciphertext>` (base64url parts).
  * The key id lets us rotate: new writes use the current key, and reads look up
@@ -94,7 +94,10 @@ export function keyIdOf(ciphertext: string): string | null {
 export const AAD = {
   connectionCredentials: (connectionId: string) => `connection:${connectionId}`,
   connectionWebhookSecret: (connectionId: string) => `connection:${connectionId}:webhook`,
-  userMfaSecret: (userId: string) => `user:${userId}:mfa`,
+  /** The OIDC client secret inside sso_providers.oidc_config. */
+  ssoClientSecret: (providerId: string) => `sso_provider:${providerId}:client_secret`,
+  /** A SAML SP private key inside sso_providers.saml_config. */
+  ssoSamlPrivateKey: (providerId: string) => `sso_provider:${providerId}:saml_private_key`,
   notificationTarget: (channelId: string) => `notification_channel:${channelId}`,
 } as const;
 

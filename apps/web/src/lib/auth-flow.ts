@@ -1,0 +1,70 @@
+/**
+ * The sign-in step machine (pure; the login and second-factor pages render it)
+ * and the client half of the MFA gate. The server enforces both; this only
+ * decides which screen to show.
+ */
+import type { Me, SecondFactor, SignInDiscovery, SignInResult } from "@slai/shared";
+
+export type SignInStep =
+  | { kind: "email" }
+  | { kind: "password"; email: string; sso: { providerId: string } | null }
+  /** The email's domain uses SSO: leave for the IdP. */
+  | { kind: "sso"; email: string; providerId: string }
+  | { kind: "second_factor"; email: string; methods: SecondFactor[] }
+  | { kind: "enroll"; me: Me }
+  | { kind: "done"; me: Me };
+
+export type SignInEvent =
+  | { type: "discovered"; email: string; discovery: SignInDiscovery }
+  | { type: "use_password" }
+  | { type: "use_sso" }
+  | { type: "result"; result: SignInResult }
+  /** 403 sso_required from the password endpoint (the domain enforces SSO). */
+  | { type: "sso_required"; providerId: string | null }
+  | { type: "back" };
+
+export function signInStep(step: SignInStep, event: SignInEvent): SignInStep {
+  switch (event.type) {
+    case "discovered": {
+      const d = event.discovery;
+      if (d.method === "sso" && d.enforced) return { kind: "sso", email: event.email, providerId: d.providerId };
+      return { kind: "password", email: event.email, sso: d.method === "sso" ? { providerId: d.providerId } : null };
+    }
+    case "use_password":
+      return step.kind === "sso" ? { kind: "password", email: step.email, sso: { providerId: step.providerId } } : step;
+    case "use_sso":
+      return step.kind === "password" && step.sso
+        ? { kind: "sso", email: step.email, providerId: step.sso.providerId }
+        : step;
+    case "sso_required":
+      if (step.kind !== "password") return step;
+      return event.providerId ? { kind: "sso", email: step.email, providerId: event.providerId } : { kind: "email" };
+    case "result": {
+      const r = event.result;
+      const email = "email" in step ? step.email : "";
+      if (r.status === "mfa_required") return { kind: "second_factor", email, methods: r.methods };
+      if (r.status === "mfa_enrollment_required") return { kind: "enroll", me: r.me };
+      return { kind: "done", me: r.me };
+    }
+    case "back":
+      return { kind: "email" };
+  }
+}
+
+/**
+ * Where an authenticated visitor must go before the app: mandatory enrollment,
+ * or verifying the second factor for this session. Null when MFA is satisfied.
+ */
+export function mfaRedirect(me: Me): "/mfa/setup" | "/mfa" | null {
+  if (me.security.mfa === "enrollment_required") return "/mfa/setup";
+  if (me.security.mfa === "verification_required") return "/mfa";
+  return null;
+}
+
+/** Second-factor methods available to a signed-in session that must verify (step-up). */
+export function stepUpMethods(me: Me): SecondFactor[] {
+  const m: SecondFactor[] = [];
+  if (me.security.totp) m.push("totp", "backup_code");
+  if (me.security.passkeys > 0) m.push("passkey");
+  return m;
+}
