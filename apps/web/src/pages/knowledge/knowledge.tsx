@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { eligibleConnections, SOURCE_KIND_LABEL, type SyncedKind, safeHref, urlHost } from "../../lib/knowledge";
 import { providerLabel } from "../../lib/labels";
@@ -113,11 +114,14 @@ export function KnowledgePage() {
               title="No knowledge yet"
               description="Sync your help center's articles, or write saved replies below. Drafts cite them with links so customers get answers, not holding replies."
               action={
-                canManage && (
-                  <Button size="sm" variant="primary" leadingIcon={<Plus />} onClick={() => setAdding(true)}>
-                    Add source
-                  </Button>
-                )
+                <>
+                  {canManage && (
+                    <Button size="sm" variant="primary" leadingIcon={<Plus />} onClick={() => setAdding(true)}>
+                      Add source
+                    </Button>
+                  )}
+                  <GuideButton guide="knowledge" />
+                </>
               }
             />
           </Card>
@@ -561,7 +565,12 @@ function SavedRepliesPanel({ sources, canManage }: { sources: KnowledgeSource[];
           icon={<MessageSquareText />}
           title="No saved replies"
           description="Write the answers you give most often, such as how to reset SSO or where to find invoices."
-          action={newButton}
+          action={
+            <>
+              {newButton}
+              <GuideButton guide="knowledge" anchor="add" />
+            </>
+          }
         />
       ) : (
         <ul className="border-t border-line">

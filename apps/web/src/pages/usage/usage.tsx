@@ -55,6 +55,8 @@ import { type FormEvent, useEffect, useState } from "react";
 import { MOCK_MODE } from "../../app-layout";
 import { NOTICE_CLASS } from "../../components/billing-banner";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
+import { WhatsThis } from "../../help/whats-this";
 import { api, errorMessage } from "../../lib/api";
 import {
   billingNotice,
@@ -369,7 +371,9 @@ function Meters({ billing, canEdit, onEditCap }: { billing: BillingSummary; canE
     <Card className="flex flex-col gap-6 p-5">
       <div>
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-sm font-medium text-ink">SLA-tracked tickets</p>
+          <p className="flex items-center gap-1 text-sm font-medium text-ink">
+            SLA-tracked tickets <WhatsThis concept="tracked" />
+          </p>
           <p className="font-mono text-sm text-ink tnum">
             {formatNumber(t.used)}
             <span className="text-ink-subtle"> / {t.limit === null ? "by contract" : formatNumber(t.limit)}</span>
@@ -462,6 +466,7 @@ function ByKind({ usage }: { usage: UsageSummary }) {
           icon={<Receipt />}
           title="No usage yet this period"
           description="Agent runs, contract extraction and previews will appear here."
+          action={<GuideButton guide="billing" anchor="credits" />}
         />
       ) : (
         <Table aria-label="Credits by kind">

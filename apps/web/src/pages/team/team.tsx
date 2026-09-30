@@ -32,6 +32,7 @@ import { KeyRound, Mail, MoreHorizontal, ShieldAlert, ShieldCheck, Trash2, UserP
 import { type FormEvent, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
 import { StepUp } from "../../components/step-up";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { canResetMfa, stepUpFresh } from "../../lib/auth-flow";
 import { ROLE_HELP, ROLE_LABEL } from "../../lib/labels";
@@ -373,6 +374,7 @@ export function TeamPage() {
                       icon={<Users />}
                       title="No members yet"
                       description="Invite your support leads and agents."
+                      action={<GuideButton guide="team-security" />}
                     />
                   </TableMessage>
                 ) : (

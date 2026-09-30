@@ -27,6 +27,7 @@ import { getRouteApi, Link } from "@tanstack/react-router";
 import { ArrowLeft, Bot, ExternalLink, FileQuestion, PenLine, ShieldAlert, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { WhatsThis } from "../../help/whats-this";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { METRIC_LABEL, providerLabel, STATUS_LABEL } from "../../lib/labels";
 import { deciderLabel } from "../../lib/people";
@@ -322,7 +323,10 @@ function MetricCard({ metric: m, warnAt, primary }: { metric: MetricView; warnAt
     <Card className={cn("flex flex-col gap-3 p-4", primary && "border-line-strong shadow-sm md:col-span-2")}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-ink">{METRIC_LABEL[m.metric]}</h3>
+          <h3 className="flex items-center gap-1 text-sm font-semibold text-ink">
+            {METRIC_LABEL[m.metric]}
+            {primary && <WhatsThis concept="thresholds" />}
+          </h3>
           <p className="text-xs text-ink-muted">
             {STATE_LABEL[m.state]}
             {m.targetMs !== null && <> · target {formatDuration(m.targetMs)}</>}

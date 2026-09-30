@@ -31,6 +31,7 @@ import { Link } from "@tanstack/react-router";
 import { Building2, MoreHorizontal, Pencil, Plus, Search, Ticket, Trash2 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage, isApiError } from "../../lib/api";
 import { qk, useCustomers, useMe, usePolicies } from "../../lib/queries";
 
@@ -140,13 +141,16 @@ export function CustomersPage() {
           <EmptyState
             icon={<Building2 />}
             title="No customers yet"
-            description="Customers are matched from your help desk by domain or organization ID. Add one to assign it a contract's policy."
+            description="Customers are matched from your help desk by organization ID, then email domain. Add one and assign it the policy from its contract; unmatched tickets use the default policy."
             action={
-              canEdit && (
-                <Button size="sm" variant="primary" leadingIcon={<Plus />} onClick={() => setEditing("new")}>
-                  Add customer
-                </Button>
-              )
+              <>
+                {canEdit && (
+                  <Button size="sm" variant="primary" leadingIcon={<Plus />} onClick={() => setEditing("new")}>
+                    Add customer
+                  </Button>
+                )}
+                <GuideButton guide="contract-review" anchor="assign" />
+              </>
             }
           />
         ) : filtered.length === 0 ? (

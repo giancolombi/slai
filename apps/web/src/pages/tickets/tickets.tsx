@@ -25,6 +25,8 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Inbox, Search, SearchX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
+import { WhatsThis } from "../../help/whats-this";
 import { api, type TicketQuery } from "../../lib/api";
 import { METRIC_LABEL, providerLabel, STATUS_LABEL, STATUSES } from "../../lib/labels";
 import { useCustomers } from "../../lib/queries";
@@ -152,7 +154,11 @@ export function TicketsPage() {
               <TH className="hidden md:table-cell">Customer</TH>
               <TH className="hidden lg:table-cell">Priority</TH>
               <TH className="hidden lg:table-cell">Status</TH>
-              <TH>Risk</TH>
+              <TH>
+                <span className="inline-flex items-center gap-1">
+                  Risk <WhatsThis concept="risk" />
+                </span>
+              </TH>
               <TH aria-sort="ascending">Next due</TH>
               <TH className="hidden xl:table-cell">Assignee</TH>
             </tr>
@@ -185,9 +191,12 @@ export function TicketsPage() {
                     title="No tickets yet"
                     description="Tickets appear here once a help desk is connected and synced."
                     action={
-                      <Button asChild size="sm" variant="primary">
-                        <Link to="/connections">Connect a help desk</Link>
-                      </Button>
+                      <>
+                        <Button asChild size="sm" variant="primary">
+                          <Link to="/connections">Connect a help desk</Link>
+                        </Button>
+                        <GuideButton guide="sla-clock" />
+                      </>
                     }
                   />
                 )}

@@ -26,6 +26,7 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Archive, ArrowRight, Gauge, ScrollText, Star } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ErrorState, Page } from "../../components/page";
+import { GuideButton } from "../../help/guide-button";
 import { api, errorMessage } from "../../lib/api";
 import { personLabel } from "../../lib/people";
 import { qk, useContracts, useCustomers, useMe, usePolicies } from "../../lib/queries";
@@ -83,9 +84,12 @@ export function PoliciesPage() {
             title="No policies yet"
             description="Upload a contract and approve the extracted policy. It shows up here."
             action={
-              <Button asChild variant="primary" size="sm">
-                <Link to="/contracts">Upload a contract</Link>
-              </Button>
+              <>
+                <Button asChild variant="primary" size="sm">
+                  <Link to="/contracts">Upload a contract</Link>
+                </Button>
+                <GuideButton guide="contract-review" />
+              </>
             }
           />
         ) : (

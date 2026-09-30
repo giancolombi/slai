@@ -16,13 +16,14 @@ import {
   SlaClock,
   Sparkline,
   Stat,
+  toast,
 } from "@slai/ui";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  BookOpen,
   CircleCheck,
   Gauge,
-  HandCoins,
   Inbox,
   OctagonX,
   Plug,
@@ -30,15 +31,52 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { ErrorState, Page } from "../../components/page";
+import { Checklist } from "../../help/checklist";
+import { WhatsThis } from "../../help/whats-this";
+import { errorMessage } from "../../lib/api";
 import { METRIC_LABEL, PRIORITY_LABEL } from "../../lib/labels";
-import { useDashboard, useMe } from "../../lib/queries";
+import { useDashboard, useMe, useOnboarding, useUpdateOnboarding } from "../../lib/queries";
 import { AttainmentChart, BreachBars, TrendTable, useActiveIndex } from "./charts";
 
 const periodFmt = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
 
+/** The getting-started checklist for owners and admins, until it is done or they hide it. */
+function useChecklistVisible() {
+  const me = useMe();
+  const canAct = me.data?.role === "owner" || me.data?.role === "admin";
+  const onboarding = useOnboarding(canAct);
+  const s = onboarding.data;
+  return { visible: Boolean(canAct && s && !s.checklistDismissed && !s.allDone), state: s };
+}
+
+function DashboardChecklist() {
+  const { visible, state } = useChecklistVisible();
+  const update = useUpdateOnboarding();
+  if (!visible || !state) return null;
+  return (
+    <Checklist
+      className="mb-5"
+      state={state}
+      canAct
+      dismissing={update.isPending}
+      onDismiss={() =>
+        update.mutate(
+          { checklistDismissed: true },
+          {
+            onSuccess: () => toast({ title: "Checklist hidden", description: "Bring it back any time from Help." }),
+            onError: (e) =>
+              toast({ tone: "error", title: "Couldn't hide the checklist", description: errorMessage(e) }),
+          },
+        )
+      }
+    />
+  );
+}
+
 export function DashboardPage() {
   const query = useDashboard();
   const me = useMe();
+  const showChecklist = useChecklistVisible().visible;
   const firstName = me.data?.user.name.split(" ")[0];
   const period = query.data ? periodFmt.format(new Date(query.data.period.start)) : null;
 
@@ -59,6 +97,7 @@ export function DashboardPage() {
       }
       width="wide"
     >
+      <DashboardChecklist />
       {query.isPending ? (
         <DashboardSkeleton />
       ) : query.isError ? (
@@ -66,7 +105,7 @@ export function DashboardPage() {
           <ErrorState error={query.error} resource="the dashboard" onRetry={() => query.refetch()} />
         </Card>
       ) : query.data.openTickets === 0 && query.data.attainmentTrend.length === 0 ? (
-        <EmptyDashboard />
+        <EmptyDashboard withChecklist={showChecklist} />
       ) : (
         <DashboardBody data={query.data} />
       )}
@@ -173,7 +212,11 @@ function DashboardBody({ data }: { data: DashboardSummary }) {
 
       <Card>
         <CardHeader
-          title="Open tickets by risk"
+          title={
+            <span className="inline-flex items-center gap-1">
+              Open tickets by risk <WhatsThis concept="risk" />
+            </span>
+          }
           description="Worst live SLA metric per ticket, from the deterministic clock."
         />
         <CardContent>
@@ -330,7 +373,9 @@ function DueSoon({ tickets: raw }: { tickets: TicketSummary[] }) {
   );
 }
 
-function EmptyDashboard() {
+function EmptyDashboard({ withChecklist }: { withChecklist: boolean }) {
+  // With the checklist on screen, it already says what to do next.
+  if (withChecklist) return null;
   return (
     <Card>
       <EmptyState
@@ -343,8 +388,8 @@ function EmptyDashboard() {
               <Link to="/onboarding">Start setup</Link>
             </Button>
             <Button asChild variant="secondary">
-              <Link to="/replay">
-                <HandCoins aria-hidden /> Run a Breach Replay
+              <Link to="/help/$guideId" params={{ guideId: "getting-started" }}>
+                <BookOpen aria-hidden /> Read Getting started
               </Link>
             </Button>
           </>
