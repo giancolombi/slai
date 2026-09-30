@@ -262,6 +262,8 @@ export interface ConnectorInfo {
   };
   /** The connector can sync help-center articles into a knowledge source (T-47). */
   supportsKnowledge?: boolean;
+  /** The connector can sync the help desk's saved replies/macros into a knowledge source (T-47b). */
+  supportsSavedReplies?: boolean;
 }
 export interface Connection {
   id: string;
@@ -566,9 +568,12 @@ export interface KnowledgeSource {
   enabledCount: number;
   createdAt: string;
 }
-/** `helpdesk_articles` needs a connection whose connector supports knowledge; `manual` takes none. */
+/**
+ * `helpdesk_articles` and `saved_replies` need a connection whose connector
+ * supports them (`supportsKnowledge`, `supportsSavedReplies`); `manual` takes none.
+ */
 export const createKnowledgeSourceBody = z.object({
-  kind: z.enum(["helpdesk_articles", "manual"]),
+  kind: z.enum(KNOWLEDGE_SOURCE_KINDS),
   name: z.string().trim().min(1).max(120),
   connectionId: z.uuid().nullable().default(null),
 });

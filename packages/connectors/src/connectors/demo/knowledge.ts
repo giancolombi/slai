@@ -191,3 +191,80 @@ const BASE_DAY = Date.UTC(2026, 0, 5);
 
 export const demoArticleUrl = (slug: string) => `${DEMO_HELP_CENTER}/articles/${slug}`;
 export const demoArticleUpdatedAt = (a: DemoArticle) => new Date(BASE_DAY + a.updatedDay * 86_400_000);
+
+/**
+ * The demo help desk's saved replies (T-47b): the macros its agents use, with
+ * the help desk's own placeholders (stripped on sync, like a real connector).
+ * They have no public page, so no URL.
+ */
+export interface DemoSavedReply {
+  id: string;
+  title: string;
+  body: string;
+  updatedDay: number;
+}
+
+export const DEMO_SAVED_REPLIES: DemoSavedReply[] = [
+  {
+    id: "macro-sso-audience",
+    title: "SSO: SAML audience mismatch after an IdP change",
+    body: "Hi {{ticket.requester.first_name}},\n\nThe audience mismatch error clears once the Audience URI in your identity provider matches the Entity ID under Settings → Security → Single sign-on exactly, including the trailing slash. Update it in Okta or Azure AD and ask one affected user to sign in again.\n\nIf it still fails, reply with a SAML trace and we will compare the assertion with your workspace settings.\n\n{{current_user.signature}}",
+    updatedDay: 215,
+  },
+  {
+    id: "macro-scim-reassign",
+    title: "SCIM: users deactivated after enabling provisioning",
+    body: "Hi {{ticket.requester.first_name}},\n\nWith SCIM provisioning on, users who are not assigned to the Acme Cloud app in your identity provider are deactivated at the next sync. Assign the affected users (or their group) to the app and run a push; they are reactivated with all their data intact.\n\n{{current_user.signature}}",
+    updatedDay: 192,
+  },
+  {
+    id: "macro-2fa-authenticator",
+    title: "2FA codes by SMS not arriving: switch to an authenticator app",
+    body: "Hi {{ticket.requester.first_name}},\n\nSome mobile carriers delay or filter SMS codes, especially for international numbers. Affected users can switch to an authenticator app under Profile → Security → Two-factor authentication, and an admin can reset a user's second factor from Settings → Members.\n\n{{current_user.signature}}",
+    updatedDay: 165,
+  },
+  {
+    id: "macro-api-500-request-ids",
+    title: "API 500 errors: retry safely and send request IDs",
+    body: "Hi {{ticket.requester.first_name}},\n\nSorry about the 500 errors. Please retry with exponential backoff and the same Idempotency-Key header, so no event is stored twice, and send us two or three request IDs (req_…) from the failing responses so our engineers can trace them.\n\n{{current_user.signature}}",
+    updatedDay: 231,
+  },
+  {
+    id: "macro-webhook-delays",
+    title: "Webhook deliveries delayed: acknowledge first, process later",
+    body: "Hi {{ticket.requester.first_name}},\n\nWebhook deliveries are retried with backoff when an endpoint takes longer than 10 seconds to answer, which makes later deliveries look delayed. Return a 2xx straight away and process the payload asynchronously; the delivery log under Settings → Developers → Webhooks shows each attempt and lets you replay failures.\n\n{{current_user.signature}}",
+    updatedDay: 207,
+  },
+  {
+    id: "macro-429-new-key",
+    title: "Rate limit 429 errors below quota: create a new API key",
+    body: "Hi {{ticket.requester.first_name}},\n\nA 429 below your plan's quota usually means the API key belongs to an older integration tier. Create a new key under Settings → Developers → API keys to get your plan's limit, and wait for the Retry-After seconds before retrying a 429.\n\n{{current_user.signature}}",
+    updatedDay: 224,
+  },
+  {
+    id: "macro-csv-export-async",
+    title: "Large CSV export times out: use the background export",
+    body: "Hi {{ticket.requester.first_name}},\n\nVery large CSV exports can time out in the browser. The background export under Settings → Data → Export runs on our side and emails you a download link when the file is ready, so it is the best option for a full history export.\n\n{{current_user.signature}}",
+    updatedDay: 180,
+  },
+  {
+    id: "macro-salesforce-reconnect",
+    title: "Salesforce sync stopped updating: reconnect the integration",
+    body: "Hi {{ticket.requester.first_name}},\n\nWhen Salesforce revokes the integration user's session (for example after a password reset), the sync stops updating opportunities while the page still says connected. Disconnect and reconnect Salesforce under Settings → Integrations with a user that has API access, then run a manual sync.\n\n{{current_user.signature}}",
+    updatedDay: 198,
+  },
+  {
+    id: "macro-slack-reinstall",
+    title: "Slack notifications no longer posting: reinstall the Slack app",
+    body: "Hi {{ticket.requester.first_name}},\n\nSlack notifications stop when the channel is archived or renamed, or when the person who installed the app leaves the workspace. Reinstall the Slack app from Settings → Integrations → Slack and pick the channel again.\n\n{{current_user.signature}}",
+    updatedDay: 170,
+  },
+  {
+    id: "macro-read-only-contractors",
+    title: "Read-only access for contractors with role-based permissions",
+    body: "Hi {{ticket.requester.first_name}},\n\nCreate a custom role under Settings → Roles with read-only access, then assign it to the contractors on just the projects they need from each project's Members tab. They will not see any other project.\n\n{{current_user.signature}}",
+    updatedDay: 112,
+  },
+];
+
+export const demoSavedReplyUpdatedAt = (r: DemoSavedReply) => new Date(BASE_DAY + r.updatedDay * 86_400_000);

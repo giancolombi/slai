@@ -6,7 +6,14 @@ import { fakeConnector, seedTicket } from "./fixtures.js";
 import { addMember, fakeRegistry, setupApp, signup } from "./harness.js";
 
 const withKnowledge = { ...fakeConnector(), supportsKnowledge: true };
-const ctx = setupApp({ connectors: fakeRegistry([withKnowledge]) });
+/** A help desk with saved replies but no help center (T-47b). */
+const withSavedReplies = {
+  ...fakeConnector(),
+  provider: "freshdesk",
+  displayName: "Freshdesk (fake)",
+  supportsSavedReplies: true,
+} as unknown as typeof withKnowledge;
+const ctx = setupApp({ connectors: fakeRegistry([withKnowledge, withSavedReplies]) });
 let owner: Awaited<ReturnType<typeof signup>>;
 let conn: Connection;
 let source: KnowledgeSource;
@@ -79,6 +86,49 @@ describe("knowledge sources", () => {
       (await owner.client.post("/knowledge-sources", { kind: "manual", name: "x", connectionId: conn.id })).status,
     ).toBe(400);
     expect((await owner.client.post("/knowledge-sources", { kind: "saved_replies", name: "x" })).status).toBe(400);
+    // The fake Zendesk has a help center but no saved replies.
+    const unsupported = await owner.client.post("/knowledge-sources", {
+      kind: "saved_replies",
+      name: "Macros",
+      connectionId: conn.id,
+    });
+    expect(unsupported.status).toBe(400);
+    expect(JSON.stringify(unsupported.body)).toMatch(/does not provide saved replies/);
+  });
+
+  it("a help desk with saved replies gets a saved-replies source on connect, synced right away (T-47b)", async () => {
+    const other = await signup(ctx, "Sam");
+    const res = await other.client.post<Connection>("/connections", {
+      provider: "freshdesk",
+      name: "Desk",
+      credentials: { subdomain: "acme", token: "fd-super-secret-token" },
+    });
+    expect(res.status).toBe(201);
+    const list = (await other.client.get<List<KnowledgeSource>>("/knowledge-sources")).body.items;
+    expect(list).toEqual([
+      expect.objectContaining({ connectionId: res.body.id, kind: "saved_replies", name: "Desk saved replies" }),
+    ]);
+    expect((await jobsFor("sourceId", list[0]!.id)).map((j) => j.name)).toEqual(["sync-knowledge"]);
+    const connectors = (await other.client.get<{ provider: string; supportsSavedReplies: boolean }[]>("/connectors"))
+      .body;
+    expect(connectors.map((c) => [c.provider, c.supportsSavedReplies])).toEqual([
+      ["zendesk", false],
+      ["freshdesk", true],
+    ]);
+
+    // Deleted by hand, it can be added back (admin, audited, synced); a second one is a conflict.
+    await ctx.owner.db.delete(knowledgeSources).where(eq(knowledgeSources.id, list[0]!.id));
+    const body = { kind: "saved_replies", name: "Desk macros", connectionId: res.body.id };
+    const created = await other.client.post<KnowledgeSource>("/knowledge-sources", body);
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ kind: "saved_replies", connectionId: res.body.id, status: "idle" });
+    expect((await jobsFor("sourceId", created.body.id)).map((j) => j.name)).toEqual(["sync-knowledge"]);
+    const dup = await other.client.post("/knowledge-sources", body);
+    expect(dup.status).toBe(409);
+    expect(JSON.stringify(dup.body)).toMatch(/saved-replies source/);
+    // Articles are still refused for a help desk without a help center.
+    const articles = await other.client.post("/knowledge-sources", { ...body, kind: "helpdesk_articles" });
+    expect(articles.status).toBe(400);
   });
 
   it("queues a sync on request (audited); manual sources have nothing to sync", async () => {

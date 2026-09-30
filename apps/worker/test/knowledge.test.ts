@@ -64,10 +64,10 @@ describe("sync-knowledge", () => {
 
   it("records an error for a connector without knowledge, and ignores manual sources", async () => {
     const other = await createConnection(h, orgId, {
-      provider: "zendesk",
-      credentials: { subdomain: "acme", email: "a@acme.example", apiToken: "t" },
+      provider: "intercom",
+      credentials: { accessToken: "t" },
     });
-    // Zendesk supports knowledge; a "saved replies" source on it does not exist upstream yet.
+    // Intercom has help-center articles, but its public API has no saved replies.
     const saved = await addSource(orgId, { connectionId: other, kind: "saved_replies" });
     const manual = await addSource(orgId, { kind: "manual", name: "Saved replies" });
     await h.queue.send("sync-knowledge", { orgId, sourceId: saved.id });
@@ -78,6 +78,27 @@ describe("sync-knowledge", () => {
       lastError: expect.stringMatching(/saved replies/),
     });
     expect(await source(manual.id)).toMatchObject({ status: "idle", lastSyncAt: null, lastError: null });
+  });
+});
+
+describe("sync-knowledge for saved replies (T-47b)", () => {
+  it("syncs the help desk's saved replies like articles, placeholders stripped, and they are retrievable", async () => {
+    const replies = await addSource(orgId, { connectionId, kind: "saved_replies", name: "Demo macros" });
+    await h.queue.send("sync-knowledge", { orgId, sourceId: replies.id });
+    await h.drain();
+    const rows = await owner.db.select().from(knowledgeArticles).where(eq(knowledgeArticles.sourceId, replies.id));
+    expect(rows.length).toBeGreaterThanOrEqual(10);
+    expect(rows.every((r) => r.url === null && r.enabled && !/\{\{|\}\}/.test(r.bodyText))).toBe(true);
+    expect(await source(replies.id)).toMatchObject({ status: "idle", lastError: null });
+
+    const found = await h.deps.orgDb.withOrg(orgId, (tx) =>
+      retrieveKnowledge(tx, {
+        subject: "Slack notifications no longer posting",
+        lastRequesterMessage: "Our Slack channel stopped getting notifications after we renamed it.",
+      }),
+    );
+    expect(found[0]).toMatchObject({ title: expect.stringMatching(/^Slack notifications/), url: null });
+    expect(rows.map((r) => r.id)).toContain(found[0]!.id);
   });
 });
 

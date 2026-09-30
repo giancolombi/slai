@@ -15,7 +15,7 @@ import type { Priority, TicketStatus } from "@slai/sla-engine";
 import { z } from "zod";
 import { finalizeEvents } from "../../lib/events.js";
 import { decodeCursor, encodeCursor } from "../../lib/paginate.js";
-import { plainText } from "../../lib/text.js";
+import { plainText, savedReplyText } from "../../lib/text.js";
 import {
   type CanonicalComment,
   type CanonicalEvent,
@@ -36,11 +36,18 @@ import {
   type TimelineItem,
   ticketCountForDay,
 } from "./generate.js";
-import { DEMO_ARTICLES, demoArticleUpdatedAt, demoArticleUrl } from "./knowledge.js";
+import {
+  DEMO_ARTICLES,
+  DEMO_SAVED_REPLIES,
+  demoArticleUpdatedAt,
+  demoArticleUrl,
+  demoSavedReplyUpdatedAt,
+} from "./knowledge.js";
 
 export const DEMO_HISTORY_DAYS = 120;
 const PAGE_SIZE = 100;
 const ARTICLE_PAGE_SIZE = 10;
+const SAVED_REPLY_PAGE_SIZE = 5;
 
 export const demoConfigSchema = z.object({
   seed: z.string().min(1).default("acme"),
@@ -131,6 +138,7 @@ export const demo: ConnectorDefinition<DemoCredentials> = {
   defaultMapping,
   docsUrl: "https://github.com/slai/slai/tree/main/packages/connectors/src/connectors/demo",
   supportsKnowledge: true,
+  supportsSavedReplies: true,
   create(ctx: ConnectorContext<DemoCredentials>): ConnectorClient {
     const parsed = demoConfigSchema.safeParse(ctx.config ?? {});
     if (!parsed.success) throw new ConnectorError(`demo: invalid config: ${parsed.error.message}`, "invalid");
@@ -343,6 +351,22 @@ export const demo: ConnectorDefinition<DemoCredentials> = {
         }));
         const next = offset + items.length;
         return { items, nextCursor: next < DEMO_ARTICLES.length ? encodeCursor({ offset: next }) : null };
+      },
+
+      async listSavedReplies(cursor) {
+        const isState = (v: unknown): v is { offset: number } =>
+          typeof (v as { offset?: unknown })?.offset === "number";
+        const offset = decodeCursor(cursor, isState)?.offset ?? 0;
+        const items = DEMO_SAVED_REPLIES.slice(offset, offset + SAVED_REPLY_PAGE_SIZE).map((r) => ({
+          sourceId: r.id,
+          title: r.title,
+          url: null,
+          bodyText: savedReplyText(r.body, "text"),
+          locale: "en-us",
+          updatedAt: demoSavedReplyUpdatedAt(r),
+        }));
+        const next = offset + items.length;
+        return { items, nextCursor: next < DEMO_SAVED_REPLIES.length ? encodeCursor({ offset: next }) : null };
       },
 
       async updateTicket(sourceId, patch) {
