@@ -3,7 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 import { AAD, createKeyring, decrypt, decryptJson, encrypt, encryptJson, keyIdOf } from "../src/crypto.js";
 import { rotateSecrets } from "../src/rotate-keys.js";
-import { connections, notificationChannels, users } from "../src/schema.js";
+import { connections, notificationChannels, ssoProviders } from "../src/schema.js";
 import { openDbs, seedOrg } from "./helpers.js";
 
 const { owner, system } = openDbs();
@@ -38,27 +38,32 @@ describe("keys:rotate", () => {
       },
       { orgId, kind: "email", target: "v1.looks.like.cipher.text@example.com" },
     ]);
-    const userId = randomUUID();
-    await owner.db.insert(users).values({
-      id: userId,
-      email: `${userId}@example.com`,
-      name: "Rotator",
-      passwordHash: "x",
-      mfaSecret: encrypt("JBSWY3DPEHPK3PXP", { keyring: oldRing, aad: `user:${userId}:mfa` }),
+    const providerId = `acme-okta-${orgId.slice(0, 8)}`;
+    const oidc = {
+      clientId: "cid",
+      clientSecret: encrypt("oidc-client-secret", { keyring: oldRing, aad: AAD.ssoClientSecret(providerId) }),
+    };
+    await owner.db.insert(ssoProviders).values({
+      orgId,
+      providerId,
+      issuer: "https://idp.example.com",
+      domain: "acme.example",
+      oidcConfig: JSON.stringify(oidc),
     });
 
     const dry = await rotateSecrets({ owner: owner.db, listOrgIds, keyring: newRing, dryRun: true });
-    expect(dry.remaining.rot1).toBeGreaterThanOrEqual(4);
+    expect(dry.remaining.rot1).toBe(4);
     const [stillOld] = await owner.db.select().from(connections).where(eq(connections.id, connectionId));
     expect(keyIdOf(stillOld!.credentials)).toBe("rot1");
 
     const report = await rotateSecrets({ owner: owner.db, listOrgIds, keyring: newRing });
     const byName = Object.fromEntries(report.columns.map((c) => [c.name, c]));
-    expect(byName["connections.credentials"]).toMatchObject({ rotated: 1, failed: 0 });
-    expect(byName["connections.webhook_secret"]).toMatchObject({ rotated: 1, failed: 0 });
+    // Other test files' fixtures hold fake k1 ciphertexts; those are counted as failed, never touched.
+    expect(byName["connections.credentials"]).toMatchObject({ rotated: 1 });
+    expect(byName["connections.webhook_secret"]).toMatchObject({ rotated: 1 });
     expect(byName["notification_channels.target"]).toMatchObject({ rotated: 1, failed: 0 });
-    expect(byName["users.mfa_secret"]!.rotated).toBeGreaterThanOrEqual(1);
-    expect(report.remaining).toEqual({});
+    expect(byName["sso_providers.oidc_config"]).toMatchObject({ rotated: 1, failed: 0 });
+    expect(report.remaining.rot1).toBeUndefined();
 
     // The old key can now be dropped: everything decrypts with the new key alone.
     const [conn] = await owner.db.select().from(connections).where(eq(connections.id, connectionId));
@@ -74,11 +79,16 @@ describe("keys:rotate", () => {
     expect(decrypt(slack.target, { keyring: newOnly, aad: AAD.notificationTarget(slackId) })).toBe(hook);
     // Plaintext email targets are untouched.
     expect(channels.find((c) => c.kind === "email")!.target).toBe("v1.looks.like.cipher.text@example.com");
-    const [u] = await owner.db.select().from(users).where(eq(users.id, userId));
-    expect(decrypt(u!.mfaSecret!, { keyring: newOnly, aad: `user:${userId}:mfa` })).toBe("JBSWY3DPEHPK3PXP");
+    const [sso] = await owner.db.select().from(ssoProviders).where(eq(ssoProviders.providerId, providerId));
+    const cfg = JSON.parse(sso!.oidcConfig!) as typeof oidc;
+    expect(cfg.clientId).toBe("cid");
+    expect(decrypt(cfg.clientSecret, { keyring: newOnly, aad: AAD.ssoClientSecret(providerId) })).toBe(
+      "oidc-client-secret",
+    );
 
     const again = await rotateSecrets({ owner: owner.db, listOrgIds, keyring: newRing });
     expect(again.columns.every((c) => c.rotated === 0)).toBe(true);
+    expect(again.remaining.rot1).toBeUndefined();
   });
 
   it("counts, and leaves alone, a ciphertext it cannot decrypt (unknown key id)", async () => {
@@ -101,7 +111,7 @@ describe("keys:rotate", () => {
       owner: owner.db,
       listOrgIds,
       keyring: newRing,
-      columns: [{ table: "users", column: "no_such_column", aad: (id) => id, orgScoped: false }],
+      columns: [{ table: "users", column: "mfa_secret", aad: (id) => id, orgScoped: false }],
     });
     expect(report.columns[0]).toMatchObject({ skipped: "missing" });
   });

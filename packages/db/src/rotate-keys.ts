@@ -8,6 +8,9 @@
  * Runs as the owner role (DATABASE_URL). Org-scoped tables are handled one org
  * at a time with `app.org_id` set, so it also works where FORCE RLS applies to
  * the owner (managed Postgres); the org list comes from the system role.
+ *
+ * better-auth's own sealed values (TOTP secrets, backup codes, OAuth tokens)
+ * use SESSION_SECRET, not this keyring; they rotate with SESSION_SECRET_VERSION.
  */
 import { sql } from "drizzle-orm";
 import type { Db } from "./client.js";
@@ -17,8 +20,11 @@ import { AAD, decrypt, encrypt, type Keyring, keyIdOf } from "./crypto.js";
 export interface SecretColumn {
   table: string;
   column: string;
-  /** The AAD the writer used, from the row id. */
-  aad: (id: string) => string;
+  /** The AAD the writer used, from the row's `aadColumn` (default `id`). */
+  aad: (key: string) => string;
+  aadColumn?: string;
+  /** The column is a JSON string and only this field in it is ciphertext. */
+  jsonField?: string;
   orgScoped: boolean;
   /** Extra SQL filter (constant), e.g. only Slack channels hold ciphertext. */
   where?: string;
@@ -26,8 +32,7 @@ export interface SecretColumn {
 
 /**
  * Every column holding `crypto.ts` ciphertext. A column missing from the
- * database (e.g. after an auth migration) is skipped, so add new ones here
- * when they appear.
+ * database is skipped, so add new ones here when they appear.
  */
 export const SECRET_COLUMNS: SecretColumn[] = [
   { table: "connections", column: "credentials", aad: AAD.connectionCredentials, orgScoped: true },
@@ -39,14 +44,29 @@ export const SECRET_COLUMNS: SecretColumn[] = [
     orgScoped: true,
     where: "kind = 'slack_webhook'",
   },
-  { table: "users", column: "mfa_secret", aad: (id) => `user:${id}:mfa`, orgScoped: false },
+  {
+    table: "sso_providers",
+    column: "oidc_config",
+    jsonField: "clientSecret",
+    aad: AAD.ssoClientSecret,
+    aadColumn: "provider_id",
+    orgScoped: true,
+  },
+  {
+    table: "sso_providers",
+    column: "saml_config",
+    jsonField: "privateKey",
+    aad: AAD.ssoSamlPrivateKey,
+    aadColumn: "provider_id",
+    orgScoped: true,
+  },
 ];
 
 export interface RotationReport {
   currentKeyId: string;
   dryRun: boolean;
   columns: { name: string; rotated: number; failed: number; skipped?: "missing" }[];
-  /** Ciphertexts still under each non-current key id after the run. */
+  /** Ciphertexts still under each non-current key id after the run (or, for a dry run, before it). */
   remaining: Record<string, number>;
 }
 
@@ -59,40 +79,57 @@ async function columnExists(db: Db, c: SecretColumn): Promise<boolean> {
   return (rows[0]?.n ?? 0) > 0;
 }
 
-/** Re-encrypts one column's stale ciphertexts, in the current transaction scope. */
+type Tally = { rotated: number; failed: number };
+
+/** Re-encrypts one column's stale ciphertexts, in batches, each batch in one transaction. */
 async function rotateColumn(
-  run: <T>(fn: (tx: Db) => Promise<T>) => Promise<T>,
+  owner: Db,
+  orgId: string | null,
   c: SecretColumn,
   ring: Keyring,
   dryRun: boolean,
-  tally: { rotated: number; failed: number },
+  tally: Tally,
   remaining: Record<string, number>,
 ): Promise<void> {
   const table = sql.raw(`"${c.table}"`);
   const col = sql.raw(`"${c.column}"`);
+  const aadCol = sql.raw(`"${c.aadColumn ?? "id"}"`);
   const extra = c.where ? sql.raw(`and (${c.where})`) : sql``;
+  // withOrg sets app.org_id for RLS; the explicit filter also scopes a superuser owner, which bypasses RLS.
+  const inOrg = orgId ? sql`and org_id = ${orgId}::uuid` : sql``;
+  const run = <T>(fn: (tx: Db) => Promise<T>): Promise<T> =>
+    orgId ? withOrg(owner, orgId, (tx) => fn(tx as unknown as Db)) : owner.transaction((tx) => fn(tx as unknown as Db));
+  // Plain columns are filtered in SQL; a JSON column holds the ciphertext in one field, checked below.
+  const stale = c.jsonField
+    ? sql`${col} is not null`
+    : sql`${col} like 'v1.%' and split_part(${col}, '.', 2) <> ${ring.currentId}`;
   let afterId = "00000000-0000-0000-0000-000000000000";
   for (;;) {
     const done = await run(async (tx) => {
-      const rows = await tx.execute<{ id: string; v: string }>(sql`
-        select id::text as id, ${col} as v from ${table}
-        where ${col} like 'v1.%' and split_part(${col}, '.', 2) <> ${ring.currentId}
-          and id > ${afterId}::uuid ${extra}
+      const rows = await tx.execute<{ id: string; k: string; v: string }>(sql`
+        select id::text as id, ${aadCol}::text as k, ${col} as v from ${table}
+        where ${stale} and id > ${afterId}::uuid ${inOrg} ${extra}
         order by id limit ${BATCH} for update`);
       for (const r of rows) {
         afterId = r.id;
-        const oldId = keyIdOf(r.v) ?? "?";
+        const cfg = c.jsonField ? (JSON.parse(r.v) as Record<string, unknown>) : null;
+        const cipher = cfg ? cfg[c.jsonField!] : r.v;
+        if (typeof cipher !== "string") continue;
+        const oldId = keyIdOf(cipher);
+        if (!oldId || oldId === ring.currentId) continue;
         try {
-          const plain = decrypt(r.v, { keyring: ring, aad: c.aad(r.id) });
-          if (!dryRun) {
-            const next = encrypt(plain, { keyring: ring, aad: c.aad(r.id) });
-            await tx.execute(sql`update ${table} set ${col} = ${next} where id = ${r.id}::uuid`);
-          } else {
+          const aad = c.aad(r.k);
+          const plain = decrypt(cipher, { keyring: ring, aad });
+          if (dryRun) {
             remaining[oldId] = (remaining[oldId] ?? 0) + 1;
+          } else {
+            const next = encrypt(plain, { keyring: ring, aad });
+            const value = cfg ? JSON.stringify({ ...cfg, [c.jsonField!]: next }) : next;
+            await tx.execute(sql`update ${table} set ${col} = ${value} where id = ${r.id}::uuid`);
           }
           tally.rotated++;
         } catch {
-          // Unknown key id or a bad AAD: leave it, count it, never log the value.
+          // Unknown key id or a bad AAD: leave it and count it. Never log the value.
           tally.failed++;
           remaining[oldId] = (remaining[oldId] ?? 0) + 1;
         }
@@ -121,27 +158,9 @@ export async function rotateSecrets(opts: {
       report.columns.push({ name, rotated: 0, failed: 0, skipped: "missing" });
       continue;
     }
-    const tally = { rotated: 0, failed: 0 };
-    if (c.orgScoped) {
-      for (const orgId of orgIds) {
-        await rotateColumn(
-          (fn) => withOrg(opts.owner, orgId, (tx) => fn(tx as unknown as Db)),
-          c,
-          opts.keyring,
-          dryRun,
-          tally,
-          report.remaining,
-        );
-      }
-    } else {
-      await rotateColumn(
-        (fn) => opts.owner.transaction((tx) => fn(tx as unknown as Db)),
-        c,
-        opts.keyring,
-        dryRun,
-        tally,
-        report.remaining,
-      );
+    const tally: Tally = { rotated: 0, failed: 0 };
+    for (const orgId of c.orgScoped ? orgIds : [null]) {
+      await rotateColumn(opts.owner, orgId, c, opts.keyring, dryRun, tally, report.remaining);
     }
     report.columns.push({ name, ...tally });
   }
