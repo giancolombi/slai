@@ -154,7 +154,7 @@ export async function exportOrg(deps: WorkerDeps, p: { orgId: string; exportId: 
   const { orgId, exportId } = p;
   const started = await deps.orgDb.withOrg(orgId, async (tx) => {
     const [row] = await tx.select().from(orgExports).where(eq(orgExports.id, exportId)).for("update");
-    if (!row || row.status !== "queued") return false;
+    if (row?.status !== "queued") return false;
     await tx.update(orgExports).set({ status: "running" }).where(eq(orgExports.id, exportId));
     return true;
   });
