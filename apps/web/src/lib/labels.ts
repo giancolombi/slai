@@ -78,10 +78,3 @@ export const PROVIDER_LABEL: Record<string, string> = {
 export function providerLabel(p: string) {
   return PROVIDER_LABEL[p] ?? p.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
-
-export const PLANS = [
-  { id: "replay", name: "Replay", priceCents: 0, tickets: 0, blurb: "One-time 90-day Breach Replay" },
-  { id: "starter", name: "Starter", priceCents: 29_900, tickets: 1_500, blurb: "Observe + triage" },
-  { id: "growth", name: "Growth", priceCents: 99_900, tickets: 7_500, blurb: "Assist (drafts)" },
-  { id: "scale", name: "Scale", priceCents: 249_900, tickets: 25_000, blurb: "Autopilot" },
-] as const;

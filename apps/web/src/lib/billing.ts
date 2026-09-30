@@ -4,14 +4,7 @@
  * numbers themselves come from `GET /billing` (BillingSummary); nothing here
  * decides entitlements.
  */
-import {
-  type AgentCeiling,
-  type BillingState,
-  type BillingSummary,
-  PLANS,
-  type PlanId,
-  TRIAL,
-} from "@slai/shared";
+import { type AgentCeiling, type BillingState, type BillingSummary, PLANS, type PlanId, TRIAL } from "@slai/shared";
 import { formatMoney } from "@slai/ui";
 
 export const CEILING_LABEL: Record<AgentCeiling, string> = {
@@ -140,6 +133,31 @@ export function fraction(value: number, max: number | null): number {
 }
 
 /** Credits available before overage: included plus purchased. */
-export function prepaidCredits(c: BillingSummary["credits"]): number {
+export function prepaidCredits(c: Pick<BillingSummary["credits"], "included" | "purchasedAvailable">): number {
   return c.included + c.purchasedAvailable;
+}
+
+export interface CreditMeter {
+  /** The bar's full width in credits: the larger of the cap, prepaid credits and usage. */
+  scale: number;
+  /** Where the spend cap sits on the bar (0..1). */
+  capAt: number;
+  /** Where the bar turns to warning: into overage, or 80% of the cap, whichever is first. */
+  warnAt: number;
+  overCap: boolean;
+}
+
+/** Lays out the credits meter: usage against included + purchased, with the spend cap marked. */
+export function creditMeter(
+  c: Pick<BillingSummary["credits"], "used" | "included" | "purchasedAvailable" | "cap">,
+): CreditMeter {
+  const prepaid = prepaidCredits(c);
+  const scale = Math.max(c.cap, prepaid, c.used, 1);
+  const capAt = c.cap / scale;
+  return {
+    scale,
+    capAt,
+    warnAt: Math.min(prepaid / scale, capAt * 0.8) || capAt,
+    overCap: c.cap > 0 ? c.used >= c.cap : c.used > 0,
+  };
 }

@@ -1,6 +1,6 @@
 import type { BillingState } from "@slai/shared";
 import { describe, expect, it } from "vitest";
-import { bannerKey, billingNotice, fraction, planPrice, shellBanner, usd } from "../src/lib/billing";
+import { bannerKey, billingNotice, creditMeter, fraction, planPrice, shellBanner, usd } from "../src/lib/billing";
 
 const b = (state: BillingState, trialDaysLeft: number | null = null, graceEndsAt: string | null = null) => ({
   state,
@@ -17,7 +17,10 @@ describe("billingNotice (billing page)", () => {
     expect(n?.tone).toBe("accent");
   });
   it("warns in the last 3 days, with a singular day", () => {
-    expect(billingNotice(b("trialing", 1))).toMatchObject({ tone: "warning", title: "1 day left in your Growth trial" });
+    expect(billingNotice(b("trialing", 1))).toMatchObject({
+      tone: "warning",
+      title: "1 day left in your Growth trial",
+    });
   });
   it("says agents are observe-only and monitoring continues once the trial ends", () => {
     const n = billingNotice(b("trial_expired", 0));
@@ -62,5 +65,30 @@ describe("formatting and meters", () => {
     expect(fraction(9_000, 7_500)).toBe(1.2);
     expect(fraction(10, null)).toBe(0);
     expect(fraction(10, 0)).toBe(0);
+  });
+});
+
+describe("creditMeter", () => {
+  const credits = (used: number, included: number, purchasedAvailable: number, cap: number) => ({
+    used,
+    included,
+    purchasedAvailable,
+    cap,
+  });
+  it("fills to the default cap (prepaid + 50% of included) and warns once into overage", () => {
+    const m = creditMeter(credits(12_000, 20_000, 0, 30_000));
+    expect(m.scale).toBe(30_000);
+    expect(m.capAt).toBe(1);
+    expect(m.warnAt).toBeCloseTo(2 / 3, 5);
+    expect(m.overCap).toBe(false);
+  });
+  it("marks a cap set below prepaid credits and flags usage at the cap", () => {
+    const m = creditMeter(credits(10_000, 20_000, 10_000, 10_000));
+    expect(m.scale).toBe(30_000);
+    expect(m.capAt).toBeCloseTo(1 / 3, 5);
+    expect(m.overCap).toBe(true);
+  });
+  it("warns at 80% of the cap in a trial (cap = included)", () => {
+    expect(creditMeter(credits(3_792, 5_000, 0, 5_000)).warnAt).toBe(0.8);
   });
 });

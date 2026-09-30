@@ -22,10 +22,10 @@ import {
   billingCheckoutBody,
   CREDIT_PACKS,
   createConnectionBody,
-  creditPackCheckoutBody,
   createPolicyBody,
   createReplayBody,
   createSsoProviderBody,
+  creditPackCheckoutBody,
   discoverBody,
   inviteBody,
   loginBody,
@@ -1368,6 +1368,7 @@ export const handlers = [
           }
         }
         if (body.trialEndsAt !== undefined) b.trialEndsAt = body.trialEndsAt;
+        if (body.pastDueSince !== undefined) b.pastDueSince = body.pastDueSince;
         if (body.grantCredits) b.purchasedCredits += body.grantCredits;
         audit(actor(), "billing.manual_update", { type: "organization", id: org().settings.id }, body);
         return HttpResponse.json(billing(Date.now()));
