@@ -27,6 +27,8 @@ export interface AgentRuntimeConfig {
   ollamaModel?: string;
 }
 
+export const LOCAL_MODEL_WALL_SCALE = 4;
+
 export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
   let exec: <K extends AgentKind>(
     job: Extract<AgentJob, { kind: K }>,
@@ -43,7 +45,10 @@ export function createAgentRuntime(config: AgentRuntimeConfig): AgentRuntime {
         ollamaUrl: config.ollamaUrl,
         ollamaModel: config.ollamaModel,
       });
-    exec = (job, bounds) => runJob(job, bounds, provider);
+    // Local models are slower than hosted ones: give them 4x the wall time (still under
+    // pg-boss's 15-minute job expiry for the longest agent, contract extraction).
+    const wallScale = config.provider === "ollama" && !config.llm ? LOCAL_MODEL_WALL_SCALE : 1;
+    exec = (job, bounds) => runJob(job, { ...bounds, maxWallMs: bounds.maxWallMs * wallScale }, provider);
   } else {
     // A sandbox cannot reach a model on the developer's machine.
     if (config.provider === "ollama") throw new Error("MODEL_PROVIDER=ollama requires AGENT_RUNTIME=local");
