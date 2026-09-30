@@ -301,3 +301,68 @@ describe("zendesk help center articles (knowledge)", () => {
     expect(err.retryAfterMs).toBe(42_000);
   });
 });
+
+describe("zendesk macros (saved replies)", () => {
+  it("declares saved-reply support", () => {
+    expect(zendesk.supportsSavedReplies).toBe(true);
+  });
+
+  it("pages through active macros that add a public comment, as text without placeholders", async () => {
+    const { c, f } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/macros?active=true&page[size]=100`,
+        headers: { authorization: AUTH },
+        fixture: "zendesk/macros-page1.json",
+      },
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/macros?active=true&page[size]=100&page[after]=mac1`,
+        headers: { authorization: AUTH },
+        fixture: "zendesk/macros-page2.json",
+      },
+    ]);
+    const p1 = await c.listSavedReplies!(null);
+    // 5003 adds a private note and 5004 adds no comment: both skipped.
+    expect(p1.items).toEqual([
+      {
+        sourceId: "5001",
+        title: "SSO::Audience mismatch",
+        url: null,
+        bodyText: "Hi,\n\nCopy the Entity ID into the Audience URI field, then sign in again.",
+        locale: null,
+        updatedAt: new Date("2026-09-02T09:00:00Z"),
+      },
+      {
+        sourceId: "5002",
+        title: "Billing::Refund issued",
+        url: null,
+        bodyText: "Hello,\n\nWe issued the refund & it arrives in 5 days.",
+        locale: null,
+        updatedAt: new Date("2026-09-03T09:00:00Z"),
+      },
+    ]);
+    expect(p1.nextCursor).not.toBeNull();
+    const p2 = await c.listSavedReplies!(p1.nextCursor);
+    // The [channel, text] form is read; a macro that is only a placeholder is empty and skipped.
+    expect(p2.items.map((r) => [r.sourceId, r.bodyText])).toEqual([
+      ["5005", "Limits reset every minute; wait for Retry-After."],
+    ]);
+    expect(p2.nextCursor).toBeNull();
+    expect(f.unused()).toEqual([]);
+  });
+
+  it("reports a token that may not read macros as unsupported, not an auth failure", async () => {
+    const { c } = client([
+      {
+        method: "GET",
+        url: `${BASE}/api/v2/macros?active=true&page[size]=100`,
+        status: 403,
+        json: { error: "Forbidden" },
+      },
+    ]);
+    const err = await rejection(c.listSavedReplies!(null));
+    expect(err.kind).toBe("unsupported");
+    expect(err.message).toMatch(/Zendesk macros/);
+  });
+});

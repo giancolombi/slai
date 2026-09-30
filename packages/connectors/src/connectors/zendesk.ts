@@ -11,6 +11,15 @@
  * - Webhook signatures: https://developer.zendesk.com/documentation/webhooks/verifying/
  * - Help Center articles (cursor pagination, draft flag, html_url): https://developer.zendesk.com/api-reference/help_center/help-center-api/articles/
  * - Webhook event payloads: https://developer.zendesk.com/api-reference/webhooks/event-types/ticket-events/
+ * - Macros (cursor pagination, active filter, actions): https://developer.zendesk.com/api-reference/ticketing/business-rules/macros/
+ * - Macro action fields (comment_value, comment_value_html, comment_mode_is_public):
+ *   https://developer.zendesk.com/documentation/ticketing/reference-guides/actions-reference/
+ *
+ * Saved replies (T-47b) are active macros that add a comment. A macro that
+ * sets `comment_mode_is_public` to false adds an internal note and is skipped.
+ * When the macro doesn't set the mode, the agent's composer default applies,
+ * which is public unless the account makes agent comments private by default;
+ * we treat those as public.
  *
  * History comes from ticket audits: every field change and comment with its
  * timestamp and author. The first public agent reply is derived from comments
@@ -20,11 +29,11 @@ import type { AuthorRole } from "@slai/sla-engine";
 import { z } from "zod";
 import { dropNoopChanges, finalizeEvents, openingEventAuthor, parseTime } from "../lib/events.js";
 import { header, verifyHmac } from "../lib/hmac.js";
-import { basicAuth, HttpClient } from "../lib/http.js";
+import { basicAuth, forbiddenAsUnsupported, HttpClient } from "../lib/http.js";
 import { mapPriority, mappingIssues, mapStatus, rawPriorityFor } from "../lib/mapping.js";
 import { oauthFetch, oauthTokenFields, readTokens } from "../lib/oauth.js";
 import { collectPages, decodeCursor, encodeCursor } from "../lib/paginate.js";
-import { htmlToText, plainText } from "../lib/text.js";
+import { htmlToText, plainText, savedReplyText } from "../lib/text.js";
 import { parseAs, tryJson } from "../lib/validate.js";
 import {
   type CanonicalComment,
@@ -135,6 +144,31 @@ const zArticles = z.object({
   articles: z.array(zArticle),
   meta: z.object({ has_more: z.boolean().nullish(), after_cursor: z.string().nullish() }).nullish(),
 });
+const zMacro = z.object({
+  id,
+  title: z.string().nullish(),
+  updated_at: z.string(),
+  actions: z.array(z.object({ field: z.string(), value: z.unknown() }).loose()).nullish(),
+});
+const zMacros = z.object({
+  macros: z.array(zMacro),
+  meta: z.object({ has_more: z.boolean().nullish(), after_cursor: z.string().nullish() }).nullish(),
+});
+
+/**
+ * The public comment a macro adds, as plain text, or null when it adds none
+ * or adds a private one. `comment_value` is the text or [channel, text].
+ */
+function macroReplyText(actions: { field: string; value: unknown }[]): string | null {
+  const find = (f: string) => actions.find((a) => a.field === f)?.value;
+  const mode = find("comment_mode_is_public");
+  if (mode === false || mode === "false") return null;
+  const html = find("comment_value_html");
+  if (typeof html === "string" && html.trim()) return savedReplyText(html, "html") || null;
+  let value = find("comment_value");
+  if (Array.isArray(value)) value = value.filter((v) => typeof v === "string").at(-1);
+  return typeof value === "string" ? savedReplyText(value, "text") || null : null;
+}
 
 const zUpdate = z.object({
   ticket: zTicket.partial().nullish(),
@@ -212,6 +246,7 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
   defaultMapping,
   docsUrl: "https://developer.zendesk.com/api-reference/",
   supportsKnowledge: true,
+  supportsSavedReplies: true,
   create(ctx: ConnectorContext<ZendeskCredentials>): ConnectorClient {
     const creds = credentialsSchema.parse(ctx.credentials);
     const sub = creds.subdomain;
@@ -476,6 +511,33 @@ export const zendesk: ConnectorDefinition<ZendeskCredentials> = {
             locale: a.locale ?? null,
             updatedAt: parseTime(a.updated_at, `article ${a.id}.updated_at`),
           }));
+        const after = data.meta?.has_more ? data.meta.after_cursor : null;
+        return { items, nextCursor: after ? encodeCursor({ a: after }) : null };
+      },
+
+      async listSavedReplies(cursor) {
+        const isState = (v: unknown): v is { a: string } => typeof (v as { a?: unknown })?.a === "string";
+        const state = decodeCursor(cursor, isState);
+        const data = parseAs(
+          zMacros,
+          await forbiddenAsUnsupported("Zendesk macros", () =>
+            http.get("/api/v2/macros", { query: { active: "true", "page[size]": 100, "page[after]": state?.a } }),
+          ),
+          "macros",
+        );
+        const items: KnowledgeArticle[] = [];
+        for (const m of data.macros) {
+          const bodyText = macroReplyText(m.actions ?? []);
+          if (!bodyText) continue;
+          items.push({
+            sourceId: m.id,
+            title: m.title ?? "",
+            url: null,
+            bodyText,
+            locale: null,
+            updatedAt: parseTime(m.updated_at, `macro ${m.id}.updated_at`),
+          });
+        }
         const after = data.meta?.has_more ? data.meta.after_cursor : null;
         return { items, nextCursor: after ? encodeCursor({ a: after }) : null };
       },

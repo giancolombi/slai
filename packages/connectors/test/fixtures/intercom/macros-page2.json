@@ -1,0 +1,18 @@
+{
+  "type": "list",
+  "data": [
+    {
+      "type": "macro",
+      "id": "125",
+      "name": "Just a greeting",
+      "body": "<p><attribute key=\"user.name\"/></p>",
+      "body_text": "{{user.name}}",
+      "created_at": 1719000000,
+      "updated_at": 1719000000,
+      "visible_to": "everyone",
+      "visible_to_team_ids": [],
+      "available_on": ["inbox"]
+    }
+  ],
+  "pages": { "type": "pages", "per_page": 150, "next": null }
+}

@@ -23,7 +23,39 @@
       "created_at": 1756700000,
       "updated_at": 1758000000,
       "url": "https://intercom.help/acme/en/articles/6871119-retry-webhook-deliveries",
-      "default_locale": "en"
+      "default_locale": "en",
+      "translated_content": {
+        "type": "article_translated_content",
+        "en": {
+          "type": "article_content",
+          "title": "Retry webhook deliveries",
+          "body": "<p>Duplicate of the default language.</p>",
+          "state": "published",
+          "updated_at": 1758000000,
+          "url": "https://intercom.help/acme/en/articles/6871119-retry-webhook-deliveries"
+        },
+        "fr": {
+          "type": "article_content",
+          "title": "Relancer les livraisons de webhooks",
+          "description": "",
+          "body": "<p>Les webhooks sont relancés pendant <b>24 heures</b>.</p>",
+          "author_id": 991,
+          "state": "published",
+          "created_at": 1756700000,
+          "updated_at": 1758100000,
+          "url": "https://intercom.help/acme/fr/articles/6871119-relancer-les-livraisons-de-webhooks",
+          "has_unpublished_changes": false
+        },
+        "pt-BR": {
+          "type": "article_content",
+          "title": "Reenviar webhooks",
+          "body": "<p>Rascunho.</p>",
+          "state": "draft",
+          "updated_at": 1758100000,
+          "url": null
+        },
+        "de": null
+      }
     },
     {
       "id": "6871120",

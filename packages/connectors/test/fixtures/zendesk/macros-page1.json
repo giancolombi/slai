@@ -1,0 +1,66 @@
+{
+  "macros": [
+    {
+      "id": 5001,
+      "url": "https://acme.zendesk.com/api/v2/macros/5001.json",
+      "title": "SSO::Audience mismatch",
+      "raw_title": "SSO::Audience mismatch",
+      "active": true,
+      "description": null,
+      "position": 1,
+      "restriction": null,
+      "default": false,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-02T09:00:00Z",
+      "actions": [
+        { "field": "status", "value": "pending" },
+        {
+          "field": "comment_value",
+          "value": "Hi {{ticket.requester.first_name}},\n\nCopy the Entity ID into the Audience URI field, then sign in again.\n\n{{current_user.signature}}"
+        }
+      ]
+    },
+    {
+      "id": 5002,
+      "url": "https://acme.zendesk.com/api/v2/macros/5002.json",
+      "title": "Billing::Refund issued",
+      "active": true,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-03T09:00:00Z",
+      "actions": [
+        {
+          "field": "comment_value_html",
+          "value": "<p>Hello {{ticket.requester.first_name}},</p><p>We issued the refund &amp; it arrives in <b>5 days</b>.</p>"
+        },
+        { "field": "comment_value", "value": "ignored plain text" },
+        { "field": "comment_mode_is_public", "value": "true" }
+      ]
+    },
+    {
+      "id": 5003,
+      "url": "https://acme.zendesk.com/api/v2/macros/5003.json",
+      "title": "Escalate to tier 2 (internal note)",
+      "active": true,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-03T09:00:00Z",
+      "actions": [
+        { "field": "comment_value", "value": "Escalating: customer is on the Enterprise plan." },
+        { "field": "comment_mode_is_public", "value": false }
+      ]
+    },
+    {
+      "id": 5004,
+      "url": "https://acme.zendesk.com/api/v2/macros/5004.json",
+      "title": "Close and tag spam",
+      "active": true,
+      "created_at": "2026-08-01T10:00:00Z",
+      "updated_at": "2026-09-03T09:00:00Z",
+      "actions": [{ "field": "status", "value": "closed" }, { "field": "current_tags", "value": "spam" }]
+    }
+  ],
+  "meta": { "has_more": true, "after_cursor": "mac1", "before_cursor": null },
+  "links": {
+    "next": "https://acme.zendesk.com/api/v2/macros.json?page%5Bafter%5D=mac1&page%5Bsize%5D=100",
+    "prev": null
+  }
+}
