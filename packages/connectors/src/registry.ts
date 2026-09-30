@@ -3,6 +3,7 @@ import { freshdesk } from "./connectors/freshdesk.js";
 import { hubspot } from "./connectors/hubspot.js";
 import { intercom } from "./connectors/intercom.js";
 import { jiraServiceManagement } from "./connectors/jira-service-management.js";
+import { salesforce } from "./connectors/salesforce.js";
 import { zammad } from "./connectors/zammad.js";
 import { zendesk } from "./connectors/zendesk.js";
 import type { ConnectorDefinition, ProviderId } from "./types.js";
@@ -16,6 +17,7 @@ const REGISTRY: Partial<Record<ProviderId, ConnectorDefinition<any>>> = {
   jira_service_management: jiraServiceManagement,
   hubspot,
   zammad,
+  salesforce,
   demo,
 };
 

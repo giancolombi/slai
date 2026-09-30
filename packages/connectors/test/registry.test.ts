@@ -12,16 +12,26 @@ const SAMPLE_CREDENTIALS: Record<string, unknown> = {
   jira_service_management: { siteUrl: "https://acme.atlassian.net", email: "a@acme.com", apiToken: "t" },
   hubspot: { accessToken: "t" },
   zammad: { baseUrl: "https://support.acme.example", apiToken: "t" },
+  salesforce: { instanceUrl: "https://acme.my.salesforce.com", clientId: "id", clientSecret: "s" },
   demo: {},
 };
 
 describe("registry", () => {
-  it("registers the tier-1 connectors and the demo", () => {
+  it("registers every connector and the demo", () => {
     expect(
       listConnectors()
         .map((c) => c.provider)
         .sort(),
-    ).toEqual(["demo", "freshdesk", "hubspot", "intercom", "jira_service_management", "zammad", "zendesk"]);
+    ).toEqual([
+      "demo",
+      "freshdesk",
+      "hubspot",
+      "intercom",
+      "jira_service_management",
+      "salesforce",
+      "zammad",
+      "zendesk",
+    ]);
     expect(getConnector("nope")).toBeNull();
   });
 
