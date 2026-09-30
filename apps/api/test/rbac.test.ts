@@ -1,3 +1,4 @@
+import type { Invitation } from "@slai/shared";
 import { describe, expect, it } from "vitest";
 import { addMember, setupApp, signup } from "./harness.js";
 
@@ -11,6 +12,15 @@ describe("RBAC", () => {
     const res = await viewer.client.post("/customers", { name: "Nope" });
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("forbidden");
+  });
+
+  it("admins invite; the response is an Invitation with no token", async () => {
+    const owner = await signup(ctx);
+    const res = await owner.client.post<Invitation>("/members/invite", { email: "new@b.co", role: "member" });
+    expect(res.status).toBe(201);
+    expect(Object.keys(res.body).sort()).toEqual(["email", "expiresAt", "id", "role"]);
+    expect(res.body).toMatchObject({ email: "new@b.co", role: "member" });
+    expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("members cannot do admin things", async () => {

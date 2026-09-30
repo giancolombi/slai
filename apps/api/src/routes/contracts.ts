@@ -35,7 +35,7 @@ export function contractRoutes(deps: AppDeps) {
 
   const selectRows = (tx: Tx) =>
     tx
-      .select({ c: contracts, uploader: users.email })
+      .select({ c: contracts, uploader: users.name })
       .from(contracts)
       .leftJoin(users, eq(users.id, contracts.uploadedBy));
 
@@ -118,7 +118,7 @@ export function contractRoutes(deps: AppDeps) {
         await deps.jobs.send(tx, "extract-contract", { orgId: a.orgId, contractId: id });
         return r!;
       });
-      return c.json(toContract(row, a.user.email, []), 201);
+      return c.json(toContract(row, a.user.name, []), 201);
     } catch (e) {
       await deps.storage.delete(storageKey).catch(() => {});
       throw e;

@@ -77,6 +77,13 @@ export interface Member {
   lastLoginAt: string | null;
 }
 export const inviteBody = z.object({ email: z.email(), role: z.enum(ROLES) });
+/** `POST /members/invite` → 201 Invitation. The token is never returned; it goes only to the invitee. */
+export interface Invitation {
+  id: string;
+  email: string;
+  role: Role;
+  expiresAt: string;
+}
 export const updateMemberBody = z.object({ role: z.enum(ROLES) });
 export const updateOrgBody = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -153,7 +160,10 @@ export interface Contract {
   customerAccountId: string | null;
   status: ContractStatus;
   uploadedAt: string;
-  uploadedBy: string;
+  /** User id of the uploader (null if that user was deleted). */
+  uploadedBy: string | null;
+  /** The uploader's display name, so clients needn't resolve `uploadedBy`. */
+  uploadedByName: string | null;
   error: string | null;
   /** Present once extraction finished. */
   extraction: {
@@ -175,7 +185,10 @@ export interface Policy {
   isDefault: boolean;
   /** The engine's SlaPolicy definition (validated by @slai/sla-engine policySchema). */
   definition: unknown;
+  /** User id of the approving admin; null while a draft. */
   approvedBy: string | null;
+  /** The approver's display name. */
+  approvedByName: string | null;
   approvedAt: string | null;
   createdAt: string;
 }
@@ -277,7 +290,13 @@ export interface AgentAction {
   /** Why autopilot did not send it (guardrail), if blocked. */
   blockedReason: string | null;
   createdAt: string;
+  /**
+   * User id of the person who approved or rejected it. Null with `decidedAt` set means
+   * slai decided on its own (an autopilot send, or an assist-mode internal note).
+   */
   decidedBy: string | null;
+  /** The decider's display name (null when `decidedBy` is null). */
+  decidedByName: string | null;
   decidedAt: string | null;
 }
 export const approveActionBody = z.object({ body: z.string().min(1).max(20000).optional() });
@@ -386,7 +405,7 @@ export const notificationChannelBody = z.object({
  *   POST   /auth/switch-org        { organizationId } → Me
  *
  *   GET    /org                    → OrgSettings          PATCH /org  updateOrgBody (admin)
- *   GET    /members                → List<Member>         POST /members/invite inviteBody (admin)
+ *   GET    /members                → List<Member>         POST /members/invite inviteBody → Invitation (admin)
  *   PATCH  /members/:userId        { role } (owner)       DELETE /members/:userId (admin)
  *
  *   GET    /connectors             → ConnectorInfo[]

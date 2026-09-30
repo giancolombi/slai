@@ -23,10 +23,16 @@ function form(bytes: Uint8Array<ArrayBuffer>, filename: string, extra: Record<st
 
 describe("contract upload", () => {
   it("accepts a PDF by magic bytes, stores it, audits it, and enqueues extraction", async () => {
-    const { client, orgId } = await signup(ctx);
+    const { client, orgId, userId } = await signup(ctx);
     const res = await client.req<Contract>("POST", "/contracts", { body: form(PDF, "msa.pdf") });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ filename: "msa.pdf", status: "uploaded", extraction: null });
+    // `uploadedBy` is the user id; the display name comes alongside.
+    expect(res.body).toMatchObject({ uploadedBy: userId, uploadedByName: "Ada" });
+    expect((await client.get<Contract>(`/contracts/${res.body.id}`)).body).toMatchObject({
+      uploadedBy: userId,
+      uploadedByName: "Ada",
+    });
 
     const file = await client.get(`/contracts/${res.body.id}/file`);
     expect(file.headers.get("content-type")).toBe("application/pdf");

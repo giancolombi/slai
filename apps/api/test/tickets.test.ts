@@ -97,7 +97,16 @@ describe("actions", () => {
     const list = await owner.client.get<{ items: AgentAction[] }>("/actions?status=proposed");
     expect(list.body.items.map((x) => x.id)).toContain(a!.id);
     const res = await owner.client.post<AgentAction>(`/actions/${a!.id}/approve`, { body: "Edited reply" });
-    expect(res.body).toMatchObject({ status: "approved", body: "Edited reply", decidedBy: owner.userId });
+    expect(res.body).toMatchObject({
+      status: "approved",
+      body: "Edited reply",
+      decidedBy: owner.userId,
+      decidedByName: "Ada",
+    });
+    const approved = await owner.client.get<{ items: AgentAction[] }>("/actions?status=approved");
+    expect(approved.body.items.find((x) => x.id === a!.id)).toMatchObject({ decidedByName: "Ada" });
+    const detail = await owner.client.get<TicketDetail>(`/tickets/${ticketId}`);
+    expect(detail.body.actions.find((x) => x.id === a!.id)).toMatchObject({ decidedByName: "Ada" });
     expect((await owner.client.post(`/actions/${a!.id}/reject`, {})).status).toBe(409);
     const [job] = await ctx.owner.client`select name from pgboss.job where data->>'actionId' = ${a!.id}`;
     expect(job?.name).toBe("execute-action");

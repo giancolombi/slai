@@ -24,6 +24,7 @@ import { type AppDeps, type AppEnv, auditBase, auth } from "../context.js";
 import { notFound } from "../errors.js";
 import { toAgentAction, toAgentRun, toMetricView, toTicketSummary } from "../mappers.js";
 import { decodeCursor, page, pageQuery } from "../pagination.js";
+import { nameOf, userNames } from "../people.js";
 import { idParam, query } from "../validate.js";
 
 const listQuery = pageQuery.extend({
@@ -167,13 +168,17 @@ export function ticketRoutes(deps: AppDeps) {
           next: u ? { metric: u.metric, dueAt: u.dueAt, remainingMs: u.remainingMs, state: u.state } : null,
         });
       }
+      const names = await userNames(
+        tx,
+        actions.map((x) => x.decidedBy),
+      );
       return {
         ...summary,
         requester: { name: row.t.requesterName, email: row.t.requesterEmail },
         metrics: (evaluation?.metrics ?? []).map(toMetricView),
         timeline,
         agentRuns: runs.map(toAgentRun),
-        actions: actions.map((x) => toAgentAction(x, row.t)),
+        actions: actions.map((x) => toAgentAction(x, row.t, nameOf(names, x.decidedBy))),
       };
     });
     return c.json(detail);

@@ -37,6 +37,7 @@ import {
   type Contract,
   type CustomerAccount,
   type DashboardSummary,
+  type Invitation,
   type List,
   type Me,
   type Member,
@@ -224,14 +225,6 @@ const del = <T = void>(path: string) => request<T>("DELETE", path);
 
 type In<S extends z.ZodType> = z.input<S>;
 const id = encodeURIComponent;
-
-/** `POST /members/invite` response. The contract doesn't name it; the API returns the pending invitation. */
-export interface Invitation {
-  id?: string;
-  email: string;
-  role: Role;
-  expiresAt?: string;
-}
 
 export interface TicketQuery {
   risk?: Risk | "";

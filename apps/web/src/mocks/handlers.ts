@@ -76,6 +76,7 @@ function requireSession() {
 
 const isAdmin = () => ["owner", "admin"].includes(getDb().me.role);
 const actor = () => getDb().me.user.name;
+const actorId = () => getDb().me.user.id;
 
 /** Wraps a handler with session + CSRF checks, the persisted save, and latency. */
 function guarded<Args extends { request: Request; params: Record<string, string | readonly string[] | undefined> }>(
@@ -121,6 +122,7 @@ function advanceContracts(now: number) {
       isDefault: false,
       definition: { ...kestrelDraftDefinition, id: policyId, name },
       approvedBy: null,
+      approvedByName: null,
       approvedAt: null,
       createdAt: new Date(readyAt).toISOString(),
     });
@@ -585,7 +587,8 @@ export const handlers = [
         customerAccountId,
         status: "extracting",
         uploadedAt: new Date().toISOString(),
-        uploadedBy: actor(),
+        uploadedBy: actorId(),
+        uploadedByName: actor(),
         error: null,
         extraction: null,
       };
@@ -634,6 +637,7 @@ export const handlers = [
         isDefault: body.isDefault,
         definition: body.definition,
         approvedBy: null,
+        approvedByName: null,
         approvedAt: null,
         createdAt: new Date().toISOString(),
       };
@@ -674,7 +678,8 @@ export const handlers = [
         for (const x of o.policies)
           if (x.status === "active" && x.name === p.name && x.id !== p.id) x.status = "superseded";
         p.status = "active";
-        p.approvedBy = actor();
+        p.approvedBy = actorId();
+        p.approvedByName = actor();
         p.approvedAt = new Date().toISOString();
         const contract = o.contracts.find((c) => c.id === p.contractId);
         if (contract?.extraction?.policyIds.every((id) => o.policies.find((x) => x.id === id)?.status === "active")) {
@@ -797,6 +802,7 @@ export const handlers = [
           blockedReason: null,
           createdAt: new Date(now).toISOString(),
           decidedBy: null,
+          decidedByName: null,
           decidedAt: null,
         });
       }
@@ -832,7 +838,8 @@ export const handlers = [
       const edited = body.body !== undefined && body.body !== a.body;
       if (body.body !== undefined) a.body = body.body;
       a.status = "sent";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       const t = o.tickets.find((x) => x.id === a.ticketId);
       if (t) {
@@ -876,7 +883,8 @@ export const handlers = [
       if (a.status !== "proposed" && a.status !== "blocked")
         return fail(409, "already_decided", "This draft was already decided.");
       a.status = "rejected";
-      a.decidedBy = actor();
+      a.decidedBy = actorId();
+      a.decidedByName = actor();
       a.decidedAt = new Date().toISOString();
       audit(actor(), "action.rejected", { type: "agent_action", id: a.id }, { reason: body.reason ?? null });
       return HttpResponse.json(a);
