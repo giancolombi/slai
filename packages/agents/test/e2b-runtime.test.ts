@@ -110,6 +110,22 @@ describe("e2b runtime", () => {
     expect(spec.egress).toEqual({ allowHosts: [], injectHeaders: {} });
   });
 
+  it("meters sandbox seconds from the create request to the kill", async () => {
+    let t = 1_000_000;
+    const f = new FakeFactory(async (m, e, s) => {
+      t += 3_000; // runner time
+      return realRunner(m, e, s);
+    });
+    const create = f.create.bind(f);
+    f.create = async (spec) => {
+      t += 2_000; // boot time is billed too
+      return create(spec);
+    };
+    const r = await e2b(f, { now: () => t }).run(triageJob, bounds);
+    expect(r.metering.sandbox?.seconds).toBe(5);
+    expect(r.metering.wallMs).toBe(5_000);
+  });
+
   it("writes an immutable manifest with the input and bounds", async () => {
     const f = new FakeFactory();
     await e2b(f).run(triageJob, bounds);

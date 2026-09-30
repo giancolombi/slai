@@ -130,6 +130,8 @@ export function createE2bExecutor(opts: E2bRuntimeOptions) {
     ) => ({ ok: false as const, error, message, metering: metering() });
 
     const work = async (): Promise<AgentRunResult<JobOutput[K]>> => {
+      // E2B bills from the create request, so sandbox seconds start here.
+      createdAt = now();
       const creating = opts.factory.create({
         template: opts.template,
         timeoutMs: bounds.maxWallMs + (opts.lifetimeGraceMs ?? 30_000),
@@ -139,7 +141,6 @@ export function createE2bExecutor(opts: E2bRuntimeOptions) {
       // If the run already timed out when creation completes, kill immediately.
       const h = await creating;
       handle = h;
-      createdAt = createdAt ?? now();
       if (finished) {
         await kill(h);
         throw new Error("run finished before the sandbox was ready");
