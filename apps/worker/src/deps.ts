@@ -2,6 +2,7 @@ import type { AgentRuntime, TicketContext } from "@slai/agents";
 import type { ConnectorDefinition } from "@slai/connectors";
 import type { Database, Keyring, OrgDatabase, StorageDriver } from "@slai/db";
 import type { Clock } from "./clock.js";
+import { FIRST_SEEN_GRACE_MS } from "./decide.js";
 import type { Logger } from "./logger.js";
 import type { Mailer } from "./notify.js";
 import type { JobQueue } from "./queue.js";
@@ -17,6 +18,8 @@ export interface WorkerConfig {
   /** A first or full sync reads tickets updated in the last N days. */
   backfillDays: number;
   appUrl: string;
+  /** A ticket seen for the first time triggers only if its live breach is at most this old (TR-21f). */
+  firstSeenGraceMs: number;
 }
 
 /** Help-center snippets and assignees for the ticket agents. No knowledge base exists yet, so the default is none. */
@@ -54,4 +57,5 @@ export const DEFAULT_CONFIG: WorkerConfig = {
   syncOverlapMs: 120_000,
   backfillDays: 14,
   appUrl: "http://localhost:5173",
+  firstSeenGraceMs: FIRST_SEEN_GRACE_MS,
 };

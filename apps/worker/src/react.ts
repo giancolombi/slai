@@ -9,7 +9,7 @@
 import { agentActions, agentRuns, autonomyRules, type Tx, ticketComments } from "@slai/db";
 import type { Priority, RiskLevel } from "@slai/sla-engine";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
-import { type AutonomyRuleLike, channelsToNotify, decideDispatch, resolveAutonomy } from "./decide.js";
+import { type AutonomyRuleLike, actionableRisk, channelsToNotify, decideDispatch, resolveAutonomy } from "./decide.js";
 import type { WorkerDeps } from "./deps.js";
 import type { Evaluated } from "./ingest.js";
 import { currentSpend } from "./metering.js";
@@ -87,10 +87,12 @@ export async function planReaction(tx: Tx, deps: WorkerDeps, orgId: string, ev: 
   if (ev.prevRisk === ev.risk) return null;
   const now = deps.clock.now();
   const t = ev.ticket;
+  // First evaluation (connect, backfill): only a still-actionable risk may trigger (TR-21f).
+  const actionable = ev.evaluation ? actionableRisk(ev.evaluation.metrics, now, deps.config.firstSeenGraceMs) : ev.risk;
 
   // Alerts are never throttled by spend; they fire for open tickets, once per crossing of each channel's minimum.
   const channels = ev.open
-    ? channelsToNotify(await enabledChannels(tx), ev.prevRisk, ev.risk).map((c) => ({
+    ? channelsToNotify(await enabledChannels(tx), ev.prevRisk, ev.risk, actionable).map((c) => ({
         id: c.id,
         kind: c.kind,
         target: c.target,
@@ -104,6 +106,7 @@ export async function planReaction(tx: Tx, deps: WorkerDeps, orgId: string, ev: 
   const decision = decideDispatch({
     prevRisk: ev.prevRisk,
     nextRisk: ev.risk,
+    actionableRisk: actionable,
     ticketOpen: ev.open,
     rule,
     spend: await currentSpend(tx, now),

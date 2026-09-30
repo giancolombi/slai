@@ -101,6 +101,53 @@ export function crossed(prev: RiskLevel | null, next: RiskLevel, threshold: Risk
   return RISK_RANK[next] >= RISK_RANK[threshold] && (prev === null || RISK_RANK[prev] < RISK_RANK[threshold]);
 }
 
+// ---------- first evaluation (TR-21f) ----------
+
+/** How long after a breach a ticket slai sees for the first time is still worth acting on. */
+export const FIRST_SEEN_GRACE_MS = 60 * 60_000;
+
+export interface MetricLike {
+  state: string;
+  risk: RiskLevel;
+  cycles: { stoppedAt: Date | null; breachAt: Date | null }[];
+}
+
+/**
+ * The risk that may count as a crossing on a ticket's first evaluation (first
+ * connect, a full backfill). Only live metrics count: a stopped cycle's breach
+ * is history no agent can change. A live metric that breached more than
+ * `graceMs` ago counts for nothing either: the moment to act passed before
+ * slai saw the ticket. What is left is the risk an alert or a draft can still
+ * do something about.
+ */
+export function actionableRisk(metrics: MetricLike[], now: Date, graceMs = FIRST_SEEN_GRACE_MS): RiskLevel {
+  let worst: RiskLevel = "ok";
+  for (const m of metrics) {
+    const current = m.cycles.at(-1);
+    if (!current || current.stoppedAt !== null) continue;
+    if (m.state === "breached") {
+      if (current.breachAt === null || now.getTime() - current.breachAt.getTime() > graceMs) continue;
+    }
+    if (RISK_RANK[m.risk] > RISK_RANK[worst]) worst = m.risk;
+  }
+  return worst;
+}
+
+/**
+ * A crossing of `threshold` that slai should react to. Later evaluations use
+ * the plain risk crossing; the first one (no previous risk) must also cross on
+ * the actionable risk, so connecting a help desk full of long-overdue tickets
+ * does not fire a burst of alerts and drafts.
+ */
+export function actionableCrossing(
+  prev: RiskLevel | null,
+  next: RiskLevel,
+  actionable: RiskLevel,
+  threshold: RiskLevel,
+): boolean {
+  return crossed(prev, next, threshold) && (prev !== null || crossed(null, actionable, threshold));
+}
+
 export type SpendState = "ok" | "over_cap";
 
 export interface DispatchDecision {
@@ -122,6 +169,8 @@ export interface DispatchDecision {
 export function decideDispatch(input: {
   prevRisk: RiskLevel | null;
   nextRisk: RiskLevel;
+  /** On a first evaluation (`prevRisk` null), the still-actionable risk (`actionableRisk`); ignored otherwise. */
+  actionableRisk: RiskLevel;
   ticketOpen: boolean;
   rule: Pick<AutonomyRuleLike, "level" | "triggerAt">;
   spend: SpendState;
@@ -141,6 +190,9 @@ export function decideDispatch(input: {
     return none(input.spend === "over_cap" ? "spend cap reached: observe only" : "autonomy is observe", "observe");
   }
   if (!crossed(input.prevRisk, input.nextRisk, input.rule.triggerAt)) return none("trigger not crossed");
+  if (!actionableCrossing(input.prevRisk, input.nextRisk, input.actionableRisk, input.rule.triggerAt)) {
+    return none("first seen already breached beyond the grace window");
+  }
   if (input.alreadyHandled) return none("already handled since the last customer message");
   return {
     runTriage: true,
@@ -151,13 +203,17 @@ export function decideDispatch(input: {
   };
 }
 
-/** Channels to notify for this transition (each fires once per crossing of its minimum). */
+/**
+ * Channels to notify for this transition (each fires once per crossing of its
+ * minimum). On a first evaluation, `actionable` applies as in `decideDispatch`.
+ */
 export function channelsToNotify<C extends { minRisk: Exclude<RiskLevel, "ok">; enabled: boolean }>(
   channels: C[],
   prev: RiskLevel | null,
   next: RiskLevel,
+  actionable: RiskLevel,
 ): C[] {
-  return channels.filter((c) => c.enabled && crossed(prev, next, c.minRisk));
+  return channels.filter((c) => c.enabled && actionableCrossing(prev, next, actionable, c.minRisk));
 }
 
 // ---------- spend ----------

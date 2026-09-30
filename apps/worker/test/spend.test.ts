@@ -40,11 +40,15 @@ async function runDay(harness: Harness, capCents: number | null, spentCredits: n
   });
   await h.queue.send("sync-connection", { orgId, connectionId, full: true });
   await h.drain();
-  // Only react to crossings from here on: let the timers fire a few hours later.
+  // The first sync reacts only to still-actionable tickets (TR-21f). Let a few hours pass, with new
+  // tickets arriving and the timers firing, so tickets cross their thresholds after connect.
   const start = h.clock.now();
-  h.clock.advance(3 * 3_600_000);
-  await sweepDueTickets(h.deps);
-  await h.drain();
+  for (let i = 0; i < 6; i++) {
+    h.clock.advance(30 * 60_000);
+    await h.queue.send("sync-connection", { orgId, connectionId, full: false });
+    await sweepDueTickets(h.deps);
+    await h.drain();
+  }
   h.clock.set(start);
   return orgId;
 }

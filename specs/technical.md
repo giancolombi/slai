@@ -44,7 +44,8 @@
    and re-evaluates them.
 5. On a risk crossing, `decideDispatch` and `channelsToNotify` decide the outcome:
    notify, run triage and draft in a sandbox, then queue for approval or autopilot
-   send (after `decideAutopilot` guardrails).
+   send (after `decideAutopilot` guardrails). On a ticket's first evaluation only
+   a still-actionable crossing counts (TR-21f).
 6. Every model call and sandbox second is written to `usage_ledger`. Over the spend
    cap, autonomy degrades to observe.
 
@@ -234,6 +235,21 @@
   The lead is `breachAt` minus the first at_risk instant, found by stepping the
   engine through event times and `nextTransitionAt`. Policy preview runs inline
   in the API.
+
+- **TR-21f** First-connect guard. A ticket's first evaluation (no stored risk:
+  first connect, a full backfill) reacts only to a crossing that is still
+  actionable:
+  - `actionableRisk` (pure, `decide.ts`) is the worst risk among **live**
+    metrics (current cycle not stopped). A stopped cycle's breach is history,
+    and a live metric that breached more than the grace window ago
+    (`firstSeenGraceMs`, default 60 minutes; per-org later) counts as nothing.
+  - Dispatch and every alert channel need the usual crossing **and** a crossing
+    on the actionable risk. So a connect with many long-overdue tickets sends no
+    alerts and runs no agents for them; a ticket at risk, or breached within the
+    window, reacts as usual.
+  - From then on the stored risk is the baseline, so a later crossing (a new
+    cycle, a re-crossing after recovery) reacts normally. A ticket skipped this
+    way stays visible on the dashboard; a human can still run the agents on it.
 
 ### API (PR-24, PR-25)
 - **TR-22** The contract is `packages/shared/src/api.ts`: base `/api/v1`, JSON,
